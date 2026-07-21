@@ -468,6 +468,8 @@ const CLASSES = { warrior: { name: '劍士', col: '#c84a4a' }, mage: { name: '�
 let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
 let portal = null;
+let floorEvent = null, eventPanel = null;
+const eventChoiceBtns = [];
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
 let plats = [], mons = [];
@@ -489,7 +491,7 @@ const player = {
   x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
   slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, chillT: 0, cls: 'warrior',
-  perk: {}, revives: 0, affixDeathUsed: false, aegisCd: 0, airJumped: false,
+  perk: {}, revives: 0, affixDeathUsed: false, eventAtk: 0, aegisCd: 0, airJumped: false,
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   items: [], itemWin: false,
@@ -572,7 +574,7 @@ function atkBase() {
 }
 function atkMultiplier() {
   const p = player;
-  let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (1 + affixV('atkPct')) * (p.rageT > 0 ? 1.3 : 1);
+  let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (1 + affixV('atkPct')) * (1 + (p.eventAtk || 0)) * (p.rageT > 0 ? 1.3 : 1);
   m *= (1 + 0.30 * perkV('bloodpact')) * (1 + 0.40 * perkV('brute')) * (1 + 0.45 * perkV('glass'));
   if (p.hp < p.mhp * 0.35) m *= (1 + 0.50 * perkV('berserk')) * (1 + affixV('lowHpAtk')); // 絕地反擊/嗜血狂
   return m;
@@ -943,6 +945,81 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
     dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
     w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3 });
 }
+const FLOOR_EVENT_DEFS = {
+  chest: { name:'寶箱房', color:'#ffd36a', title:'旅行者的寶箱', desc:'找到一只尚未開啟的寶箱。', choices:['開啟寶箱', '暫時離開'] },
+  shrine: { name:'祭壇房', color:'#d9a8ff', title:'古老祭壇', desc:'祭壇回應你的意志，只能接受一種祝福。', choices:['血之祝福：失去20% HP，攻擊+12%', '生命祝福：回復35% HP與50% MP'] },
+  challenge: { name:'事件房', color:'#ff8a6a', title:'封印的試煉', desc:'解除封印會喚醒三名菁英守衛。', choices:['接受試煉', '暫時離開'] }
+};
+function spawnFloorEvent(n) {
+  floorEvent = null; eventPanel = null;
+  if (n < 2 || n % 5 === 0 || Math.random() >= 0.45) return;
+  const types = ['chest', 'shrine', 'challenge'];
+  const type = types[(Math.random() * types.length) | 0];
+  floorEvent = { type: type, x: Math.round(worldW * (0.46 + Math.random() * 0.24)), y: 468, status:'idle' };
+}
+function openFloorEvent() {
+  if (!floorEvent || floorEvent.status !== 'idle') return false;
+  if (Math.abs(player.x - floorEvent.x) > 54 || Math.abs(player.y - floorEvent.y) > 52) return false;
+  eventPanel = { type: floorEvent.type };
+  player.itemWin = false; keys.space = false;
+  beep(620, 0.08, 'sine', 0.035);
+  return true;
+}
+function spawnEventAmbush() {
+  const sc = (1 + 0.3 * (floor - 1) + 0.02 * (floor - 1) * (floor - 1)) * (floor >= 21 ? 1.15 : 1);
+  const hp = monsterHp(32, sc, floor, 2.4);
+  for (let i = 0; i < 3; i++) {
+    const x = Math.max(100, Math.min(worldW - 100, floorEvent.x + (i - 1) * 110));
+    mons.push({ type:'slime', x:x, y:468, vx:(i === 1 ? 1 : i ? -1 : 1) * 0.9,
+      minx:Math.max(20, x - 150), maxx:Math.min(worldW - 20, x + 150), hp:hp, mhp:hp,
+      xpv:Math.round(22 * (1 + 0.15 * (floor - 1))), dmg:Math.round(11 * sc), w:46, h:30,
+      hitT:0, elite:true, eventMon:true, s:4 });
+  }
+  portal = null;
+  burst(floorEvent.x, floorEvent.y - 30, '#ff6b5a', 30);
+  num(floorEvent.x, floorEvent.y - 78, '試煉開始!', '#ff8a6a');
+  beep(150, 0.22, 'sawtooth', 0.055);
+}
+function chooseFloorEvent(choice) {
+  if (!eventPanel || !floorEvent || floorEvent.status !== 'idle') { eventPanel = null; return; }
+  const type = floorEvent.type;
+  if (choice === 1 && type !== 'shrine') { eventPanel = null; return; }
+  if (type === 'chest') {
+    floorEvent.status = 'done';
+    const rarity = Math.max(1, rollRarity(floor));
+    gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0, it:genGear(floor, rarity), t:1500, ground:468 });
+    meta.mats.ench += 1; saveMeta();
+    burst(floorEvent.x, floorEvent.y - 30, '#ffd36a', 24);
+    num(floorEvent.x, floorEvent.y - 76, '裝備 + 附魔塵×1', '#ffd36a');
+    beep(760, 0.1, 'sine', 0.04); setTimeout(() => beep(980, 0.13, 'sine', 0.04), 90);
+  } else if (type === 'shrine') {
+    floorEvent.status = 'done';
+    if (choice === 0) {
+      const cost = Math.min(Math.max(0, player.hp - 1), Math.round(player.mhp * 0.2));
+      player.hp -= cost; player.eventAtk = (player.eventAtk || 0) + 0.12;
+      num(player.x, player.y - player.h - 18, '血之祝福 攻擊+12%', '#ff8a8a');
+    } else {
+      player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.35));
+      player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.5));
+      num(player.x, player.y - player.h - 18, '生命祝福', '#7dffd6');
+    }
+    burst(floorEvent.x, floorEvent.y - 42, '#d9a8ff', 28); beep(840, 0.18, 'sine', 0.04);
+  } else if (type === 'challenge') {
+    floorEvent.status = 'challenge'; spawnEventAmbush();
+  }
+  eventPanel = null;
+}
+function checkFloorEventReward() {
+  if (!floorEvent || floorEvent.status !== 'challenge' || mons.some(m => m.eventMon)) return;
+  floorEvent.status = 'done';
+  const dust = 2 + Math.floor(floor / 10);
+  meta.mats.ench += dust; saveMeta();
+  const rarity = floor >= 15 ? 3 : 2;
+  gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4.5, vx:0, it:genGear(floor, rarity), t:1800, ground:468 });
+  burst(floorEvent.x, floorEvent.y - 38, '#ffd36a', 36);
+  num(floorEvent.x, floorEvent.y - 84, '試煉完成! 稀有裝 + 附魔塵×' + dust, '#ffd36a');
+  beep(660, 0.1, 'sine', 0.045); setTimeout(() => beep(880, 0.12, 'sine', 0.045), 100); setTimeout(() => beep(1100, 0.16, 'sine', 0.045), 210);
+}
 function genFloor(n) {
   if (n % 5 === 0) { genBossFloor(n); return; }
   worldW = Math.min(1600 + n * 120, 2600);
@@ -980,6 +1057,7 @@ function genFloor(n) {
   }
   portal = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
+  spawnFloorEvent(n);
   floorT = 90;
 }
 function genBossFloor(n) {
@@ -996,6 +1074,7 @@ function genBossFloor(n) {
     dmg: Math.round(15 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
+  floorEvent = null; eventPanel = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
   floorT = 150;
 }
@@ -1027,7 +1106,7 @@ function resetRun() {
   p.x = 80; p.y = 468; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.rageT = 0; p.shieldHp = 0; p.shieldT = 0; p.chillT = 0;
-  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.aegisCd = 0; p.airJumped = false;
+  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.eventAtk = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;
   calcStats();
   p.hp = p.mhp; p.mp = p.mmp;
@@ -1108,11 +1187,11 @@ function hitMon(m, d, crit, noChain) {
         if (o !== m && Math.abs(o.x - m.x) < 95 && Math.abs((o.y - o.h / 2) - (m.y - m.h / 2)) < 75) hitMon(o, cd, false, true);
       }
     }
-    const orbN = m.type === 'boss' ? 8 : m.elite ? 2 : (Math.random() < SOUL_DROP_CHANCE ? 1 : 0);
+    const orbN = m.eventMon ? 0 : m.type === 'boss' ? 8 : m.elite ? 2 : (Math.random() < SOUL_DROP_CHANCE ? 1 : 0);
     for (let i = 0; i < orbN; i++) {
       orbs.push({ x: m.x + (Math.random() - 0.5) * 16, y: m.y - m.h, vx: (Math.random() - 0.5) * 3, vy: -3 - Math.random() * 2, t: 0 });
     }
-    if (Math.random() < potionDropChance()) {
+    if (!m.eventMon && Math.random() < potionDropChance()) {
       drops.push({
         x: m.x + 10, y: m.y - m.h, vy: -3.5, vx: (Math.random() - 0.5) * 2,
         type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
@@ -1122,7 +1201,7 @@ function hitMon(m, d, crit, noChain) {
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 468 });
-    } else {
+    } else if (!m.eventMon) {
       if (Math.random() < gearDropChance(m.elite)) {
         gearDrops.push({
           x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
@@ -1131,6 +1210,7 @@ function hitMon(m, d, crit, noChain) {
       }
     }
     mons.splice(mons.indexOf(m), 1);
+    checkFloorEventReward();
     beep(220, 0.15, 'sawtooth');
     if (m.type === 'splitter' && (m.gen || 0) < 1) {
       for (let i = 0; i < 2; i++) {
@@ -1339,6 +1419,11 @@ window.addEventListener('keydown', e => {
     if (n >= 1 && n <= 3) applyCard(pickOpts[n - 1]);
     return;
   }
+  if (eventPanel) {
+    if (k === '1' || k === '2') chooseFloorEvent(parseInt(k, 10) - 1);
+    else if (k === 'escape') eventPanel = null;
+    return;
+  }
   // play
   if (k === 'p') { openStats(); return; }
   if (k === 'i') player.itemWin = !player.itemWin;
@@ -1360,6 +1445,10 @@ window.addEventListener('keyup', e => {
 });
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+  if (eventPanel) {
+    for (const b of eventChoiceBtns) if (inside(b)) { chooseFloorEvent(b.choice); return; }
+    return;
+  }
   if (settingsOpen) {
     for (const b of settingsBtns) if (inside(b)) {
       if (b.act === 'copy') {
@@ -1481,6 +1570,7 @@ cv.addEventListener('touchstart', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
   for (const t of e.changedTouches) {
     const [mx, my] = touchPos(t);
+    if (eventPanel) { handleTap(mx, my); continue; }
     if (gameState === 'play') {
       const b = vbtnAt(mx, my);
       if (b) {
@@ -1518,7 +1608,7 @@ function touchEnd(e) {
 cv.addEventListener('touchend', touchEnd, { passive: false });
 cv.addEventListener('touchcancel', touchEnd, { passive: false });
 function drawTouchUI() {
-  if (!isTouch || gameState !== 'play') return;
+  if (!isTouch || gameState !== 'play' || eventPanel) return;
   const held = new Set(Object.values(touchMap));
   ctx.textAlign = 'center';
   for (const b of vbtns) {
@@ -1536,6 +1626,7 @@ function drawTouchUI() {
 // ---------- update ----------
 function update() {
   const p = player;
+  if (eventPanel) return;
   if (p.inv > 0) p.inv--;
   if (p.potCd > 0) p.potCd--;
   for (let i = 0; i < 3; i++) if (p.slotCd[i] > 0) p.slotCd[i]--;
@@ -1555,6 +1646,8 @@ function update() {
   if (p.slashT > 0) p.slashT--;
   if (p.spinT > 0) p.spinT--;
   if (floorT > 0) floorT--;
+
+  if (keys['space'] && openFloorEvent()) return;
 
   // movement
   let mv = 0;
@@ -1862,6 +1955,59 @@ function update() {
 
 // ---------- render ----------
 let camX = 0;
+function drawFloorEventWorld() {
+  if (!floorEvent) return;
+  const e = floorEvent, d = FLOOR_EVENT_DEFS[e.type], x = e.x, y = e.y;
+  ctx.save();
+  ctx.globalAlpha = e.status === 'done' ? 0.45 : 1;
+  const bob = Math.sin(frame * 0.08) * 2;
+  if (e.type === 'chest') {
+    ctx.fillStyle = '#6b3f20'; ctx.fillRect(x - 24, y - 30, 48, 28);
+    ctx.fillStyle = '#b96b2f'; ctx.fillRect(x - 26, y - 40 + bob, 52, 15);
+    ctx.fillStyle = '#ffd36a'; ctx.fillRect(x - 4, y - 28, 8, 13); ctx.fillRect(x - 20, y - 37 + bob, 40, 3);
+  } else if (e.type === 'shrine') {
+    ctx.fillStyle = '#504064'; ctx.fillRect(x - 28, y - 10, 56, 10); ctx.fillRect(x - 19, y - 20, 38, 10);
+    ctx.fillStyle = '#8165a0'; ctx.fillRect(x - 9, y - 62, 18, 43);
+    ctx.fillStyle = '#d9a8ff'; ctx.beginPath(); ctx.arc(x, y - 70 + bob, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha *= 0.22; ctx.beginPath(); ctx.arc(x, y - 70 + bob, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = e.status === 'done' ? 0.45 : 1;
+  } else {
+    ctx.fillStyle = e.status === 'challenge' ? '#7a2f32' : '#3c344b'; ctx.fillRect(x - 18, y - 65, 36, 65);
+    ctx.fillStyle = '#1b1725'; ctx.fillRect(x - 12, y - 57, 24, 50);
+    ctx.strokeStyle = '#ff8a6a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - 38, 11 + Math.sin(frame * 0.1) * 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#ff8a6a'; ctx.fillRect(x - 3, y - 44, 6, 12);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.font = 'bold 12px ' + STAT_FONT;
+  ctx.fillStyle = e.status === 'done' ? '#777' : d.color;
+  const near = Math.abs(player.x - e.x) <= 72 && Math.abs(player.y - e.y) <= 60;
+  const label = e.status === 'done' ? '已使用' : e.status === 'challenge' ? '試煉進行中' : near ? '[Space] 互動' : d.name;
+  ctx.fillText(label, x, y - 84);
+  ctx.restore();
+}
+function drawEventPanel() {
+  if (!eventPanel || !floorEvent) return;
+  const d = FLOOR_EVENT_DEFS[eventPanel.type];
+  eventChoiceBtns.length = 0;
+  ctx.fillStyle = 'rgba(5,6,16,0.76)'; ctx.fillRect(0, 0, W, H);
+  const x = 190, y = 112, w = 580, h = 306;
+  ctx.fillStyle = 'rgba(24,25,46,0.99)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = d.color; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  ctx.textAlign = 'center'; ctx.fillStyle = d.color; ctx.font = 'bold 25px ' + STAT_FONT;
+  ctx.fillText(d.title, W / 2, y + 44);
+  ctx.fillStyle = '#c8cdec'; ctx.font = '14px ' + STAT_FONT;
+  ctx.fillText(d.desc, W / 2, y + 78);
+  const note = eventPanel.type === 'chest' ? '獎勵：精良以上裝備＋附魔塵' : eventPanel.type === 'challenge' ? '完成獎勵：稀有以上裝備＋附魔塵' : '祝福效果持續至本次冒險結束';
+  ctx.fillStyle = '#9299b9'; ctx.font = '12px ' + STAT_FONT; ctx.fillText(note, W / 2, y + 105);
+  for (let i = 0; i < 2; i++) {
+    const b = { x:x + 55, y:y + 128 + i * 62, w:w - 110, h:46, choice:i };
+    eventChoiceBtns.push(b);
+    ctx.fillStyle = i === 0 ? 'rgba(176,90,224,0.25)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = i === 0 ? d.color : '#4a4d66'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px ' + STAT_FONT;
+    ctx.fillText('[' + (i + 1) + '] ' + d.choices[i], W / 2, b.y + 29);
+  }
+  ctx.fillStyle = '#737a9a'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('按 1 / 2 選擇　·　Esc 關閉', W / 2, y + h - 18);
+  ctx.textAlign = 'left';
+}
 function render() {
   const p = player;
   camX += ((Math.max(0, Math.min(worldW - W, p.x - W / 2))) - camX) * 0.12;
@@ -1897,6 +2043,7 @@ function render() {
     for (let x = q.x; x < q.x + q.w; x += 18) ctx.fillRect(x + 6, q.y + 4, 6, 3);
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
+  drawFloorEventWorld();
   // portal
   if (portal) {
     const ph = 64, pw = 40;
@@ -2075,6 +2222,7 @@ function render() {
   ctx.fillText('Lv.' + p.lv + ' ' + CLASSES[p.cls].name, 14, H - 26);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('靈魂 +' + soulsRun, 14, H - 8);
+  if (p.eventAtk > 0) { ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('血祝+' + Math.round(p.eventAtk * 100) + '%', 92, H - 8); }
   bar(170, H - 36, 200, 12, p.hp / p.mhp, '#e23b3b', 'HP ' + Math.ceil(p.hp) + '/' + p.mhp);
   bar(170, H - 20, 200, 12, p.mp / p.mmp, '#3b6fe2', 'MP ' + Math.ceil(p.mp) + '/' + p.mmp);
   bar(400, H - 28, 280, 12, p.xp / xpNeed(p.lv), '#d8c93a', 'EXP ' + (100 * p.xp / xpNeed(p.lv)).toFixed(0) + '%');
@@ -2108,13 +2256,14 @@ function render() {
     ctx.fillText('第 ' + floor + ' 層' + (floor % 5 === 0 ? '  ⚠ BOSS' : ''), W / 2, 180);
     ctx.font = 'bold 22px "Courier New",monospace';
     ctx.fillStyle = '#ffe680';
-    ctx.fillText('— ' + biomeOf(floor).name + ' —', W / 2, 214);
+    ctx.fillText('— ' + biomeOf(floor).name + (floorEvent ? ' · ' + FLOOR_EVENT_DEFS[floorEvent.type].name : '') + ' —', W / 2, 214);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
   }
 
   if (p.itemWin) drawItemWin();
   drawTouchUI();
+  drawEventPanel();
 }
 function bar(x, y, w, h, ratio, color, label) {
   ctx.fillStyle = '#111'; ctx.fillRect(x, y, w, h);
