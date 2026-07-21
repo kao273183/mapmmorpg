@@ -384,7 +384,7 @@ const BIOMES = [
 function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 1) / 5))]; }
 
 const player = {
-  x: 80, y: 500, vx: 0, vy: 0, w: 26, h: 46, face: 1,
+  x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
   slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, chillT: 0, cls: 'warrior',
   perk: {}, revives: 0, aegisCd: 0, airJumped: false,
@@ -767,9 +767,9 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
       dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
-  const cand = plats.filter(q => q.ground || q.w > 120);
-  const pl = cand[(Math.random() * cand.length) | 0];
-  const sx = pl.ground ? 350 + Math.random() * (worldW - 550) : pl.x + 30 + Math.random() * (pl.w - 60);
+  const wide = plats.filter(q => !q.ground && q.w > 120);
+  const pl = (Math.random() < 0.62 || wide.length === 0) ? plats[0] : wide[(Math.random() * wide.length) | 0]; // 6 成生在地面,其餘上平台
+  const sx = pl.ground ? 200 + Math.random() * (worldW - 350) : pl.x + 30 + Math.random() * (pl.w - 60);
   const minx = Math.max(pl.x + 20, sx - 140), maxx = Math.min(pl.x + pl.w - 20, sx + 140);
   if (type === 'mush') {
     const hp = Math.round(30 * sc);
@@ -817,7 +817,7 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
 function genFloor(n) {
   if (n % 5 === 0) { genBossFloor(n); return; }
   worldW = Math.min(1600 + n * 120, 2600);
-  plats = [{ x: 0, y: 500, w: worldW, ground: true }];
+  plats = [{ x: 0, y: 468, w: worldW, ground: true }];
   const rowsY = [405, 325, 250];
   let px = 150;
   while (px < worldW - 260) {
@@ -855,14 +855,14 @@ function genFloor(n) {
 }
 function genBossFloor(n) {
   worldW = 1300;
-  plats = [{ x: 0, y: 500, w: worldW, ground: true }];
+  plats = [{ x: 0, y: 468, w: worldW, ground: true }];
   plats.push({ x: 170, y: 405, w: 150 });
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
   const hp = Math.round(800 * sc); // 大幅提高:原本比一整層還少
   mons = [{
-    type: 'boss', x: worldW - 240, y: 500, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
+    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
     hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
     dmg: Math.round(15 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
@@ -892,7 +892,7 @@ function resetRun() {
     if (src) { const cp = Object.assign({}, src); p.items.push(cp); p.eq[part] = cp; }
   }
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
-  p.x = 80; p.y = 500; p.vx = 0; p.vy = 0; p.face = 1;
+  p.x = 80; p.y = 468; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.rageT = 0; p.shieldHp = 0; p.shieldT = 0; p.chillT = 0;
   p.perk = {}; p.revives = 0; p.aegisCd = 0; p.airJumped = false;
@@ -936,7 +936,7 @@ function removeMon(m) {
   if (i < 0) return;
   mons.splice(i, 1);
   if (mons.length === 0 && !portal) {
-    portal = { x: worldW - 70, y: 500 };
+    portal = { x: worldW - 70, y: 468 };
     num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
     beep(880, 0.2, 'sine', 0.05);
   }
@@ -981,17 +981,17 @@ function hitMon(m, d, crit, noChain) {
     if (Math.random() < 0.13 + 0.08 * player.cd.pot) {
       drops.push({
         x: m.x + 10, y: m.y - m.h, vy: -3.5, vx: (Math.random() - 0.5) * 2,
-        type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 500 : (m.baseY || m.y)
+        type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
       });
     }
     if (m.type === 'boss') {
       // 保底傳說裝 + 追加一件隨機裝
-      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 500 }); // 保底史詩,深層傳說
-      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 500 });
+      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 468 }); // 保底史詩,深層傳說
+      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 468 });
     } else if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
       gearDrops.push({
         x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
-        it: genGear(floor), t: 900, ground: m.type === 'bat' ? 500 : (m.baseY || m.y)
+        it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
       });
     }
     mons.splice(mons.indexOf(m), 1);
@@ -1009,7 +1009,7 @@ function hitMon(m, d, crit, noChain) {
       burst(m.x, m.y - m.h / 2, '#d8f4ff', 12);
     }
     if (mons.length === 0 && !portal) {
-      portal = { x: worldW - 70, y: 500 };
+      portal = { x: worldW - 70, y: 468 };
       num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
       beep(880, 0.2, 'sine', 0.05);
     }
@@ -1445,14 +1445,14 @@ function update() {
       }
     }
   }
-  if (p.y > 600) { p.y = 500; p.vy = 0; p.onGround = true; p.airJumped = false; }
+  if (p.y > 600) { p.y = 468; p.vy = 0; p.onGround = true; p.airJumped = false; }
 
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
     floor++;
     p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.15));
     genFloor(floor);
-    p.x = 80; p.y = 500; p.vy = 0;
+    p.x = 80; p.y = 468; p.vy = 0;
     num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層', '#b05ae0');
     beep(660, 0.15, 'sine', 0.05);
     return;
@@ -1502,7 +1502,7 @@ function update() {
       beep(100, 0.2, 'sawtooth', 0.05);
       for (const m of mons.slice()) { // 落地範圍爆炸,補打附近地面怪
         if (mt.hits.indexOf(m) >= 0) continue;
-        if (Math.abs(m.x - mt.x) < mt.r + m.w / 2 && Math.abs(m.y - 500) < 130) {
+        if (Math.abs(m.x - mt.x) < mt.r + m.w / 2 && Math.abs(m.y - 468) < 130) {
           const r = skillDmg(mt.mult); hitMon(m, r.d, r.crit);
         }
       }
@@ -1570,7 +1570,7 @@ function update() {
       const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
       if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(ph); } // 進階段召喚援軍
       const dir = p.x < m.x ? -1 : 1;
-      const grounded = m.y >= 500 && m.vy >= 0;
+      const grounded = m.y >= 468 && m.vy >= 0;
       if (m.atkT > 0) {
         m.atkT--;
         if (grounded) m.vx = dir * (ph === 1 ? 1.1 : ph === 2 ? 1.6 : 2.2); // 追著玩家走
@@ -1603,9 +1603,9 @@ function update() {
       m.x += m.vx * slowF; m.y += m.vy;
       if (m.x < 60) m.x = 60;
       if (m.x > worldW - 60) m.x = worldW - 60;
-      if (m.y >= 500) {
+      if (m.y >= 468) {
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
-          burst(m.x, 500, '#b05ae0', 26);
+          burst(m.x, 468, '#b05ae0', 26);
           beep(90, 0.2, 'sawtooth', 0.06);
           if (p.onGround && Math.abs(p.x - m.x) < 150 && p.inv === 0) {
             const d = Math.max(1, Math.round(m.dmg * 0.9) - armorDef());
@@ -1613,7 +1613,7 @@ function update() {
             if (dmgPlayer(d)) return;
           }
         }
-        m.y = 500; m.vy = 0;
+        m.y = 468; m.vy = 0;
       }
     } else {
       m.t++;
@@ -1632,7 +1632,7 @@ function update() {
         m.x += (bx2 - m.x) * 0.03;
         m.y += (by2 - m.y) * 0.03;
       }
-      if (m.y > 480) m.y = 480;
+      if (m.y > 448) m.y = 448;
     }
     if (p.inv === 0 &&
         Math.abs(m.x - p.x) < (m.w + p.w) / 2 - 4 &&
@@ -1659,7 +1659,7 @@ function update() {
       continue;
     }
     if (s.y > 505 || s.x < -20 || s.x > worldW + 20) {
-      burst(s.x, Math.min(s.y, 500), '#8a5adf', 5);
+      burst(s.x, Math.min(s.y, 468), '#8a5adf', 5);
       espits.splice(espits.indexOf(s), 1);
     }
   }
