@@ -5,7 +5,7 @@ const W = 960, H = 540;
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
-const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X 技能&nbsp;|&nbsp;C 紅水 V 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;Esc 關閉';
+const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;Esc 關閉';
 const HINT_MENU = '[1]/[2] 選職業&nbsp;|&nbsp;點擊購買永久強化&nbsp;|&nbsp;Enter 開始冒險';
 
 // ---------- audio ----------
@@ -89,6 +89,126 @@ function buyMeta(d) {
   beep(900, 0.08, 'sine', 0.04);
 }
 
+// ---------- skills ----------
+const SKILL_DEFS = {
+  slash:  { cls:'warrior', name:'揮砍',   mp:4,  cd:15,  basic:true, desc:'近戰扇形攻擊,最多3目標' },
+  spin:   { cls:'warrior', name:'旋風斬', mp:15, cd:140, desc:'360度範圍攻擊,1.5倍傷害' },
+  dash:   { cls:'warrior', name:'突進斬', mp:10, cd:120, desc:'向前衝刺,路徑上1.3倍傷害' },
+  quake:  { cls:'warrior', name:'震地波', mp:14, cd:160, desc:'震擊前方地面目標,1.6倍傷害' },
+  rage:   { cls:'warrior', name:'狂暴',   mp:18, cd:480, desc:'6秒內傷害+30% 移速+0.8' },
+  fire:   { cls:'mage', name:'火球術', mp:8,  cd:22,  basic:true, desc:'直線火球投射物' },
+  bolt:   { cls:'mage', name:'落雷術', mp:20, cd:170, desc:'範圍內最多4目標,1.8倍傷害' },
+  ice:    { cls:'mage', name:'冰錐術', mp:10, cd:90,  desc:'穿透冰錐,命中緩速敵人' },
+  meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
+  shield: { cls:'mage', name:'魔法盾', mp:16, cd:480, desc:'護盾吸收30%最大HP的傷害' }
+};
+const SKILL_IDS = Object.keys(SKILL_DEFS); // 存檔順序,固定不可重排
+const BRANCH_NAMES = {
+  slash:['重擊','連擊'], spin:['龍捲','利刃'], dash:['疾影','破陣'], quake:['餘震','崩裂'], rage:['血怒','戰意'],
+  fire:['爆裂','連鎖'], bolt:['雷暴','聚雷'], ice:['霜寒','冰刺'], meteor:['天火','隕擊'], shield:['壁壘','荊棘']
+};
+const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
+for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
+const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null] };
+let menuTab = 'base', selSkill = null, pendingReset = null;
+function classSkills(cls) { return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls); }
+// 天賦倍率(第一批:數值分支。A=範圍/持續流,B=傷害流;里程碑特效後續批次)
+function talentOf(id) {
+  const s = skillState[id];
+  const t = { dmg: 1, area: 1, cd: 1 };
+  if (s.spent >= 1) t.dmg *= 1.12;
+  if (s.spent >= 2) { if (s.branch === 0) t.area *= 1.25; else t.dmg *= 1.2; }
+  if (s.spent >= 3) { if (s.branch === 0) t.area *= 1.2; else t.dmg *= 1.15; }
+  if (s.spent >= 4) t.cd *= 0.85;
+  if (s.spent >= 5) { if (s.branch === 0) { t.area *= 1.15; t.dmg *= 1.1; } else t.dmg *= 1.18; }
+  return t;
+}
+function drawSkillGacha() {
+  const cost = 40;
+  if (meta.souls < cost) { menuMsg = { text: '靈魂不足(需 ' + cost + ')', color: '#ff5a5a', t: 180 }; beep(150, 0.1, 'square', 0.04); return; }
+  const pool = classSkills(chosenCls).filter(id => !(skillState[id].unl && skillState[id].pts >= 5));
+  if (!pool.length) { menuMsg = { text: '此職業技能池已全滿!', color: '#ffe680', t: 240 }; return; }
+  meta.souls -= cost;
+  const id = pool[(Math.random() * pool.length) | 0];
+  const s = skillState[id];
+  if (!s.unl) {
+    s.unl = 1;
+    menuMsg = { text: '★ 習得新技能:' + SKILL_DEFS[id].name, color: '#7dffd6', t: 300 };
+    beep(660, 0.1, 'sine', 0.05); setTimeout(() => beep(880, 0.15, 'sine', 0.05), 100);
+  } else {
+    s.pts++;
+    menuMsg = { text: SKILL_DEFS[id].name + ' 天賦點 +1(共 ' + s.pts + ' 點)', color: '#9ecbff', t: 300 };
+    beep(700, 0.1, 'sine', 0.04);
+  }
+  selSkill = id;
+  saveMeta();
+}
+function investTalent(id, branch) {
+  const s = skillState[id];
+  if (s.spent >= 5 || s.pts - s.spent <= 0) return;
+  if (s.spent === 1) { // 第 2 點 = 分支選擇,必須指定
+    if (branch !== 0 && branch !== 1) return;
+    s.branch = branch;
+  }
+  s.spent++;
+  saveMeta();
+  beep(900, 0.08, 'sine', 0.04);
+}
+function resetTalent(id) {
+  const s = skillState[id];
+  if (s.spent === 0) return;
+  const cost = 30 + 20 * s.spent;
+  if (meta.souls < cost) { menuMsg = { text: '靈魂不足(需 ' + cost + ')', color: '#ff5a5a', t: 180 }; beep(150, 0.1, 'square', 0.04); return; }
+  meta.souls -= cost;
+  s.spent = 0; s.branch = -1;
+  menuMsg = { text: SKILL_DEFS[id].name + ' 天賦已重置', color: '#7dffd6', t: 240 };
+  saveMeta();
+  beep(500, 0.12, 'sine', 0.04);
+}
+function toggleLoadout(id) {
+  const lo = loadouts[chosenCls];
+  const i = lo.indexOf(id);
+  if (i >= 0) {
+    if (lo.filter(Boolean).length <= 1) { menuMsg = { text: '至少要裝備一招技能', color: '#ff5a5a', t: 180 }; return; }
+    lo[i] = null;
+  } else {
+    if (!skillState[id].unl) return;
+    const e = lo.indexOf(null);
+    if (e < 0) { menuMsg = { text: '出戰欄已滿(3 招)', color: '#ff5a5a', t: 180 }; return; }
+    lo[e] = id;
+  }
+  saveMeta();
+}
+function skillsToNums() {
+  const a = [];
+  for (const id of SKILL_IDS) { const t = skillState[id]; a.push(t.unl ? 1 : 0, t.pts, t.spent, t.branch + 1); }
+  for (const cls of ['warrior', 'mage']) {
+    const list = classSkills(cls);
+    for (let i = 0; i < 3; i++) a.push(loadouts[cls][i] ? list.indexOf(loadouts[cls][i]) + 1 : 0);
+  }
+  return a; // 10技能×4 + 2職業×3槽 = 46
+}
+function applySkillNums(a) {
+  if (!Array.isArray(a) || a.length !== SKILL_IDS.length * 4 + 6) return;
+  SKILL_IDS.forEach((id, i) => {
+    const s = skillState[id];
+    s.unl = SKILL_DEFS[id].basic ? 1 : (a[i * 4] ? 1 : 0);
+    s.pts = Math.max(0, Math.min(5, a[i * 4 + 1] | 0));
+    s.spent = Math.max(0, Math.min(s.pts, a[i * 4 + 2] | 0));
+    s.branch = Math.max(-1, Math.min(1, (a[i * 4 + 3] | 0) - 1));
+    if (s.spent >= 2 && s.branch < 0) s.spent = 1; // 沒選分支不可能超過第1點
+  });
+  let o = SKILL_IDS.length * 4;
+  for (const cls of ['warrior', 'mage']) {
+    const list = classSkills(cls);
+    for (let i = 0; i < 3; i++) {
+      const v = a[o++] | 0;
+      loadouts[cls][i] = (v >= 1 && v <= list.length && skillState[list[v - 1]].unl) ? list[v - 1] : null;
+    }
+    if (!loadouts[cls].some(Boolean)) loadouts[cls][0] = list.find(id => SKILL_DEFS[id].basic);
+  }
+}
+
 // ---------- save ----------
 const SAVE_KEY = 'pixelrogue_save';
 const UP_IDS = ['atk', 'vit', 'pots', 'treasure', 'soul'];
@@ -103,24 +223,32 @@ function applyMeta(souls, ups, best) {
   bestFloor = Math.max(0, best | 0);
 }
 function saveMeta() {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor })); } catch (e) {}
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums()
+    }));
+  } catch (e) {}
 }
 function loadMeta() {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (d && typeof d.s === 'number' && Array.isArray(d.u)) applyMeta(d.s, d.u, d.b);
+    if (d && Array.isArray(d.k)) applySkillNums(d.k);
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
 function encodeSave() {
-  const a = [1, meta.souls, ...UP_IDS.map(id => meta.up[id]), bestFloor];
+  const a = [2, meta.souls, ...UP_IDS.map(id => meta.up[id]), bestFloor, ...skillsToNums()];
   a.push(saveChk(a));
   return btoa(a.join(','));
 }
+const V2_LEN = 1 + 1 + 5 + 1 + 46 + 1; // 版本+靈魂+強化5+最深層+技能46+校驗
 function decodeSave(str) {
   try {
     const a = atob(String(str).trim()).split(',').map(Number);
-    if (a.length !== 9 || a[0] !== 1 || a.some(v => !Number.isFinite(v))) return null;
+    const v1 = a.length === 9 && a[0] === 1;
+    const v2 = a.length === V2_LEN && a[0] === 2;
+    if ((!v1 && !v2) || a.some(v => !Number.isFinite(v))) return null;
     const chk = a.pop();
     if (saveChk(a) !== chk) return null;
     return a;
@@ -142,6 +270,7 @@ function importSave() {
     return;
   }
   applyMeta(a[1], a.slice(2, 7), a[7]);
+  if (a[0] >= 2) applySkillNums(a.slice(8, 8 + 46)); // v1 舊碼:技能維持預設
   saveMeta();
   menuMsg = { text: '匯入成功!靈魂 ' + meta.souls, color: '#7dffd6', t: 240 };
   beep(900, 0.1, 'sine', 0.04);
@@ -158,14 +287,14 @@ let portal = null;
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
 let plats = [], mons = [];
-const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [];
+const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [];
 const clouds = [];
 for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + (i * 53) % 120, w: 70 + (i * 31) % 60 });
 
 const player = {
   x: 80, y: 500, vx: 0, vy: 0, w: 26, h: 46, face: 1,
-  onGround: false, dropT: 0, inv: 0, cast: 0, fireCd: 0, boltCd: 0, walk: 0,
-  slashT: 0, spinT: 0, potCd: 0, cls: 'warrior',
+  onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
+  slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, cls: 'warrior',
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   items: [], itemWin: false,
@@ -179,7 +308,7 @@ const CARDS = [
   { id:'crit', name:'致命精準', desc:'爆擊率 +6%' },
   { id:'spd',  name:'疾風步伐', desc:'移動速度 +0.4' },
   { id:'aspd', name:'迅捷出手', desc:'攻擊冷卻 -12%' },
-  { id:'xdmg', name:'絕技精通', desc:'X技能傷害 +15%' },
+  { id:'xdmg', name:'絕技精通', desc:'技能傷害 +15%' },
   { id:'ls',   name:'嗜血',     desc:'擊殺回復 3 HP' },
   { id:'mp',   name:'心靈之泉', desc:'MP上限+15 回魔+50%' },
   { id:'pot',  name:'藥劑師',   desc:'藥水掉落率 +8%' }
@@ -206,13 +335,13 @@ function applyCard(c) {
 function accV(f) { return player.eq.acc && player.eq.acc[f] ? player.eq.acc[f] : 0; }
 function atkPow() {
   const base = 8 + player.lv * 2.5 + (player.eq.weapon ? player.eq.weapon.atk : 0) + (player.cls === 'warrior' ? 4 : 0);
-  return base * (1 + 0.12 * player.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul'));
+  return base * (1 + 0.12 * player.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (player.rageT > 0 ? 1.3 : 1);
 }
 function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit'); }
 function armorDef() {
   return (player.eq.armor ? player.eq.armor.def : 0) + (player.eq.helmet ? player.eq.helmet.def : 0);
 }
-function moveSpd() { return 3.2 + 0.4 * player.cd.spd + (player.eq.boots ? player.eq.boots.spd : 0); }
+function moveSpd() { return 3.2 + 0.4 * player.cd.spd + (player.eq.boots ? player.eq.boots.spd : 0) + (player.rageT > 0 ? 0.8 : 0); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function calcStats() {
   const p = player;
@@ -223,12 +352,160 @@ function calcStats() {
   if (p.mp > p.mmp) p.mp = p.mmp;
 }
 function xpNeed(l) { return 25 + l * 15; }
-function zCd() { return Math.max(6, Math.round((player.cls === 'mage' ? 22 : 15) * Math.pow(0.88, player.cd.aspd))); }
-function xCd() { return Math.max(40, Math.round((player.cls === 'mage' ? 170 : 140) * Math.pow(0.92, player.cd.aspd))); }
 function playerDmg() {
   const crit = Math.random() < critRate();
   const d = Math.round(atkPow() * (0.85 + Math.random() * 0.3) * (crit ? 1.6 : 1));
   return { d: d, crit: crit };
+}
+function skillDmg(mult) { // 絕技精通卡:全部出戰技能傷害+15%/層
+  const r = playerDmg();
+  return { d: Math.max(1, Math.round(r.d * mult * (1 + 0.15 * player.cd.xdmg))), crit: r.crit };
+}
+function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死亡)
+  const p = player;
+  if (p.shieldHp > 0) {
+    const ab = Math.min(p.shieldHp, d);
+    p.shieldHp -= ab; d -= ab;
+    if (p.shieldHp <= 0) num(p.x, p.y - p.h - 24, '護盾破碎', '#7dcfff');
+    if (d <= 0) { p.inv = 30; num(p.x, p.y - p.h - 10, '吸收', '#7dcfff'); beep(500, 0.06, 'sine', 0.03); return false; }
+  }
+  p.hp -= d; p.inv = 60;
+  num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
+  beep(180, 0.12, 'square', 0.05);
+  if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return true; }
+  return false;
+}
+// 技能效果:回傳 false = 施放失敗(不扣MP不進CD)
+const SKILL_FX = {
+  slash(t) {
+    const p = player;
+    p.cast = 10; p.slashT = 10;
+    beep(500, 0.05, 'square', 0.03);
+    let hit = 0;
+    for (const m of mons.slice()) {
+      const dx = (m.x - p.x) * p.face;
+      const dy = Math.abs((m.y - m.h / 2) - (p.y - p.h / 2));
+      if (dx > -12 && dx < 85 * t.area && dy < 55 && hit < 3) {
+        hit++;
+        const r = skillDmg(t.dmg);
+        hitMon(m, r.d, r.crit);
+      }
+    }
+  },
+  spin(t) {
+    const p = player;
+    let hit = 0;
+    for (const m of mons.slice()) {
+      if (Math.abs(m.x - p.x) < 100 * t.area && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 70 * t.area && hit < 6) {
+        hit++;
+        const r = skillDmg(1.5 * t.dmg);
+        hitMon(m, r.d, r.crit);
+      }
+    }
+    if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
+    p.cast = 12; p.spinT = 14;
+    beep(300, 0.15, 'sawtooth', 0.05);
+  },
+  dash(t) {
+    const p = player;
+    p.cast = 10; p.slashT = 10;
+    const x0 = p.x;
+    const nx = Math.max(14, Math.min(worldW - 14, p.x + p.face * 130 * t.area));
+    const lo2 = Math.min(x0, nx) - 20, hi = Math.max(x0, nx) + 20;
+    for (const m of mons.slice()) {
+      if (m.x > lo2 && m.x < hi && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 60) {
+        const r = skillDmg(1.3 * t.dmg);
+        hitMon(m, r.d, r.crit);
+      }
+    }
+    for (let i = 0; i < 8; i++) parts.push({ x: x0 + (nx - x0) * i / 8, y: p.y - 20, vx: 0, vy: -0.5, t: 14, color: '#c8cdec' });
+    p.x = nx; p.inv = Math.max(p.inv, 10); // 衝刺短暫無敵
+    beep(600, 0.08, 'square', 0.04);
+  },
+  quake(t) {
+    const p = player;
+    if (!p.onGround) { num(p.x, p.y - p.h - 10, '需站在地面', '#aaa'); return false; }
+    let hit = 0;
+    const range = 200 * t.area;
+    for (const m of mons.slice()) {
+      const dx = (m.x - p.x) * p.face;
+      const grounded = m.type !== 'bat' || m.y > 440;
+      if (dx > -10 && dx < range && grounded && Math.abs(m.y - p.y) < 90) {
+        hit++;
+        const r = skillDmg(1.6 * t.dmg);
+        hitMon(m, r.d, r.crit);
+        burst(m.x, m.y - m.h / 2, '#d8b365', 8);
+      }
+    }
+    if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
+    p.cast = 12;
+    for (let i = 1; i < 6; i++) parts.push({ x: p.x + p.face * i * range / 6, y: p.y - 2, vx: 0, vy: -2 - Math.random(), t: 18, color: '#d8b365' });
+    beep(120, 0.2, 'sawtooth', 0.05);
+  },
+  rage(t) {
+    const p = player;
+    p.rageT = Math.round(360 * t.area);
+    p.cast = 8;
+    burst(p.x, p.y - p.h / 2, '#ff5a5a', 20);
+    beep(200, 0.2, 'square', 0.05);
+  },
+  fire(t) {
+    const p = player;
+    p.cast = 12;
+    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70, mult: t.dmg, kind: 'fire' });
+    beep(880, 0.08, 'sawtooth', 0.03);
+  },
+  bolt(t) {
+    const p = player;
+    let hit = 0;
+    for (const m of mons.slice()) {
+      if (Math.abs(m.x - p.x) < 240 * t.area && hit < 4) {
+        hit++;
+        bolts.push({ x: m.x, y: m.y - m.h / 2, t: 14 });
+        const r = skillDmg(1.8 * t.dmg);
+        hitMon(m, r.d, r.crit);
+      }
+    }
+    if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
+    p.cast = 14;
+    beep(140, 0.25, 'sawtooth', 0.05);
+  },
+  ice(t) {
+    const p = player;
+    p.cast = 12;
+    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 6.5, t: 90, mult: t.dmg, kind: 'ice', pierce: true, hits: [] });
+    beep(1000, 0.08, 'sine', 0.03);
+  },
+  meteor(t) {
+    const p = player;
+    p.cast = 14;
+    for (let i = 0; i < 3; i++) {
+      meteors.push({
+        x: p.x + p.face * (70 + i * 90) + (Math.random() - 0.5) * 30,
+        y: 40 - i * 50, vy: 7, r: 55 * t.area, mult: 2.2 * t.dmg
+      });
+    }
+    beep(220, 0.2, 'sawtooth', 0.05);
+  },
+  shield(t) {
+    const p = player;
+    p.shieldHp = Math.round(p.mhp * 0.3 * t.dmg); // 傷害天賦→盾量
+    p.shieldT = 600;
+    p.cast = 10;
+    burst(p.x, p.y - p.h / 2, '#7dcfff', 18);
+    beep(700, 0.15, 'sine', 0.04);
+  }
+};
+function trySkill(i) {
+  const p = player;
+  const id = loadouts[p.cls][i];
+  if (!id || p.slotCd[i] > 0) return;
+  const def = SKILL_DEFS[id];
+  if (p.mp < def.mp) { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.slotCd[i] = 30; return; }
+  const t = talentOf(id);
+  if (SKILL_FX[id](t) === false) { p.slotCd[i] = 20; return; }
+  p.mp -= def.mp;
+  p.slotCd[i] = Math.max(6, Math.round(def.cd * t.cd * Math.pow(0.9, p.cd.aspd)));
 }
 
 // ---------- gear generation ----------
@@ -357,7 +634,7 @@ function genFloor(n) {
     }
   }
   portal = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
   floorT = 90;
 }
 function genBossFloor(n) {
@@ -374,7 +651,7 @@ function genBossFloor(n) {
     dmg: Math.round(11 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
   floorT = 150;
 }
 function resetRun() {
@@ -385,7 +662,8 @@ function resetRun() {
   p.items = []; p.eq = { weapon: null, armor: null, helmet: null, boots: null, acc: null };
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
   p.x = 80; p.y = 500; p.vx = 0; p.vy = 0; p.face = 1;
-  p.inv = 0; p.cast = 0; p.fireCd = 0; p.boltCd = 0; p.potCd = 0; p.slashT = 0; p.spinT = 0;
+  p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
+  p.rageT = 0; p.shieldHp = 0; p.shieldT = 0;
   p.itemWin = false;
   calcStats();
   p.hp = p.mhp; p.mp = p.mmp;
@@ -491,6 +769,8 @@ function usePot(t) {
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
 let expBtn = null, impBtn = null;
+const tabBtns = [], skillBtns = [], skillActBtns = [];
+let gachaBtn = null;
 let startBtn = null;
 window.addEventListener('keydown', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
@@ -515,8 +795,8 @@ window.addEventListener('keydown', e => {
   // play
   if (k === 'i') player.itemWin = !player.itemWin;
   if (k === 'escape') player.itemWin = false;
-  if (k === 'c') usePot('hp');
-  if (k === 'v') usePot('mp');
+  if (k === 'a') usePot('hp');
+  if (k === 's') usePot('mp');
   if (player.itemWin) {
     const n = e.code && e.code.startsWith('Digit') ? parseInt(e.code.slice(5), 10) : parseInt(k, 10);
     if (n >= 1 && n <= player.items.length) {
@@ -533,10 +813,27 @@ window.addEventListener('keyup', e => {
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
   if (gameState === 'select') {
-    for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
-    for (const b of metaBtns) if (inside(b)) { buyMeta(b.d); return; }
+    for (const b of tabBtns) if (inside(b)) { menuTab = b.tab; pendingReset = null; return; }
     if (inside(expBtn)) { exportSave(); return; }
     if (inside(impBtn)) { importSave(); return; }
+    if (menuTab === 'skills') {
+      if (inside(gachaBtn)) { drawSkillGacha(); return; }
+      for (const b of skillBtns) if (inside(b)) { selSkill = b.id; pendingReset = null; return; }
+      for (const b of skillActBtns) {
+        if (!inside(b)) continue;
+        if (b.act === 'cls') { chosenCls = b.cls; selSkill = null; pendingReset = null; return; }
+        if (b.act === 'invest') { investTalent(selSkill, b.br); return; }
+        if (b.act === 'equip') { toggleLoadout(selSkill); return; }
+        if (b.act === 'reset') {
+          if (pendingReset && pendingReset.id === selSkill && frame - pendingReset.f < 150) { resetTalent(selSkill); pendingReset = null; }
+          else pendingReset = { id: selSkill, f: frame };
+          return;
+        }
+      }
+      return;
+    }
+    for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
+    for (const b of metaBtns) if (inside(b)) { buyMeta(b.d); return; }
     if (inside(startBtn)) resetRun();
     return;
   }
@@ -567,11 +864,12 @@ const vbtns = [
   { x: 104, y: 396, w: 74, h: 74, label: '▶', hold: 'arrowright' },
   { x: 60,  y: 312, w: 74, h: 74, label: '▼', hold: 'arrowdown' },
   { x: 870, y: 396, w: 74, h: 74, label: '跳', press: 'space' },
-  { x: 782, y: 396, w: 74, h: 74, label: 'Z', hold: 'z' },
-  { x: 694, y: 396, w: 74, h: 74, label: 'X', hold: 'x' },
-  { x: 694, y: 330, w: 52, h: 52, label: 'C', tap: () => usePot('hp') },
-  { x: 760, y: 330, w: 52, h: 52, label: 'V', tap: () => usePot('mp') },
-  { x: 826, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
+  { x: 786, y: 396, w: 74, h: 74, label: 'Z', hold: 'z' },
+  { x: 702, y: 396, w: 74, h: 74, label: 'X', hold: 'x' },
+  { x: 618, y: 396, w: 74, h: 74, label: 'C', hold: 'c' },
+  { x: 702, y: 330, w: 52, h: 52, label: 'A', tap: () => usePot('hp') },
+  { x: 768, y: 330, w: 52, h: 52, label: 'S', tap: () => usePot('mp') },
+  { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
 ];
 const touchMap = {}; // touch identifier -> vbtn
 function touchPos(t) {
@@ -644,8 +942,9 @@ function update() {
   const p = player;
   if (p.inv > 0) p.inv--;
   if (p.potCd > 0) p.potCd--;
-  if (p.fireCd > 0) p.fireCd--;
-  if (p.boltCd > 0) p.boltCd--;
+  for (let i = 0; i < 3; i++) if (p.slotCd[i] > 0) p.slotCd[i]--;
+  if (p.rageT > 0) p.rageT--;
+  if (p.shieldT > 0) { p.shieldT--; if (p.shieldT === 0) p.shieldHp = 0; }
   if (p.cast > 0) p.cast--;
   if (p.dropT > 0) p.dropT--;
   if (p.slashT > 0) p.slashT--;
@@ -694,85 +993,57 @@ function update() {
     return;
   }
 
-  // skills
-  if (keys['z'] && p.fireCd === 0) {
-    if (p.cls === 'mage') {
-      if (p.mp >= 8) {
-        p.mp -= 8; p.fireCd = zCd(); p.cast = 12;
-        projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70 });
-        beep(880, 0.08, 'sawtooth', 0.03);
-      } else { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.fireCd = 20; }
-    } else {
-      if (p.mp >= 4) {
-        p.mp -= 4; p.fireCd = zCd(); p.cast = 10; p.slashT = 10;
-        beep(500, 0.05, 'square', 0.03);
-        let hit = 0;
-        for (const m of mons.slice()) {
-          const dx = (m.x - p.x) * p.face;
-          const dy = Math.abs((m.y - m.h / 2) - (p.y - p.h / 2));
-          if (dx > -12 && dx < 85 && dy < 55 && hit < 3) {
-            hit++;
-            const r = playerDmg();
-            hitMon(m, r.d, r.crit);
-          }
-        }
-      } else { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.fireCd = 20; }
-    }
-  }
-  if (keys['x'] && p.boltCd === 0) {
-    const xMul = 1 + 0.15 * p.cd.xdmg;
-    if (p.cls === 'mage') {
-      if (p.mp >= 20) {
-        p.mp -= 20; p.boltCd = xCd(); p.cast = 14;
-        let hit = 0;
-        for (const m of mons.slice()) {
-          if (Math.abs(m.x - p.x) < 240 && hit < 4) {
-            hit++;
-            bolts.push({ x: m.x, y: m.y - m.h / 2, t: 14 });
-            const r = playerDmg();
-            hitMon(m, Math.round(r.d * 1.8 * xMul), r.crit);
-          }
-        }
-        if (hit === 0) num(p.x, p.y - p.h - 10, '沒有目標', '#aaa');
-        else beep(140, 0.25, 'sawtooth', 0.05);
-      } else { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.boltCd = 60; }
-    } else {
-      if (p.mp >= 15) {
-        p.mp -= 15; p.boltCd = xCd(); p.cast = 12; p.spinT = 14;
-        let hit = 0;
-        for (const m of mons.slice()) {
-          if (Math.abs(m.x - p.x) < 100 && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 70 && hit < 6) {
-            hit++;
-            const r = playerDmg();
-            hitMon(m, Math.round(r.d * 1.5 * xMul), r.crit);
-          }
-        }
-        beep(300, 0.15, 'sawtooth', 0.05);
-        if (hit === 0) num(p.x, p.y - p.h - 10, '沒有目標', '#aaa');
-      } else { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.boltCd = 60; }
-    }
-  }
+  // skills(出戰槽 Z/X/C)
+  if (keys['z']) trySkill(0);
+  if (keys['x']) trySkill(1);
+  if (keys['c']) trySkill(2);
 
   // projectiles
   for (const pr of projs.slice()) {
     pr.x += pr.vx; pr.t--;
     let gone = pr.t <= 0;
     for (const m of mons) {
+      if (pr.pierce && pr.hits.indexOf(m) >= 0) continue;
       if (Math.abs(pr.x - m.x) < m.w / 2 + 8 && Math.abs(pr.y - (m.y - m.h / 2)) < m.h / 2 + 10) {
-        const r = playerDmg();
+        const r = skillDmg(pr.mult || 1);
         hitMon(m, r.d, r.crit);
-        burst(pr.x, pr.y, '#ff8c2e', 10);
-        gone = true; break;
+        if (pr.kind === 'ice') {
+          m.slowT = 180;
+          burst(pr.x, pr.y, '#7dcfff', 8);
+          pr.hits.push(m);
+        } else {
+          burst(pr.x, pr.y, '#ff8c2e', 10);
+          gone = true; break;
+        }
       }
     }
     if (gone) projs.splice(projs.indexOf(pr), 1);
   }
 
+  // 隕石
+  for (const mt of meteors.slice()) {
+    mt.y += mt.vy;
+    parts.push({ x: mt.x + (Math.random() - 0.5) * 10, y: mt.y - 10, vx: 0, vy: -1, t: 10, color: '#ff8c2e' });
+    if (mt.y >= 495) {
+      burst(mt.x, 495, '#ff8c2e', 20);
+      beep(100, 0.2, 'sawtooth', 0.05);
+      for (const m of mons.slice()) {
+        if (Math.abs(m.x - mt.x) < mt.r + m.w / 2 && m.y > 380) {
+          const r = skillDmg(mt.mult);
+          hitMon(m, r.d, r.crit);
+        }
+      }
+      meteors.splice(meteors.indexOf(mt), 1);
+    }
+  }
+
   // monsters
   for (const m of mons) {
     if (m.hitT > 0) m.hitT--;
+    if (m.slowT > 0) m.slowT--;
+    const slowF = m.slowT > 0 ? 0.5 : 1;
     if (m.type === 'slime') {
-      m.x += m.vx;
+      m.x += m.vx * slowF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
     } else if (m.type === 'boss') {
@@ -806,7 +1077,7 @@ function update() {
         m.tele = 36;
       }
       m.vy += 0.6; if (m.vy > 14) m.vy = 14;
-      m.x += m.vx; m.y += m.vy;
+      m.x += m.vx * slowF; m.y += m.vy;
       if (m.x < 60) m.x = 60;
       if (m.x > worldW - 60) m.x = worldW - 60;
       if (m.y >= 500) {
@@ -815,11 +1086,8 @@ function update() {
           beep(90, 0.2, 'sawtooth', 0.06);
           if (p.onGround && Math.abs(p.x - m.x) < 150 && p.inv === 0) {
             const d = Math.max(1, Math.round(m.dmg * 0.9) - armorDef());
-            p.hp -= d; p.inv = 60;
             p.vx = (p.x < m.x ? -1 : 1) * 6; p.vy = -6; p.onGround = false;
-            num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
-            beep(180, 0.12, 'square', 0.05);
-            if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+            if (dmgPlayer(d)) return;
           }
         }
         m.y = 500; m.vy = 0;
@@ -830,7 +1098,7 @@ function update() {
       const dist = Math.hypot(ddx, ddy) || 1;
       if (dist < 360) {
         // 俯衝追擊玩家
-        const sp = Math.min(2.2, 1.1 + floor * 0.06);
+        const sp = Math.min(2.2, 1.1 + floor * 0.06) * slowF;
         m.x += ddx / dist * sp + Math.sin(m.t * 0.15) * 0.5;
         m.y += ddy / dist * sp + Math.cos(m.t * 0.13) * 0.5;
         m.vx = ddx;
@@ -847,11 +1115,8 @@ function update() {
         Math.abs(m.x - p.x) < (m.w + p.w) / 2 - 4 &&
         Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < (m.h + p.h) / 2 - 6) {
       const d = Math.max(1, Math.round(m.dmg * (0.9 + Math.random() * 0.2)) - armorDef());
-      p.hp -= d; p.inv = 60;
       p.vx = (p.x < m.x ? -1 : 1) * 5; p.vy = -5; p.onGround = false;
-      num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
-      beep(180, 0.12, 'square', 0.05);
-      if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+      if (dmgPlayer(d)) return;
     }
   }
 
@@ -860,11 +1125,8 @@ function update() {
     s.vy += 0.25; s.x += s.vx; s.y += s.vy;
     if (p.inv === 0 && Math.abs(s.x - p.x) < 15 && Math.abs(s.y - (p.y - p.h / 2)) < p.h / 2 + 8) {
       const d = Math.max(1, s.dmg - armorDef());
-      p.hp -= d; p.inv = 60;
-      num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
-      beep(180, 0.12, 'square', 0.05);
       espits.splice(espits.indexOf(s), 1);
-      if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+      if (dmgPlayer(d)) return;
       continue;
     }
     if (s.y > 505 || s.x < -20 || s.x > worldW + 20) {
@@ -1065,9 +1327,24 @@ function render() {
   }
   // projectiles
   for (const pr of projs) {
-    drawSprite(FIRE, pr.x - 9, pr.y - 9, 3, pr.vx < 0);
-    ctx.fillStyle = 'rgba(255,140,46,0.35)';
-    ctx.fillRect(pr.x - pr.vx * 2 - 6, pr.y - 6, 12, 12);
+    if (pr.kind === 'ice') {
+      ctx.fillStyle = '#7dcfff'; ctx.fillRect(pr.x - 8, pr.y - 4, 16, 8);
+      ctx.fillStyle = '#d8f4ff'; ctx.fillRect(pr.x - 3, pr.y - 2, 6, 4);
+    } else {
+      drawSprite(FIRE, pr.x - 9, pr.y - 9, 3, pr.vx < 0);
+      ctx.fillStyle = 'rgba(255,140,46,0.35)';
+      ctx.fillRect(pr.x - pr.vx * 2 - 6, pr.y - 6, 12, 12);
+    }
+  }
+  // 隕石
+  for (const mt of meteors) {
+    ctx.fillStyle = '#ff8c2e'; ctx.fillRect(mt.x - 7, mt.y - 14, 14, 18);
+    ctx.fillStyle = '#ffe680'; ctx.fillRect(mt.x - 3, mt.y - 8, 6, 8);
+  }
+  // 魔法盾泡泡
+  if (player.shieldHp > 0) {
+    ctx.strokeStyle = 'rgba(125,207,255,0.7)'; ctx.lineWidth = 2;
+    ctx.strokeRect(player.x - 22, player.y - player.h - 8, 44, player.h + 12);
   }
   // bolts
   for (const b of bolts) {
@@ -1118,14 +1395,18 @@ function render() {
   ctx.textAlign = 'left';
   ctx.font = '12px "Courier New",monospace';
   ctx.fillStyle = p.bag.hp > 0 ? '#ff8a8a' : '#666';
-  ctx.fillText('[C]紅水x' + p.bag.hp, 400, H - 4);
+  ctx.fillText('[A]紅水x' + p.bag.hp, 400, H - 4);
   ctx.fillStyle = p.bag.mp > 0 ? '#8aa8ff' : '#666';
-  ctx.fillText('[V]藍水x' + p.bag.mp, 500, H - 4);
-  ctx.font = 'bold 14px "Courier New",monospace';
-  ctx.fillStyle = p.fireCd > 0 ? '#666' : '#ff8c2e';
-  ctx.fillText(p.cls === 'mage' ? '[Z]火球' : '[Z]揮砍', 700, H - 26);
-  ctx.fillStyle = p.boltCd > 0 ? '#666' : '#ffe680';
-  ctx.fillText((p.cls === 'mage' ? '[X]落雷' : '[X]旋風斬') + (p.boltCd > 0 ? ' ' + Math.ceil(p.boltCd / 60) + 's' : ''), 700, H - 8);
+  ctx.fillText('[S]藍水x' + p.bag.mp, 500, H - 4);
+  if (p.shieldHp > 0) { ctx.fillStyle = '#7dcfff'; ctx.fillRect(170, H - 40, 200 * Math.min(1, p.shieldHp / p.mhp), 3); }
+  if (p.rageT > 0) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('狂暴' + Math.ceil(p.rageT / 60), 110, H - 8); }
+  ctx.font = 'bold 12px "Courier New",monospace';
+  const loH = loadouts[p.cls], keyN = ['Z', 'X', 'C'], skCol = ['#ff8c2e', '#ffe680', '#7dcfff'];
+  for (let i = 0; i < 3; i++) {
+    const sid = loH[i];
+    ctx.fillStyle = !sid ? '#555' : p.slotCd[i] > 0 ? '#666' : skCol[i];
+    ctx.fillText('[' + keyN[i] + ']' + (sid ? SKILL_DEFS[sid].name : '—') + (sid && p.slotCd[i] > 60 ? ' ' + Math.ceil(p.slotCd[i] / 60) + 's' : ''), 690, H - 32 + i * 14);
+  }
   ctx.font = 'bold 12px "Courier New",monospace';
   ctx.fillStyle = '#c8cdec';
   ctx.fillText('[I]裝備', 845, H - 8);
@@ -1259,10 +1540,10 @@ function drawItemWin() {
   const py = y + h - 40;
   ctx.fillStyle = '#e23b3b'; ctx.fillRect(bx, py + 2, 8, 10);
   ctx.fillStyle = '#fff'; ctx.font = '12px "Courier New",monospace';
-  ctx.fillText('x' + p.bag.hp + '[C]', bx + 12, py + 11);
+  ctx.fillText('x' + p.bag.hp + '[A]', bx + 12, py + 11);
   ctx.fillStyle = '#3b6fe2'; ctx.fillRect(bx + 70, py + 2, 8, 10);
   ctx.fillStyle = '#fff';
-  ctx.fillText('x' + p.bag.mp + '[V]', bx + 82, py + 11);
+  ctx.fillText('x' + p.bag.mp + '[S]', bx + 82, py + 11);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('靈魂 +' + soulsRun, bx + 140, py + 11);
 }
@@ -1312,6 +1593,142 @@ function drawDead() {
 }
 
 // ---------- menu ----------
+function renderSkillTab() {
+  skillBtns.length = 0; skillActBtns.length = 0;
+  if (pendingReset && (frame - pendingReset.f > 150 || pendingReset.id !== selSkill)) pendingReset = null;
+  // 職業切換
+  const clsList = ['warrior', 'mage'];
+  for (let i = 0; i < 2; i++) {
+    const b = { x: 40 + i * 122, y: 118, w: 112, h: 32, act: 'cls', cls: clsList[i] };
+    skillActBtns.push(b);
+    const on = chosenCls === clsList[i];
+    ctx.fillStyle = on ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.05)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = on ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = on ? '#fff' : '#889'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(CLASSES[clsList[i]].name, b.x + b.w / 2, b.y + 21);
+  }
+  // 抽取按鈕
+  gachaBtn = { x: 660, y: 118, w: 260, h: 32 };
+  const pool = classSkills(chosenCls).filter(id => !(skillState[id].unl && skillState[id].pts >= 5));
+  ctx.fillStyle = pool.length ? (Math.floor(frame / 30) % 2 === 0 ? 'rgba(176,90,224,0.35)' : 'rgba(176,90,224,0.22)') : 'rgba(255,255,255,0.05)';
+  ctx.fillRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
+  ctx.strokeStyle = '#b05ae0'; ctx.lineWidth = 2; ctx.strokeRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText(pool.length ? '抽取技能(40 靈魂)' : '技能池已全滿', gachaBtn.x + gachaBtn.w / 2, gachaBtn.y + 21);
+  // 技能清單(左欄)
+  const list = classSkills(chosenCls);
+  const lo = loadouts[chosenCls];
+  ctx.textAlign = 'left';
+  for (let i = 0; i < list.length; i++) {
+    const id = list[i], s = skillState[id], d = SKILL_DEFS[id];
+    const b = { x: 40, y: 162 + i * 58, w: 280, h: 52, act: 'sel', id: id };
+    skillBtns.push(b);
+    const sel = selSkill === id;
+    ctx.fillStyle = sel ? 'rgba(125,255,214,0.12)' : 'rgba(255,255,255,0.05)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = sel ? '#7dffd6' : '#3a3450'; ctx.lineWidth = sel ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.font = 'bold 14px "Courier New",monospace';
+    ctx.fillStyle = s.unl ? '#fff' : '#556';
+    ctx.fillText((s.unl ? '' : '? ') + d.name, b.x + 12, b.y + 21);
+    const li = lo.indexOf(id);
+    if (li >= 0) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('出戰[' + ['Z', 'X', 'C'][li] + ']', b.x + 205, b.y + 21); }
+    ctx.font = '11px "Courier New",monospace'; ctx.fillStyle = '#8890b8';
+    if (s.unl) {
+      let stars = '';
+      for (let k = 0; k < 5; k++) stars += k < s.spent ? '★' : (k < s.pts ? '☆' : '·');
+      ctx.fillText(stars + (s.branch >= 0 ? ' [' + BRANCH_NAMES[id][s.branch] + ']' : '') + (s.pts - s.spent > 0 ? ' 可投點!' : ''), b.x + 12, b.y + 40);
+    } else {
+      ctx.fillText('未解鎖(抽取獲得)', b.x + 12, b.y + 40);
+    }
+  }
+  // 右側詳情:天賦樹
+  const dx = 360, dy = 162, dw = 560, dh = 262;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(dx, dy, dw, dh);
+  ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(dx, dy, dw, dh);
+  if (!selSkill || SKILL_DEFS[selSkill].cls !== chosenCls) {
+    ctx.fillStyle = '#667'; ctx.font = '13px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText('← 點選左側技能查看天賦樹', dx + dw / 2, dy + dh / 2);
+  } else {
+    const id = selSkill, s = skillState[id], d = SKILL_DEFS[id];
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#d8b365'; ctx.font = 'bold 16px "Courier New",monospace';
+    ctx.fillText(d.name, dx + 16, dy + 26);
+    ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
+    ctx.fillText(d.desc + ' | MP' + d.mp + ' CD' + (d.cd / 60).toFixed(1) + 's', dx + 130, dy + 26);
+    if (!s.unl) {
+      ctx.fillStyle = '#667'; ctx.font = '13px "Courier New",monospace';
+      ctx.fillText('尚未解鎖,透過上方抽取獲得', dx + 16, dy + 90);
+    } else {
+      const labels = [
+        '傷害+12%',
+        s.branch === -1 ? '分支二選一' : '流派:' + BRANCH_NAMES[id][s.branch],
+        s.branch === 1 ? '傷害+15%' : '範圍+20%',
+        '冷卻-15%',
+        s.branch === 1 ? '傷害+18%' : '範圍+15% 傷害+10%'
+      ];
+      for (let k = 0; k < 5; k++) {
+        const nx = dx + 14 + k * 108, ny = dy + 44, nw = 100, nh = 66;
+        const invested = s.spent > k;
+        ctx.fillStyle = invested ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(nx, ny, nw, nh);
+        ctx.strokeStyle = invested ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(nx, ny, nw, nh);
+        ctx.fillStyle = invested ? '#7dffd6' : '#889'; ctx.font = 'bold 11px "Courier New",monospace';
+        ctx.fillText('Lv' + (k + 1) + (k === 1 ? ' ★' : ''), nx + 6, ny + 16);
+        ctx.font = '10px "Courier New",monospace'; ctx.fillStyle = invested ? '#cfe' : '#778';
+        ctx.fillText(labels[k].slice(0, 9), nx + 6, ny + 36);
+        if (labels[k].length > 9) ctx.fillText(labels[k].slice(9), nx + 6, ny + 52);
+      }
+      const avail = s.pts - s.spent;
+      ctx.fillStyle = avail > 0 ? '#7dffd6' : '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
+      ctx.fillText('可用天賦點:' + avail + '(重複抽取同技能獲得)', dx + 16, dy + 132);
+      let bx2 = dx + 16;
+      const mkBtn = (label, act, extra, color) => {
+        const w2 = 16 + label.length * 14;
+        const b = Object.assign({ x: bx2, y: dy + 148, w: w2, h: 34, act: act }, extra);
+        skillActBtns.push(b);
+        ctx.fillStyle = color || 'rgba(255,255,255,0.08)';
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'left';
+        ctx.fillText(label, b.x + 8, b.y + 22);
+        bx2 += w2 + 12;
+      };
+      if (avail > 0 && s.spent < 5) {
+        if (s.spent === 1) {
+          mkBtn('選' + BRANCH_NAMES[id][0], 'invest', { br: 0 }, 'rgba(125,255,214,0.2)');
+          mkBtn('選' + BRANCH_NAMES[id][1], 'invest', { br: 1 }, 'rgba(255,140,46,0.2)');
+        } else {
+          mkBtn('投入1點', 'invest', {}, 'rgba(125,255,214,0.2)');
+        }
+      }
+      mkBtn(loadouts[chosenCls].indexOf(id) >= 0 ? '卸下' : '裝備出戰', 'equip', {});
+      if (s.spent > 0) {
+        const pend = pendingReset && pendingReset.id === id;
+        mkBtn(pend ? '確認重置?' : '重置(' + (30 + 20 * s.spent) + '魂)', 'reset', {}, pend ? 'rgba(226,59,59,0.35)' : undefined);
+      }
+      if (s.branch >= 0) {
+        ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace';
+        ctx.fillText('流派已鎖定:' + BRANCH_NAMES[id][s.branch] + '(A=範圍/持續 B=傷害;重置可重選)', dx + 16, dy + 206);
+      }
+    }
+  }
+  // 出戰欄
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
+  ctx.fillText('出戰技能(最多 3 招,槽位=按鍵):', 360, 448);
+  const lo2 = loadouts[chosenCls];
+  for (let i = 0; i < 3; i++) {
+    const bx3 = 360 + i * 190, by3 = 458;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(bx3, by3, 180, 40);
+    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(bx3, by3, 180, 40);
+    ctx.fillStyle = lo2[i] ? ['#ff8c2e', '#ffe680', '#7dcfff'][i] : '#556';
+    ctx.font = 'bold 13px "Courier New",monospace';
+    ctx.fillText('[' + ['Z', 'X', 'C'][i] + '] ' + (lo2[i] ? SKILL_DEFS[lo2[i]].name : '(空)'), bx3 + 10, by3 + 25);
+  }
+  ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
+  ctx.fillText('Enter 開始冒險', 40, 480);
+}
 function renderMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, '#1a1c2c'); g.addColorStop(1, '#2c2f4a');
@@ -1336,6 +1753,25 @@ function renderMenu() {
     ctx.fillText(menuMsg.text, 844, 78);
     if (--menuMsg.t <= 0) menuMsg = null;
   }
+  // 分頁:基地 / 技能
+  tabBtns.length = 0;
+  const tabs = [['base', '基 地'], ['skills', '技 能']];
+  for (let i = 0; i < 2; i++) {
+    const b = { x: 20 + i * 112, y: 30, w: 102, h: 32, tab: tabs[i][0] };
+    tabBtns.push(b);
+    const on = menuTab === b.tab;
+    ctx.fillStyle = on ? 'rgba(176,90,224,0.35)' : 'rgba(255,255,255,0.07)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = on ? '#b05ae0' : '#44485f'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = on ? '#fff' : '#8890b8'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 21);
+  }
+  if (menuTab === 'skills') {
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null;
+    renderSkillTab();
+    return;
+  }
+  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null;
   if (lastRun) {
     ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('上次:第' + lastRun.floor + '層 / 擊殺' + lastRun.kills + ' / 靈魂+' + lastRun.gained, W / 2, 126);
