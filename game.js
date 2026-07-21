@@ -152,8 +152,8 @@ const META_DEFS = [
   { id:'atk',      name:'攻擊強化', desc:'攻擊 +4%/級',        max:10, cost:l => 20 + l * 15 },
   { id:'vit',      name:'體魄強化', desc:'HP上限 +8%/級',      max:10, cost:l => 20 + l * 15 },
   { id:'pots',     name:'起始藥水', desc:'開局紅藍藥水 +1/級', max:3,  cost:l => 30 + l * 25 },
-  { id:'treasure', name:'尋寶直覺', desc:'裝備掉落率 +2%/級',  max:5,  cost:l => 40 + l * 30 },
-  { id:'soul',     name:'靈魂共鳴', desc:'靈魂獲取 +10%/級',   max:5,  cost:l => 50 + l * 40 }
+  { id:'treasure', name:'尋寶直覺', desc:'裝備掉落率 +1%/級',  max:5,  cost:l => 40 + l * 30 },
+  { id:'soul',     name:'靈魂共鳴', desc:'靈魂獲取 +5%/級',    max:5,  cost:l => 50 + l * 40 }
 ];
 function buyMeta(d) {
   const lv = meta.up[d.id];
@@ -407,13 +407,13 @@ const CARDS = [
   { id:'xdmg', r:0, stat:1, name:'絕技精通', desc:'技能傷害 +15%' },
   { id:'ls',   r:0, stat:1, name:'嗜血',     desc:'擊殺回復 3 HP' },
   { id:'mp',   r:0, stat:1, name:'心靈之泉', desc:'MP上限+15 回魔+50%' },
-  { id:'pot',  r:0, stat:1, name:'藥劑師',   desc:'藥水掉落率 +8%' },
+  { id:'pot',  r:0, stat:1, name:'藥劑師',   desc:'藥水掉落率 +4%' },
   // 稀有:特殊被動(走 perk)
   { id:'vamp',   r:1, name:'吸血鬼',   desc:'造成傷害回復 6% HP' },
   { id:'thorns', r:1, name:'荊棘護甲', desc:'受擊反彈 40% 攻擊力' },
   { id:'djump',  r:1, name:'羽翼',     desc:'可空中二段跳' },
   { id:'mana',   r:1, name:'法力循環', desc:'擊殺回復 5 MP' },
-  { id:'greed',  r:1, name:'貪婪',     desc:'靈魂獲取 +20%' },
+  { id:'greed',  r:1, name:'貪婪',     desc:'靈魂獲取 +10%' },
   { id:'aegis',  r:1, name:'守護結界', desc:'每12秒獲得護盾' },
   { id:'bloodpact', r:1, name:'血祭', desc:'HP上限-15% 攻擊+30%' },
   // 傳說:強力/獨特(走 perk)
@@ -486,7 +486,8 @@ function calcStats() {
   if (p.hp > p.mhp) p.hp = p.mhp;
   if (p.mp > p.mmp) p.mp = p.mmp;
 }
-function xpNeed(l) { return 25 + l * 15; }
+// A floor should grant roughly one level early on, then gradually slow down.
+function xpNeed(l) { return Math.round(50 + 30 * l + 5 * l * l); }
 function playerDmg() {
   const crit = Math.random() < critRate();
   const d = Math.round(atkPow() * (0.85 + Math.random() * 0.3) * (crit ? 1.6 : 1));
@@ -758,12 +759,17 @@ function dismantle(it) {
 }
 
 // ---------- floor generation ----------
+function monsterHp(base, sc, n, extraMul = 1) {
+  const endurance = 1.5 + Math.min(0.75, 0.025 * (n - 1));
+  return Math.round(base * sc * endurance * extraMul);
+}
 function spawnMon(type, n, sc, xpSc, eliteCh) {
   if (type === 'bat') {
     const bx = 350 + Math.random() * (worldW - 550);
     const by = 170 + Math.random() * 140;
+    const hp = monsterHp(20, sc, n);
     mons.push({ type:'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 200,
-      hp: Math.round(20 * sc), mhp: Math.round(20 * sc), xpv: Math.round(16 * xpSc),
+      hp, mhp: hp, xpv: Math.round(16 * xpSc),
       dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
@@ -772,43 +778,43 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
   const sx = pl.ground ? 200 + Math.random() * (worldW - 350) : pl.x + 30 + Math.random() * (pl.w - 60);
   const minx = Math.max(pl.x + 20, sx - 140), maxx = Math.min(pl.x + pl.w - 20, sx + 140);
   if (type === 'mush') {
-    const hp = Math.round(30 * sc);
+    const hp = monsterHp(30, sc, n);
     mons.push({ type:'mush', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), vy: 0, onG: true, jt: 30 + Math.random() * 60,
       minx, maxx, hp, mhp: hp, xpv: Math.round(14 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'spore') {
-    const hp = Math.round(22 * sc);
+    const hp = monsterHp(22, sc, n);
     mons.push({ type:'spore', x: sx, y: pl.y, vx: (0.3 + Math.random() * 0.25) * (Math.random() < 0.5 ? -1 : 1), st: 60 + Math.random() * 60,
       minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'bomber') {
-    const hp = Math.round(24 * sc);
+    const hp = monsterHp(24, sc, n);
     mons.push({ type:'bomber', x: sx, y: pl.y, baseY: pl.y, vx: 0, fuse: null, boom: false,
       minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(7 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'charger') {
-    const hp = Math.round(34 * sc);
+    const hp = monsterHp(34, sc, n);
     mons.push({ type:'charger', x: sx, y: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), chg: 0, tel: 0, dir: 1,
       minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(9 * sc), w: 36, h: 20, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'icer') {
-    const hp = Math.round(28 * sc);
+    const hp = monsterHp(28, sc, n);
     mons.push({ type:'icer', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
       minx, maxx, hp, mhp: hp, xpv: Math.round(13 * xpSc), dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'splitter') {
-    const hp = Math.round(30 * sc);
+    const hp = monsterHp(30, sc, n);
     mons.push({ type:'splitter', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1), gen: 0,
       minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * sc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
     return;
   }
   const elite = Math.random() < eliteCh;
-  const hp = Math.round(26 * sc * (elite ? 3.2 : 1));
+  const hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
   mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
     minx, maxx, hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
     dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
@@ -860,7 +866,7 @@ function genBossFloor(n) {
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const hp = Math.round(800 * sc); // 大幅提高:原本比一整層還少
+  const hp = Math.round(800 * sc * 1.35); // Boss 小幅加厚，避免戰鬥過短
   mons = [{
     type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
     hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
@@ -874,7 +880,7 @@ function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增�
   const sc = (1 + 0.3 * (floor - 1) + 0.02 * (floor - 1) * (floor - 1)) * 0.7;
   for (let i = 0; i < count; i++) {
     const bx = 220 + Math.random() * (worldW - 440), by = 150 + Math.random() * 120;
-    const hp = Math.round(22 * sc);
+    const hp = monsterHp(22, sc, floor);
     mons.push({ type: 'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 100, hp: hp, mhp: hp, xpv: 10, dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
   }
   num(player.x, player.y - player.h - 30, '召喚援軍!', '#ff5a5a');
@@ -909,7 +915,7 @@ function resetRun() {
   setTimeout(() => beep(880, 0.15, 'sine', 0.04), 100);
 }
 function endRun() {
-  const gained = Math.round(soulsRun * (1 + 0.1 * meta.up.soul) * (1 + 0.2 * perkV('greed')));
+  const gained = Math.round(soulsRun * (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')));
   meta.souls += gained;
   let stashed = 0;
   for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
@@ -974,11 +980,11 @@ function hitMon(m, d, crit, noChain) {
         if (o !== m && Math.abs(o.x - m.x) < 95 && Math.abs((o.y - o.h / 2) - (m.y - m.h / 2)) < 75) hitMon(o, cd, false, true);
       }
     }
-    const orbN = m.type === 'boss' ? 15 : m.elite ? 3 : 1;
+    const orbN = m.type === 'boss' ? 8 : m.elite ? 2 : (Math.random() < 0.25 ? 1 : 0);
     for (let i = 0; i < orbN; i++) {
       orbs.push({ x: m.x + (Math.random() - 0.5) * 16, y: m.y - m.h, vx: (Math.random() - 0.5) * 3, vy: -3 - Math.random() * 2, t: 0 });
     }
-    if (Math.random() < 0.13 + 0.08 * player.cd.pot) {
+    if (Math.random() < 0.07 + 0.04 * player.cd.pot) {
       drops.push({
         x: m.x + 10, y: m.y - m.h, vy: -3.5, vx: (Math.random() - 0.5) * 2,
         type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
@@ -988,11 +994,15 @@ function hitMon(m, d, crit, noChain) {
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 468 });
-    } else if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
-      gearDrops.push({
-        x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
-        it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
-      });
+    } else {
+      const baseGearChance = Math.min(0.025 + 0.0025 * floor + 0.01 * meta.up.treasure, 0.10);
+      const gearChance = Math.min(baseGearChance + (m.elite ? 0.15 : 0), 0.25);
+      if (Math.random() < gearChance) {
+        gearDrops.push({
+          x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
+          it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
+        });
+      }
     }
     mons.splice(mons.indexOf(m), 1);
     beep(220, 0.15, 'sawtooth');
