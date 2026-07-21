@@ -30,7 +30,7 @@ const PAL = {
   '8':'#f4c542', 'a':'#a05a2c', 'b':'#d8d4f2', 'c':'#6d5aa8',
   'o':'#ff8c2e', 'y':'#ffd23e', 'r':'#e23b3b', 'm':'#7a4a22',
   'e':'#b05ae0', 'f':'#7a2fa8',
-  'g':'#9ab55c', 'p':'#e0687f', 'k':'#6a6a7c'
+  'g':'#9ab55c', 'p':'#e0687f', 'k':'#6a6a7c', 'i':'#7ec8f0'
 };
 const RARITY_COL = ['#e8e8e8', '#6f9dff', '#ffd23e'];
 const MAGE = [
@@ -66,6 +66,22 @@ const SPORE = [
   "............","....gggg....","...gggggg...","..gg7gg7gg..",
   "..gggggggg..","...gggggg...","....gggg....","..g..gg..g.."
 ];
+const FSLIME = [
+  "............","....oooo....","..oooooooo..",".oooooooooo.",".ooyooooyoo.",
+  "oooooooooooo","oooorooroooo",".rrrrrrrrrr."
+];
+const ISLIME = [
+  "............","....iiii....","..iiiiiiii..",".iiiiiiiiii.",".ii1iiii1ii.",
+  "iiiiiiiiiiii","iiiibiibiiii",".bbbbbbbbbb."
+];
+const SNOW = [
+  "............","....2222....","..22222222..",".2222222222.",".22i2222i22.",
+  "222222222222","2222b22b2222",".bbbbbbbbbb."
+];
+const LIZARD = [
+  "............",".rrrrrrrrrr.","ryrrrrrrryr.","rrrrrrrrrrrr","r.rr..rr.rr."
+];
+const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW };
 function drawSprite(rows, x, y, s, flip, flash) {
   const w = rows[0].length;
   for (let r = 0; r < rows.length; r++) {
@@ -304,16 +320,16 @@ for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + 
 const BIOMES = [
   { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', pool:['slime','slime','bat','mush'] },
   { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', pool:['slime','bat','bat','spore'] },
-  { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', pool:['slime','mush','bat','spore'] },
-  { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', pool:['slime','spore','bat','mush'] },
-  { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', pool:['slime','bat','mush','spore'] }
+  { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', pool:['bomber','charger','slime','spore','charger'] },
+  { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', pool:['icer','splitter','icer','spore','bat'] },
+  { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', pool:['bomber','charger','icer','splitter','bat','spore'] }
 ];
 function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 1) / 5))]; }
 
 const player = {
   x: 80, y: 500, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
-  slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, cls: 'warrior',
+  slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, chillT: 0, cls: 'warrior',
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   items: [], itemWin: false,
@@ -360,7 +376,7 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit'); }
 function armorDef() {
   return (player.eq.armor ? player.eq.armor.def : 0) + (player.eq.helmet ? player.eq.helmet.def : 0);
 }
-function moveSpd() { return 3.2 + 0.4 * player.cd.spd + (player.eq.boots ? player.eq.boots.spd : 0) + (player.rageT > 0 ? 0.8 : 0); }
+function moveSpd() { return (3.2 + 0.4 * player.cd.spd + (player.eq.boots ? player.eq.boots.spd : 0) + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function calcStats() {
   const p = player;
@@ -622,6 +638,30 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
       minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
+  if (type === 'bomber') {
+    const hp = Math.round(24 * sc);
+    mons.push({ type:'bomber', x: sx, y: pl.y, baseY: pl.y, vx: 0, fuse: null, boom: false,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(7 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'charger') {
+    const hp = Math.round(34 * sc);
+    mons.push({ type:'charger', x: sx, y: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), chg: 0, tel: 0, dir: 1,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(9 * sc), w: 36, h: 20, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'icer') {
+    const hp = Math.round(28 * sc);
+    mons.push({ type:'icer', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
+      minx, maxx, hp, mhp: hp, xpv: Math.round(13 * xpSc), dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'splitter') {
+    const hp = Math.round(30 * sc);
+    mons.push({ type:'splitter', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1), gen: 0,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * sc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
+    return;
+  }
   const elite = Math.random() < eliteCh;
   const hp = Math.round(26 * sc * (elite ? 3.2 : 1));
   mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
@@ -694,7 +734,7 @@ function resetRun() {
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
   p.x = 80; p.y = 500; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
-  p.rageT = 0; p.shieldHp = 0; p.shieldT = 0;
+  p.rageT = 0; p.shieldHp = 0; p.shieldT = 0; p.chillT = 0;
   p.itemWin = false;
   calcStats();
   p.hp = p.mhp; p.mp = p.mmp;
@@ -728,6 +768,29 @@ function burst(x, y, color, n) {
 }
 
 // ---------- combat ----------
+function removeMon(m) {
+  const i = mons.indexOf(m);
+  if (i < 0) return;
+  mons.splice(i, 1);
+  if (mons.length === 0 && !portal) {
+    portal = { x: worldW - 70, y: 500 };
+    num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
+    beep(880, 0.2, 'sine', 0.05);
+  }
+}
+function explodeBomber(m) {
+  const p = player;
+  burst(m.x, m.y - m.h / 2, '#ff6b2e', 28);
+  beep(90, 0.25, 'sawtooth', 0.06);
+  let dead = false;
+  if (p.inv === 0 && Math.abs(p.x - m.x) < 85 && Math.abs((p.y - p.h / 2) - (m.y - m.h / 2)) < 85) {
+    const d = Math.max(1, Math.round(m.dmg * 2.2) - armorDef());
+    p.vx = (p.x < m.x ? -1 : 1) * 6.5; p.vy = -6; p.onGround = false;
+    dead = dmgPlayer(d);
+  }
+  removeMon(m);
+  return dead;
+}
 function hitMon(m, d, crit) {
   m.hp -= d; m.hitT = 8;
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff');
@@ -760,6 +823,18 @@ function hitMon(m, d, crit) {
     }
     mons.splice(mons.indexOf(m), 1);
     beep(220, 0.15, 'sawtooth');
+    if (m.type === 'splitter' && (m.gen || 0) < 1) {
+      for (let i = 0; i < 2; i++) {
+        const shp = Math.round(m.mhp * 0.4);
+        const by = m.baseY || m.y;
+        mons.push({ type:'splitter', x: m.x + (i ? 20 : -20), y: by, baseY: by,
+          vx: (i ? 1 : -1) * (0.6 + Math.random() * 0.4), gen: 1,
+          minx: Math.max(20, m.x - 130), maxx: Math.min(worldW - 20, m.x + 130),
+          hp: shp, mhp: shp, xpv: Math.round(m.xpv * 0.4), dmg: Math.round(m.dmg * 0.7),
+          w: 26, h: 18, hitT: 0, elite: false, s: 3 });
+      }
+      burst(m.x, m.y - m.h / 2, '#d8f4ff', 12);
+    }
     if (mons.length === 0 && !portal) {
       portal = { x: worldW - 70, y: 500 };
       num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
@@ -975,6 +1050,7 @@ function update() {
   if (p.potCd > 0) p.potCd--;
   for (let i = 0; i < 3; i++) if (p.slotCd[i] > 0) p.slotCd[i]--;
   if (p.rageT > 0) p.rageT--;
+  if (p.chillT > 0) p.chillT--;
   if (p.shieldT > 0) { p.shieldT--; if (p.shieldT === 0) p.shieldHp = 0; }
   if (p.cast > 0) p.cast--;
   if (p.dropT > 0) p.dropT--;
@@ -1073,7 +1149,7 @@ function update() {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
     const slowF = m.slowT > 0 ? 0.5 : 1;
-    if (m.type === 'slime') {
+    if (m.type === 'slime' || m.type === 'icer' || m.type === 'splitter') {
       m.x += m.vx * slowF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
@@ -1096,6 +1172,32 @@ function update() {
         espits.push({ x: m.x, y: m.y - m.h + 4, vx: (p.x - m.x) / 65, vy: -3.5, dmg: Math.round(m.dmg * 0.8) });
         m.st = 110;
         beep(400, 0.08, 'square', 0.03);
+      }
+    } else if (m.type === 'bomber') {
+      const dir = p.x < m.x ? -1 : 1;
+      m.x += dir * 1.4 * slowF;
+      if (m.fuse != null) {
+        m.fuse--;
+        if (m.fuse <= 0) m.boom = true;
+        else if (Math.floor(m.fuse / 4) % 2 === 0) m.hitT = 2; // 引信閃爍預警
+      } else if (Math.abs(m.x - p.x) < 48 && Math.abs(m.y - p.y) < 60) {
+        m.fuse = 30;
+      }
+    } else if (m.type === 'charger') {
+      if (m.chg > 0) {
+        m.chg--;
+        m.x += m.dir * 7.5 * slowF;
+        if (m.x < 40) { m.x = 40; m.chg = 0; }
+        if (m.x > worldW - 40) { m.x = worldW - 40; m.chg = 0; }
+        if (m.chg === 0) { m.minx = Math.max(20, m.x - 140); m.maxx = Math.min(worldW - 20, m.x + 140); } // 衝刺後巡邏範圍跟到當前位置,避免瞬移
+      } else if (m.tel > 0) {
+        m.tel--; m.hitT = 2;
+        if (m.tel === 0) { m.chg = 26; beep(300, 0.1, 'sawtooth', 0.04); }
+      } else {
+        m.x += m.vx * slowF;
+        if (m.x < m.minx) m.vx = Math.abs(m.vx); // 軟反彈,不設值避免瞬移
+        if (m.x > m.maxx) m.vx = -Math.abs(m.vx);
+        if (Math.abs(p.y - m.y) < 46 && Math.abs(p.x - m.x) < 320) { m.dir = p.x < m.x ? -1 : 1; m.tel = 28; }
       }
     } else if (m.type === 'boss') {
       m.t++;
@@ -1167,8 +1269,13 @@ function update() {
         Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < (m.h + p.h) / 2 - 6) {
       const d = Math.max(1, Math.round(m.dmg * (0.9 + Math.random() * 0.2)) - armorDef());
       p.vx = (p.x < m.x ? -1 : 1) * 5; p.vy = -5; p.onGround = false;
+      if (m.type === 'icer') { p.chillT = 120; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }
       if (dmgPlayer(d)) return;
     }
+  }
+  // bomber 引爆(loop 外處理,避免遍歷中 splice)
+  for (const m of mons.slice()) {
+    if (m.boom) { if (explodeBomber(m)) return; }
   }
 
   // boss 毒彈
@@ -1310,7 +1417,7 @@ function render() {
   }
   // monsters
   for (const m of mons) {
-    const rows = m.type === 'mush' ? MUSH : m.type === 'spore' ? SPORE : m.type === 'bat' ? BAT : (m.elite ? ESLIME : SLIME);
+    const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
     drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0);
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
       ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
