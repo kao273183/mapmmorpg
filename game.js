@@ -419,7 +419,7 @@ const SKILL_DEFS = {
   dash:   { cls:'warrior', name:'突進斬', mp:10, cd:120, desc:'向前衝刺,路徑上1.3倍傷害' },
   quake:  { cls:'warrior', name:'震地波', mp:14, cd:160, desc:'震擊前方地面目標,1.6倍傷害' },
   rage:   { cls:'warrior', name:'狂暴',   mp:18, cd:480, desc:'6秒內傷害+30% 移速+0.8' },
-  fire:   { cls:'mage', name:'火球術', mp:8,  cd:45, minCd:18, basic:true, desc:'直線火球投射物' },
+  fire:   { cls:'mage', name:'火球術', mp:8,  cd:45, minCd:18, basic:true, desc:'對飛行怪有柔和追蹤的火球' },
   bolt:   { cls:'mage', name:'落雷術', mp:20, cd:170, desc:'範圍內最多4目標,1.8倍傷害' },
   ice:    { cls:'mage', name:'冰錐術', mp:10, cd:90,  desc:'穿透冰錐,命中緩速敵人' },
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
@@ -1144,6 +1144,21 @@ function playZoneAnim(z) {
   else if (z.kind === 'thunder') playSkillAnim('impact', z.x, z.y, { scale:1.05 });
   else if (z.kind === 'wind' || z.kind === 'whirlwind') playSkillAnim('smoke', z.x, z.y, { scale:Math.max(1.1, z.rx / 74), layer:'back', alpha:0.75 });
 }
+function fireballAim(playerRef, originX, originY) {
+  let target = null, bestScore = Infinity;
+  for (const m of mons) {
+    if (m.type !== 'bat') continue;
+    const forward = (m.x - originX) * playerRef.face;
+    const dy = (m.y - m.h / 2) - originY;
+    if (forward <= 20 || forward > 700 || Math.abs(dy) > 320) continue;
+    const score = forward + Math.abs(dy) * 1.25;
+    if (score < bestScore) { target = m; bestScore = score; }
+  }
+  if (!target) return { target:null, angle:0 };
+  const forward = Math.max(1, (target.x - originX) * playerRef.face);
+  const dy = (target.y - target.h / 2) - originY;
+  return { target, angle:Math.max(-0.65, Math.min(0.65, Math.atan2(dy, forward))) };
+}
 // 技能效果:回傳 false = 施放失敗(不扣MP不進CD)
 const SKILL_FX = {
   slash(t) {
@@ -1251,7 +1266,10 @@ const SKILL_FX = {
   fire(t) {
     const p = player;
     p.cast = 12;
-    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70, mult: t.dmg, kind: 'fire', talent:t });
+    const x = p.x + p.face * 20, y = p.y - 30;
+    const aim = fireballAim(p, x, y), speed = 7.5;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:aim.target ? 90 : 70, mult:t.dmg, kind:'fire', talent:t, aimTarget:aim.target, aimT:aim.target ? 24 : 0 });
     playSfx('fire');
   },
   bolt(t) {
@@ -2428,11 +2446,25 @@ function update() {
 
   // projectiles
   for (const pr of projs.slice()) {
-    pr.x += pr.vx; pr.t--;
+    if (pr.kind === 'fire' && pr.aimT > 0) {
+      pr.aimT--;
+      const target = pr.aimTarget, face = pr.vx < 0 ? -1 : 1;
+      const forward = target && mons.includes(target) ? (target.x - pr.x) * face : -1;
+      if (forward > 0 && forward < 680) {
+        const targetY = target.y - target.h / 2;
+        const wanted = Math.max(-0.7, Math.min(0.7, Math.atan2(targetY - pr.y, forward)));
+        let angle = Math.atan2(pr.vy || 0, Math.abs(pr.vx));
+        angle += Math.max(-0.035, Math.min(0.035, wanted - angle));
+        const speed = Math.hypot(pr.vx, pr.vy || 0) || 7.5;
+        pr.vx = face * Math.cos(angle) * speed; pr.vy = Math.sin(angle) * speed;
+      } else pr.aimT = 0;
+    }
+    pr.x += pr.vx; pr.y += pr.vy || 0; pr.t--;
     let gone = pr.t <= 0;
     for (const m of mons) {
       if (pr.pierce && pr.hits.indexOf(m) >= 0) continue;
-      if (Math.abs(pr.x - m.x) < m.w / 2 + 8 && Math.abs(pr.y - (m.y - m.h / 2)) < m.h / 2 + 10) {
+      const fireVsBat = pr.kind === 'fire' && m.type === 'bat';
+      if (Math.abs(pr.x - m.x) < m.w / 2 + (fireVsBat ? 12 : 8) && Math.abs(pr.y - (m.y - m.h / 2)) < m.h / 2 + (fireVsBat ? 18 : 10)) {
         const tt = pr.talent || { mechanic:false, ultimate:false, branch:-1 };
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
@@ -2995,7 +3027,8 @@ function render() {
       ctx.fillStyle = '#7dcfff'; ctx.fillRect(pr.x - 8, pr.y - 4, 16, 8);
       ctx.fillStyle = '#d8f4ff'; ctx.fillRect(pr.x - 3, pr.y - 2, 6, 4);
     } else {
-      if (!drawSkillVfxFrame('fireball', pr.x, pr.y, Math.floor(frame / 4), 1.05, pr.vx < 0, 0, 1)) {
+      const fireAngle = Math.atan2(pr.vy || 0, Math.abs(pr.vx));
+      if (!drawSkillVfxFrame('fireball', pr.x, pr.y, Math.floor(frame / 4), 1.05, pr.vx < 0, fireAngle, 1)) {
         drawSprite(FIRE, pr.x - 9, pr.y - 9, 3, pr.vx < 0);
         ctx.fillStyle = 'rgba(255,140,46,0.35)'; ctx.fillRect(pr.x - pr.vx * 2 - 6, pr.y - 6, 12, 12);
       }
