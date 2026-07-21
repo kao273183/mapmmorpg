@@ -53,13 +53,85 @@ const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;
 
 // ---------- audio ----------
 let audioCtx = null;
+let audioMaster = null, sfxLoading = false;
+const AUDIO_KEY = 'pixelrogue_audio';
+const audioSettings = { volume: 0.7, muted: false };
+try {
+  const savedAudio = JSON.parse(localStorage.getItem(AUDIO_KEY));
+  if (savedAudio) {
+    if (Number.isFinite(savedAudio.volume)) audioSettings.volume = Math.max(0, Math.min(1, savedAudio.volume));
+    audioSettings.muted = !!savedAudio.muted;
+  }
+} catch (err) {}
+const SFX_FILES = {
+  swordSwing:'audio/sfx/sword_swing.ogg', hit:'audio/sfx/hit.ogg', critical:'audio/sfx/critical.ogg',
+  hurt:'audio/sfx/player_hurt.ogg', pickup:'audio/sfx/pickup.ogg', chest:'audio/sfx/chest_open.ogg',
+  uiSelect:'audio/sfx/ui_select.ogg', uiConfirm:'audio/sfx/ui_confirm.ogg', uiError:'audio/sfx/ui_error.ogg',
+  enhanceSuccess:'audio/sfx/enhance_success.ogg', enhanceFail:'audio/sfx/enhance_fail.ogg', itemBreak:'audio/sfx/item_break.ogg',
+  fire:'audio/sfx/spell_fire.ogg', lightning:'audio/sfx/spell_lightning.ogg', ice:'audio/sfx/spell_ice.ogg', meteor:'audio/sfx/spell_meteor.ogg'
+};
+const SFX_VOLUME = { swordSwing:0.55, hit:0.45, critical:0.62, hurt:0.58, pickup:0.48, chest:0.55, uiSelect:0.38, uiConfirm:0.48, uiError:0.45, enhanceSuccess:0.55, enhanceFail:0.52, itemBreak:0.68, fire:0.48, lightning:0.52, ice:0.46, meteor:0.58 };
+const SFX_COOLDOWN = { hit:35, critical:45, hurt:80, pickup:55, uiSelect:50 };
+const SFX_FALLBACK = { swordSwing:420, hit:520, critical:720, hurt:180, pickup:900, chest:620, uiSelect:600, uiConfirm:880, uiError:150, enhanceSuccess:960, enhanceFail:240, itemBreak:90, fire:760, lightning:920, ice:540, meteor:120 };
+const sfxBuffers = {}, sfxLastAt = {};
+function saveAudioSettings() {
+  try { localStorage.setItem(AUDIO_KEY, JSON.stringify(audioSettings)); } catch (err) {}
+}
+function applyAudioVolume() {
+  if (audioMaster && audioCtx) audioMaster.gain.setValueAtTime(audioSettings.muted ? 0 : audioSettings.volume, audioCtx.currentTime);
+}
+function unlockAudio() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioMaster = audioCtx.createGain(); audioMaster.connect(audioCtx.destination); applyAudioVolume();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    preloadSfx();
+  } catch (err) {}
+}
+async function preloadSfx() {
+  if (!audioCtx || sfxLoading) return;
+  sfxLoading = true;
+  await Promise.all(Object.entries(SFX_FILES).map(async ([id, url]) => {
+    if (sfxBuffers[id]) return;
+    try {
+      const res = await fetch(url); if (!res.ok) return;
+      sfxBuffers[id] = await audioCtx.decodeAudioData(await res.arrayBuffer());
+    } catch (err) {}
+  }));
+  sfxLoading = false;
+}
+function playSfx(id, volume = 1, rate = 1) {
+  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0) return;
+  const now = performance.now(), gap = SFX_COOLDOWN[id] || 0;
+  if (now - (sfxLastAt[id] || 0) < gap) return;
+  sfxLastAt[id] = now;
+  const buffer = sfxBuffers[id];
+  if (!buffer) { beep(SFX_FALLBACK[id] || 500, 0.07, 'square', 0.025 * volume); return; }
+  try {
+    const src = audioCtx.createBufferSource(), gain = audioCtx.createGain();
+    src.buffer = buffer; src.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
+    gain.gain.value = (SFX_VOLUME[id] || 0.5) * volume;
+    src.connect(gain); gain.connect(audioMaster); src.start();
+  } catch (err) {}
+}
+function changeSfxVolume(delta) {
+  audioSettings.volume = Math.max(0, Math.min(1, Math.round((audioSettings.volume + delta) * 10) / 10));
+  if (audioSettings.volume > 0) audioSettings.muted = false;
+  applyAudioVolume(); saveAudioSettings(); playSfx('uiSelect');
+}
+function toggleSfxMute() {
+  audioSettings.muted = !audioSettings.muted; applyAudioVolume(); saveAudioSettings();
+  if (!audioSettings.muted) playSfx('uiConfirm');
+}
 function beep(f, d, type, v) {
-  if (!audioCtx) return;
+  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0) return;
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = type || 'square'; o.frequency.value = f;
     g.gain.value = v || 0.035;
-    o.connect(g); g.connect(audioCtx.destination);
+    o.connect(g); g.connect(audioMaster || audioCtx.destination);
     o.start();
     g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
     o.stop(audioCtx.currentTime + d);
@@ -238,7 +310,7 @@ function enchantGearSlot(it, slot) {
   enchantAnim = { t: 55, text: affixText(rolled), rare: !!AFFIX_BY_ID[rolled.id].rare };
   menuMsg = { text: (old ? '重洗完成：' : '附魔完成：') + affixText(rolled), color: '#d9a8ff', t: 180 };
   saveMeta();
-  beep(720, 0.08, 'sine', 0.04); setTimeout(() => beep(AFFIX_BY_ID[rolled.id].rare ? 1180 : 960, 0.13, 'sine', 0.04), 80);
+  playSfx('enhanceSuccess', 0.8, AFFIX_BY_ID[rolled.id].rare ? 1.12 : 1);
 }
 function matFor(r) { return [{ enh: 1, ench: 0 }, { enh: 3, ench: 1 }, { enh: 6, ench: 3 }, { enh: 10, ench: 6 }, { enh: 16, ench: 10 }][r] || { enh: 1, ench: 0 }; }
 function addMat(r) { const m = matFor(r); meta.mats.enh += m.enh; meta.mats.ench += m.ench; return m; }
@@ -558,7 +630,7 @@ function applyCard(c) {
   calcStats();
   if (c.id === 'hp') p.hp = p.mhp;
   num(p.x, p.y - p.h - 10, c.name + '!', CARD_RCOL[c.r]);
-  beep(700, 0.08, 'sine', 0.04);
+  playSfx('uiConfirm');
   pendingPicks--;
   if (pendingPicks > 0) rollPick();
   else gameState = 'play';
@@ -632,7 +704,7 @@ function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死�
   }
   p.hp -= d; p.inv = 60;
   num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
-  beep(180, 0.12, 'square', 0.05);
+  playSfx('hurt');
   if (p.hp <= 0) {
     if (p.revives > 0) { // 不死鳥:每場一次致死復活
       p.revives--; p.hp = Math.round(p.mhp * 0.5); p.inv = 90;
@@ -657,7 +729,7 @@ const SKILL_FX = {
   slash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
-    beep(500, 0.05, 'square', 0.03);
+    playSfx('swordSwing');
     let hit = 0;
     for (const m of mons.slice()) {
       const dx = (m.x - p.x) * p.face;
@@ -681,7 +753,7 @@ const SKILL_FX = {
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12; p.spinT = 14;
-    beep(300, 0.15, 'sawtooth', 0.05);
+    playSfx('swordSwing', 0.85, 0.82);
   },
   dash(t) {
     const p = player;
@@ -697,7 +769,7 @@ const SKILL_FX = {
     }
     for (let i = 0; i < 8; i++) parts.push({ x: x0 + (nx - x0) * i / 8, y: p.y - 20, vx: 0, vy: -0.5, t: 14, color: '#c8cdec' });
     p.x = nx; p.inv = Math.max(p.inv, 10); // 衝刺短暫無敵
-    beep(600, 0.08, 'square', 0.04);
+    playSfx('swordSwing', 0.9, 1.16);
   },
   quake(t) {
     const p = player;
@@ -730,7 +802,7 @@ const SKILL_FX = {
     const p = player;
     p.cast = 12;
     projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70, mult: t.dmg, kind: 'fire' });
-    beep(880, 0.08, 'sawtooth', 0.03);
+    playSfx('fire');
   },
   bolt(t) {
     const p = player;
@@ -745,13 +817,13 @@ const SKILL_FX = {
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 14;
-    beep(140, 0.25, 'sawtooth', 0.05);
+    playSfx('lightning');
   },
   ice(t) {
     const p = player;
     p.cast = 12;
     projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 6.5, t: 90, mult: t.dmg, kind: 'ice', pierce: true, hits: [] });
-    beep(1000, 0.08, 'sine', 0.03);
+    playSfx('ice');
   },
   meteor(t) {
     const p = player;
@@ -762,7 +834,7 @@ const SKILL_FX = {
         y: 40 - i * 50, vy: 7, r: 55 * t.area, mult: 2.2 * t.dmg
       });
     }
-    beep(220, 0.2, 'sawtooth', 0.05);
+    playSfx('meteor');
   },
   shield(t) {
     const p = player;
@@ -861,7 +933,7 @@ function addGear(it) {
   p.items.push(it);
   if (!p.eq[it.kind]) { p.eq[it.kind] = it; calcStats(); }
   num(p.x, p.y - p.h - 24, '獲得 ' + it.name, RARITY_COL[it.r]);
-  beep(1000, 0.1, 'sine', 0.04);
+  playSfx('pickup');
 }
 function equipItem(it) {
   player.eq[it.kind] = it;
@@ -991,7 +1063,7 @@ function chooseFloorEvent(choice) {
     meta.mats.ench += 1; saveMeta();
     burst(floorEvent.x, floorEvent.y - 30, '#ffd36a', 24);
     num(floorEvent.x, floorEvent.y - 76, '裝備 + 附魔塵×1', '#ffd36a');
-    beep(760, 0.1, 'sine', 0.04); setTimeout(() => beep(980, 0.13, 'sine', 0.04), 90);
+    playSfx('chest');
   } else if (type === 'shrine') {
     floorEvent.status = 'done';
     if (choice === 0) {
@@ -1003,7 +1075,7 @@ function chooseFloorEvent(choice) {
       player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.5));
       num(player.x, player.y - player.h - 18, '生命祝福', '#7dffd6');
     }
-    burst(floorEvent.x, floorEvent.y - 42, '#d9a8ff', 28); beep(840, 0.18, 'sine', 0.04);
+    burst(floorEvent.x, floorEvent.y - 42, '#d9a8ff', 28); playSfx('uiConfirm', 0.9, 1.08);
   } else if (type === 'challenge') {
     floorEvent.status = 'challenge'; spawnEventAmbush();
   }
@@ -1018,7 +1090,7 @@ function checkFloorEventReward() {
   gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4.5, vx:0, it:genGear(floor, rarity), t:1800, ground:468 });
   burst(floorEvent.x, floorEvent.y - 38, '#ffd36a', 36);
   num(floorEvent.x, floorEvent.y - 84, '試煉完成! 稀有裝 + 附魔塵×' + dust, '#ffd36a');
-  beep(660, 0.1, 'sine', 0.045); setTimeout(() => beep(880, 0.12, 'sine', 0.045), 100); setTimeout(() => beep(1100, 0.16, 'sine', 0.045), 210);
+  playSfx('enhanceSuccess', 0.85, 1.08);
 }
 function genFloor(n) {
   if (n % 5 === 0) { genBossFloor(n); return; }
@@ -1171,7 +1243,7 @@ function hitMon(m, d, crit, noChain) {
   if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + d * lifesteal); // 吸血鬼/吸血詞綴
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff');
   burst(m.x, m.y - m.h / 2, '#ffd23e', 6);
-  beep(crit ? 660 : 520, 0.07, 'square');
+  playSfx(crit ? 'critical' : 'hit');
   if (m.hp <= 0) {
     kills++;
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
@@ -1308,14 +1380,20 @@ function applySaveInput() {
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 540, mh = 250, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 540, mh = 340, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace'; ctx.fillText('設 定', W / 2, my + 38);
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 70);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('存檔碼會自動存於瀏覽器;用「複製」可備份到別的裝置', W / 2, my + 92);
-  const bw = 230, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 110;
+  ctx.fillStyle = audioSettings.muted ? '#ff8a8a' : '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText('音效音量：' + (audioSettings.muted ? '靜音' : Math.round(audioSettings.volume * 100) + '%'), W / 2, my + 121);
+  const sm = (x, y, w, label, act, on) => { const b = { x, y, w, h:34, act }; settingsBtns.push(b); ctx.fillStyle = on ? 'rgba(125,255,214,0.22)' : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, w, 34); ctx.strokeStyle = on ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, 34); ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(label, x + w / 2, y + 22); };
+  sm(mx + 54, my + 134, 92, '－ 10%', 'volDown', false);
+  sm(mx + 156, my + 134, 92, '＋ 10%', 'volUp', false);
+  sm(mx + 294, my + 134, 192, audioSettings.muted ? '開啟音效' : '靜音', 'mute', audioSettings.muted);
+  const bw = 230, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 184;
   const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
   mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
   mk(bx2, byy, '匯入存檔', 'import');
@@ -1360,7 +1438,7 @@ function enhanceGear(it) {
   const lv = it.enh || 0;
   if (lv >= ENH_MAX) { menuMsg = { text: '已達強化上限 +' + ENH_MAX, color: '#ffe680', t: 180 }; return; }
   const cost = enhCost(lv);
-  if (meta.mats.enh < cost) { menuMsg = { text: '強化石不足(需 ' + cost + ')', color: '#ff5a5a', t: 180 }; beep(150, 0.1, 'square', 0.04); return; }
+  if (meta.mats.enh < cost) { menuMsg = { text: '強化石不足(需 ' + cost + ')', color: '#ff5a5a', t: 180 }; playSfx('uiError'); return; }
   meta.mats.enh -= cost;
   let result;
   if (Math.random() < enhRate(lv)) { it.enh = lv + 1; result = 'success'; }
@@ -1378,13 +1456,13 @@ function enhanceGear(it) {
     selStash = null;
   }
   saveMeta();
-  if (result === 'success') { beep(700, 0.08, 'sine', 0.04); setTimeout(() => beep(950, 0.12, 'sine', 0.04), 90); }
-  else if (result === 'boom') { beep(160, 0.1, 'sawtooth', 0.05); setTimeout(() => beep(70, 0.35, 'sawtooth', 0.06), 90); }
-  else beep(250, 0.15, 'square', 0.04);
+  if (result === 'success') playSfx('enhanceSuccess');
+  else if (result === 'boom') playSfx('itemBreak');
+  else playSfx('enhanceFail');
 }
 let startBtn = null;
 window.addEventListener('keydown', e => {
-  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
+  unlockAudio();
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
   keys[e.key === ' ' ? 'space' : e.key.toLowerCase()] = true;
   const k = e.key.toLowerCase();
@@ -1459,6 +1537,9 @@ function handleTap(mx, my) {
       }
       if (b.act === 'import') { startSaveEdit('import'); return; }
       if (b.act === 'rename') { startSaveEdit('rename'); return; }
+      if (b.act === 'volDown') { changeSfxVolume(-0.1); return; }
+      if (b.act === 'volUp') { changeSfxVolume(0.1); return; }
+      if (b.act === 'mute') { toggleSfxMute(); return; }
       if (b.act === 'close') { settingsOpen = false; closeSaveEdit(); return; }
     }
     return; // 設定視窗吃掉所有點擊
@@ -1537,6 +1618,7 @@ function handleTap(mx, my) {
   if (mx >= 840 && my >= H - 16) player.itemWin = !player.itemWin;
 }
 cv.addEventListener('mousedown', e => {
+  unlockAudio();
   const r = cv.getBoundingClientRect();
   handleTap((e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height));
 });
@@ -1567,7 +1649,7 @@ function vbtnAt(mx, my) {
 function releaseVbtn(b) { if (b && b.hold) keys[b.hold] = false; }
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
-  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
+  unlockAudio();
   for (const t of e.changedTouches) {
     const [mx, my] = touchPos(t);
     if (eventPanel) { handleTap(mx, my); continue; }
@@ -1929,7 +2011,7 @@ function update() {
     if (Math.abs(d.x - p.x) < 24 && Math.abs(d.y - p.y) < 40) {
       p.bag[d.type]++;
       num(d.x, d.y - 20, '獲得 ' + (d.type === 'hp' ? '紅色藥水' : '藍色藥水'), d.type === 'hp' ? '#ff8a8a' : '#8aa8ff');
-      beep(1100, 0.06, 'sine', 0.04);
+      playSfx('pickup', 0.72, 1.12);
       drops.splice(drops.indexOf(d), 1);
     } else if (d.t <= 0) drops.splice(drops.indexOf(d), 1);
   }
