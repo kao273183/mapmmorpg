@@ -461,10 +461,12 @@ function applyCard(c) {
 }
 
 // ---------- derived stats ----------
-function accV(f) { return player.eq.acc && player.eq.acc[f] ? player.eq.acc[f] : 0; }
+function enhMul(it) { return it ? 1 + 0.05 * (it.enh || 0) : 1; } // 強化 +5%/級
+function eqStat(slot, key) { const it = player.eq[slot]; return it && it[key] ? it[key] * enhMul(it) : 0; }
+function accV(f) { return eqStat('acc', f); }
 function atkPow() {
   const p = player;
-  const base = 8 + p.lv * 2.5 + (p.eq.weapon ? p.eq.weapon.atk : 0) + (p.cls === 'warrior' ? 4 : 0);
+  const base = 8 + p.lv * 2.5 + eqStat('weapon', 'atk') + (p.cls === 'warrior' ? 4 : 0);
   let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (p.rageT > 0 ? 1.3 : 1);
   m *= (1 + 0.30 * perkV('bloodpact')) * (1 + 0.40 * perkV('brute')) * (1 + 0.45 * perkV('glass'));
   if (p.hp < p.mhp * 0.35) m *= (1 + 0.50 * perkV('berserk')); // 絕地反擊:低血加成
@@ -472,13 +474,13 @@ function atkPow() {
 }
 function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit'); }
 function armorDef() {
-  return (player.eq.armor ? player.eq.armor.def : 0) + (player.eq.helmet ? player.eq.helmet.def : 0);
+  return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def'));
 }
-function moveSpd() { return (3.2 + 0.4 * player.cd.spd + (player.eq.boots ? player.eq.boots.spd : 0) + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
+function moveSpd() { return (3.2 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function calcStats() {
   const p = player;
-  const gearHp = (p.eq.armor ? p.eq.armor.hp : 0) + (p.eq.helmet ? p.eq.helmet.hp : 0);
+  const gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
   p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
   p.mmp = 30 + (p.cls === 'mage' ? 15 : 0) + p.lv * 4 + 15 * p.cd.mp;
   if (p.hp > p.mhp) p.hp = p.mhp;
@@ -1107,6 +1109,48 @@ function dismantleStash(it) {
   menuMsg = { text: '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : ''), color: '#7dffd6', t: 180 };
   beep(500, 0.1, 'square', 0.03);
 }
+// ---------- 強化 ----------
+const ENH_MAX = 12;
+function enhCost(lv) { return lv + 2; }
+function enhRate(lv) { return lv < 3 ? 0.9 : lv < 6 ? 0.75 : lv < 9 ? 0.55 : 0.35; }
+function enhBoomRate(lv) { return 0.15 + 0.05 * (lv - 8); }
+function enhZone(lv) { return lv < 4 ? 'safe' : lv < 8 ? 'down' : 'risk'; }
+function gearDesc(it) {
+  const e = enhMul(it);
+  if (it.kind === 'weapon') return '攻擊+' + Math.round(it.atk * e);
+  if (it.kind === 'armor' || it.kind === 'helmet') return 'HP+' + Math.round(it.hp * e) + ' 減傷' + Math.max(1, Math.round(it.def * e));
+  if (it.kind === 'boots') return '移速+' + (Math.round(it.spd * e * 10) / 10) + (it.jmp ? ' 跳躍+1' : '');
+  if (it.kind === 'acc') return it.crit != null ? '爆擊+' + Math.round(it.crit * e * 100) + '%' : '攻擊+' + Math.round((it.atkMul || 0) * e * 100) + '%';
+  return it.desc || '';
+}
+function gearLabel(it) { return it.name + ((it.enh || 0) > 0 ? ' +' + it.enh : ''); }
+let enhAnim = null; // {t, result, uid}
+function enhanceGear(it) {
+  const lv = it.enh || 0;
+  if (lv >= ENH_MAX) { menuMsg = { text: '已達強化上限 +' + ENH_MAX, color: '#ffe680', t: 180 }; return; }
+  const cost = enhCost(lv);
+  if (meta.mats.enh < cost) { menuMsg = { text: '強化石不足(需 ' + cost + ')', color: '#ff5a5a', t: 180 }; beep(150, 0.1, 'square', 0.04); return; }
+  meta.mats.enh -= cost;
+  let result;
+  if (Math.random() < enhRate(lv)) { it.enh = lv + 1; result = 'success'; }
+  else {
+    const z = enhZone(lv);
+    if (z === 'safe') result = 'keep';
+    else if (z === 'down') { it.enh = lv - 1; result = 'down'; }
+    else if (Math.random() < enhBoomRate(lv)) result = 'boom';
+    else { it.enh = lv - 1; result = 'down'; }
+  }
+  enhAnim = { t: 70, result: result, uid: it.uid };
+  if (result === 'boom') {
+    const i = meta.stash.indexOf(it); if (i >= 0) meta.stash.splice(i, 1);
+    for (const part of GEAR_PARTS) if (meta.loadout[part] === it.uid) meta.loadout[part] = null;
+    selStash = null;
+  }
+  saveMeta();
+  if (result === 'success') { beep(700, 0.08, 'sine', 0.04); setTimeout(() => beep(950, 0.12, 'sine', 0.04), 90); }
+  else if (result === 'boom') { beep(160, 0.1, 'sawtooth', 0.05); setTimeout(() => beep(70, 0.35, 'sawtooth', 0.06), 90); }
+  else beep(250, 0.15, 'square', 0.04);
+}
 let startBtn = null;
 window.addEventListener('keydown', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
@@ -1217,6 +1261,7 @@ function handleTap(mx, my) {
         const sel = meta.stash.find(s => s.uid === selStash);
         if (!sel) return;
         if (b.act === 'equip') { meta.loadout[sel.kind] = meta.loadout[sel.kind] === sel.uid ? null : sel.uid; saveMeta(); return; }
+        if (b.act === 'enhance') { enhanceGear(sel); return; }
         if (b.act === 'dismantle') {
           if (pendingStashDel === sel.uid) { dismantleStash(sel); selStash = null; }
           else pendingStashDel = sel.uid;
@@ -1958,7 +2003,7 @@ function slotBox(sx, sy, slot, label) {
   ctx.textAlign = 'center';
   ctx.font = '10px "Courier New",monospace';
   ctx.fillStyle = it ? RARITY_COL[it.r || 0] : '#667';
-  ctx.fillText(it ? it.name : label, sx + 22, sy + 56);
+  ctx.fillText(it ? gearLabel(it) : label, sx + 22, sy + 56);
   ctx.textAlign = 'left';
 }
 function drawItemWin() {
@@ -2009,10 +2054,10 @@ function drawItemWin() {
     drawItemIcon(it, bx, ry - 11, 20);
     ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillStyle = RARITY_COL[it.r || 0]; ctx.textAlign = 'left';
-    ctx.fillText(it.name, bx + 24, ry + 3);
+    ctx.fillText(gearLabel(it), bx + 24, ry + 3);
     ctx.font = '10px "Courier New",monospace';
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(it.desc, bx + 128, ry + 3);
+    ctx.fillText(gearDesc(it), bx + 128, ry + 3);
     if (eqd) {
       ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace';
       ctx.fillText('E', bx + bw - 16, ry + 3);
@@ -2361,7 +2406,8 @@ function renderStashTab() {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#889'; ctx.font = '10px "Courier New",monospace';
       ctx.fillText(RARITY_ABBR[it.r], cxx + cell / 2, cyy + cell - 4);
-      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('▲', cxx + cell / 2, cyy + 11); }
+      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('▲', cxx + 8, cyy + 12); }
+      if (it.enh > 0) { ctx.fillStyle = '#ffcf6a'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('+' + it.enh, cxx + cell - 3, cyy + 12); }
       ctx.textAlign = 'left';
     }
   }
@@ -2371,22 +2417,40 @@ function renderStashTab() {
   if (sel) {
     ctx.textAlign = 'left';
     ctx.fillStyle = RARITY_COL[sel.r]; ctx.font = 'bold 15px "Courier New",monospace';
-    ctx.fillText(sel.name, 40, dyy + 16);
+    ctx.fillText(gearLabel(sel), 40, dyy + 12);
     ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-    ctx.fillText('[' + PART_NAME[sel.kind] + '] ' + sel.desc, 220, dyy + 16);
+    ctx.fillText('[' + PART_NAME[sel.kind] + '] ' + gearDesc(sel), 40, dyy + 30);
+    const lv = sel.enh || 0;
+    if (lv < ENH_MAX) {
+      const zone = enhZone(lv), zt = zone === 'safe' ? '安全區·失敗不降級' : zone === 'down' ? '失敗降 1 級' : '危險·失敗可能爆裝(' + Math.round(enhBoomRate(lv) * 100) + '%)';
+      ctx.fillStyle = '#c8cdec'; ctx.font = '11px "Courier New",monospace';
+      ctx.fillText('強化 +' + lv + '→+' + (lv + 1) + '   成功率 ' + Math.round(enhRate(lv) * 100) + '%   花費 石×' + enhCost(lv), 40, dyy + 48);
+      ctx.fillStyle = zone === 'safe' ? '#7dffd6' : zone === 'down' ? '#ffe680' : '#ff6b6b';
+      ctx.fillText(zt, 360, dyy + 48);
+    } else { ctx.fillStyle = '#ffe680'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('已達強化上限 +' + ENH_MAX, 40, dyy + 48); }
     const equipped = meta.loadout[sel.kind] === sel.uid;
-    const b1 = { x: 560, y: dyy, w: 150, h: 28, act: 'equip' };
+    const b1 = { x: 560, y: dyy - 6, w: 150, h: 26, act: 'equip' };
     stashActBtns.push(b1);
     ctx.fillStyle = equipped ? 'rgba(125,255,214,0.25)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b1.x, b1.y, b1.w, b1.h);
     ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b1.x, b1.y, b1.w, b1.h);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(equipped ? '✓ 出戰中(點擊卸下)' : '設為開局出戰', b1.x + b1.w / 2, b1.y + 18);
+    ctx.fillText(equipped ? '✓ 出戰中(卸下)' : '設為開局出戰', b1.x + b1.w / 2, b1.y + 17);
     const pend = pendingStashDel === sel.uid;
-    const b2 = { x: 724, y: dyy, w: 120, h: 28, act: 'dismantle' };
+    const b2 = { x: 560, y: dyy + 24, w: 150, h: 26, act: 'dismantle' };
     stashActBtns.push(b2);
     ctx.fillStyle = pend ? 'rgba(226,59,59,0.35)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b2.x, b2.y, b2.w, b2.h);
     ctx.strokeStyle = '#44485f'; ctx.strokeRect(b2.x, b2.y, b2.w, b2.h);
-    ctx.fillStyle = '#fff'; ctx.fillText(pend ? '確認分解?' : '分解成材料', b2.x + b2.w / 2, b2.y + 18);
+    ctx.fillStyle = '#fff'; ctx.fillText(pend ? '確認分解?' : '分解成材料', b2.x + b2.w / 2, b2.y + 17);
+    if (lv < ENH_MAX) {
+      const b3 = { x: 724, y: dyy - 6, w: 160, h: 56, act: 'enhance' };
+      stashActBtns.push(b3);
+      const can = meta.mats.enh >= enhCost(lv);
+      ctx.fillStyle = can ? 'rgba(255,140,46,0.28)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(b3.x, b3.y, b3.w, b3.h);
+      ctx.strokeStyle = '#ff8c2e'; ctx.lineWidth = 2; ctx.strokeRect(b3.x, b3.y, b3.w, b3.h);
+      ctx.fillStyle = can ? '#ffcf9e' : '#888'; ctx.font = 'bold 17px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText('⚒ 強化', b3.x + b3.w / 2, b3.y + 24);
+      ctx.font = '11px "Courier New",monospace'; ctx.fillText('強化石 ×' + enhCost(lv), b3.x + b3.w / 2, b3.y + 44);
+    }
     ctx.textAlign = 'left';
   } else {
     ctx.fillStyle = '#667'; ctx.font = '12px "Courier New",monospace'; ctx.textAlign = 'left';
@@ -2398,6 +2462,34 @@ function renderStashTab() {
     if (--menuMsg.t <= 0) menuMsg = null;
     ctx.textAlign = 'left';
   }
+  drawEnhAnim();
+}
+function drawEnhAnim() {
+  if (!enhAnim) return;
+  const a = enhAnim, cx = W / 2, cy = 300, rt = a.result;
+  const boom = rt === 'boom';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  if (a.t > 42) { // 火花/爆炸擴散
+    const rr = (70 - a.t) * 4;
+    for (let i = 0; i < 14; i++) {
+      const ang = i / 14 * Math.PI * 2 + frame * 0.2;
+      ctx.fillStyle = boom ? (i % 2 ? '#ff5a3a' : '#ffb020') : (i % 2 ? '#ffcf6a' : '#7dffd6');
+      const px = cx + Math.cos(ang) * rr, py = cy + Math.sin(ang) * rr;
+      ctx.fillRect(px - 3, py - 3, 6, 6);
+    }
+    ctx.fillStyle = boom ? 'rgba(255,90,58,0.5)' : 'rgba(255,220,120,0.5)';
+    ctx.beginPath(); ctx.arc(cx, cy, Math.max(4, 40 - (70 - a.t) * 2), 0, Math.PI * 2); ctx.fill();
+  } else { // 結果字
+    const txt = rt === 'success' ? '✦ 強化成功 ✦' : rt === 'keep' ? '失敗… 保級' : rt === 'down' ? '強化失敗 · 降級' : '💥 裝備爆裂!';
+    const col = rt === 'success' ? '#7dffd6' : boom ? '#ff5a3a' : '#ffe680';
+    const sc = 1 + Math.max(0, (a.t - 30)) * 0.04;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+    ctx.fillStyle = col; ctx.font = 'bold 30px "Courier New",monospace';
+    ctx.fillText(txt, 0, 0); ctx.restore();
+  }
+  if (--a.t <= 0) enhAnim = null;
+  ctx.textAlign = 'left';
 }
 function renderSkillTab() {
   skillBtns.length = 0; skillActBtns.length = 0;
