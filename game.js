@@ -25,6 +25,45 @@ function drawTile(idx, dx, dy, scale) {
 const itemsheet = new Image();
 let itemsheetReady = false;
 if (window.ITEMSHEET_URI) { itemsheet.onload = () => { itemsheetReady = true; }; itemsheet.src = window.ITEMSHEET_URI; }
+// Akari21 equipment art. Quality tiers deliberately use distinct silhouettes
+// so upgrades are readable before the player checks the item text.
+const GEAR_ART_ROOT = 'item/equipment/Akari21/';
+const GEAR_ART = {
+  warrior: {
+    weapon: ['sword - wood.png', 'sword - metal.png', 'sword - gold.png', 'special sword - ice.png', 'special sword - fire.png'],
+    armor:  ['armor - body (leather).png', 'armor - body (metal).png', 'armor - body (gold).png', 'armor - body (bone).png', 'armor - body (gold).png'],
+    helmet: ['armor - head (leather).png', 'armor - head (metal).png', 'armor - head (gold).png', 'armor - head (bone).png', 'armor - head (gold).png'],
+    boots:  ['armor - foot (leather).png', 'armor - foot (metal).png', 'armor - foot (gold).png', 'armor - foot (bone).png', 'armor - foot (gold).png']
+  },
+  mage: {
+    weapon: ['magic staff 1.png', 'magic staff 1 - blue gem.png', 'magic staff 2 - green gem.png', 'magic staff 3 - purple gem.png', 'magic staff 3 - red gem.png'],
+    armor:  ['mage clothes 1 (black).png', 'mage clothes 1 (purple).png', 'mage clothes 1 (red).png', 'mage clothes 2 (black).png', 'mage clothes 2 (purple).png'],
+    helmet: ['mage hat (black).png', 'mage hat (purple).png', 'mage hat (red).png', 'mage hat (black).png', 'mage hat (purple).png'],
+    boots:  ['armor - foot (leather).png', 'armor - foot (metal).png', 'armor - foot (gold).png', 'armor - foot (bone).png', 'armor - foot (gold).png']
+  },
+  acc: ['items/amulet 1.png', 'items/ring 2.png', 'items/amulet 3.png', 'items/ring 8.png', 'items/amulet 6.png']
+};
+const gearArtImages = {};
+function gearArtPath(it) {
+  if (!it) return '';
+  const rarity = Math.max(0, Math.min(4, it.r | 0));
+  if (it.kind === 'acc') return GEAR_ART_ROOT + GEAR_ART.acc[rarity];
+  const cls = it.cls || (it.wpn === 'stave' ? 'mage' : (typeof player !== 'undefined' && player.cls) || 'warrior');
+  const file = GEAR_ART[cls] && GEAR_ART[cls][it.kind] && GEAR_ART[cls][it.kind][rarity];
+  return file ? GEAR_ART_ROOT + 'weapons and armor/' + file : '';
+}
+for (const cls of ['warrior', 'mage']) {
+  for (const part of ['weapon', 'armor', 'helmet', 'boots']) {
+    for (const file of GEAR_ART[cls][part]) {
+      const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
+      if (!gearArtImages[path]) { const img = new Image(); img.src = path; gearArtImages[path] = img; }
+    }
+  }
+}
+for (const file of GEAR_ART.acc) {
+  const path = GEAR_ART_ROOT + file;
+  const img = new Image(); img.src = path; gearArtImages[path] = img;
+}
 function itemIconIdx(it) {
   if (it.kind === 'weapon') return it.wpn === 'stave' ? 1 : 0;
   if (it.kind === 'armor') return 2;
@@ -33,6 +72,11 @@ function itemIconIdx(it) {
   return -1; // 飾品:程式畫
 }
 function drawItemIcon(it, x, y, s) { // 在 (x,y) 畫 s×s 圖示
+  const art = gearArtImages[gearArtPath(it)];
+  if (art && art.complete && art.naturalWidth) {
+    ctx.drawImage(art, Math.round(x), Math.round(y), s, s);
+    return;
+  }
   const idx = itemIconIdx(it);
   if (idx >= 0 && itemsheetReady) { ctx.drawImage(itemsheet, idx * 32, 0, 32, 32, Math.round(x), Math.round(y), s, s); return; }
   // 飾品:金環 + 品質色寶石(明顯是戒指,不像藥水)
@@ -1392,7 +1436,7 @@ function genGear(n, forceR) {
   const slot = slots[(Math.random() * 5) | 0];
   const r = forceR != null ? forceR : rollRarity(n);
   const m = [1, 1.5, 2.1, 2.8, 3.6][r] * (0.85 + Math.random() * 0.3);
-  const it = { kind: slot, r: r, id: 'g' + (gearSeq++), affixes: Array(affixSlots(r)).fill(null) };
+  const it = { kind: slot, r: r, id: 'g' + (gearSeq++), cls: player.cls, affixes: Array(affixSlots(r)).fill(null) };
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
     it.wpn = player.cls === 'mage' ? 'stave' : 'sword';
