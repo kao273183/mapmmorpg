@@ -401,7 +401,7 @@ const SKILL_DEFS = {
   dash:   { cls:'warrior', name:'突進斬', mp:10, cd:120, desc:'向前衝刺,路徑上1.3倍傷害' },
   quake:  { cls:'warrior', name:'震地波', mp:14, cd:160, desc:'震擊前方地面目標,1.6倍傷害' },
   rage:   { cls:'warrior', name:'狂暴',   mp:18, cd:480, desc:'6秒內傷害+30% 移速+0.8' },
-  fire:   { cls:'mage', name:'火球術', mp:8,  cd:22,  basic:true, desc:'直線火球投射物' },
+  fire:   { cls:'mage', name:'火球術', mp:8,  cd:45, minCd:18, basic:true, desc:'直線火球投射物' },
   bolt:   { cls:'mage', name:'落雷術', mp:20, cd:170, desc:'範圍內最多4目標,1.8倍傷害' },
   ice:    { cls:'mage', name:'冰錐術', mp:10, cd:90,  desc:'穿透冰錐,命中緩速敵人' },
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
