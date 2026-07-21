@@ -609,16 +609,48 @@ loadMeta();
 
 // ---------- adventure contracts / weekly activity ----------
 const ACTIVITY_KEY = 'pixelrogue_activity_v1';
-const DAILY_TASKS = [
-  { id:'daily_kills', stat:'kills', title:'清剿魔物', desc:'擊敗 25 隻怪物', target:25, points:10 },
-  { id:'daily_floors', stat:'floors', title:'深入地城', desc:'通過 3 個樓層', target:3, points:10 },
-  { id:'daily_skills', stat:'skills', title:'磨練技藝', desc:'成功施放 18 次技能', target:18, points:10 }
+const DAILY_TASK_GROUPS = [
+  [
+    { id:'daily_kills_20', stat:'kills', title:'快速清剿', desc:'擊敗 20 隻怪物', target:20, points:10 },
+    { id:'daily_kills_30', stat:'kills', title:'魔物掃蕩', desc:'擊敗 30 隻怪物', target:30, points:10 },
+    { id:'daily_elites_3', stat:'elites', title:'菁英獵手', desc:'擊敗 3 隻菁英怪', target:3, points:10 },
+    { id:'daily_elites_5', stat:'elites', title:'強敵追獵', desc:'擊敗 5 隻菁英怪', target:5, points:10 }
+  ],
+  [
+    { id:'daily_floors_2', stat:'floors', title:'短程探索', desc:'通過 2 個樓層', target:2, points:10 },
+    { id:'daily_floors_4', stat:'floors', title:'深入地城', desc:'通過 4 個樓層', target:4, points:10 },
+    { id:'daily_boss_1', stat:'bosses', title:'首領討伐', desc:'擊敗 1 隻地城首領', target:1, points:10 },
+    { id:'daily_floors_5', stat:'floors', title:'深層遠征', desc:'通過 5 個樓層', target:5, points:10 }
+  ],
+  [
+    { id:'daily_skills_12', stat:'skills', title:'技能熱身', desc:'成功施放 12 次技能', target:12, points:10 },
+    { id:'daily_skills_20', stat:'skills', title:'磨練技藝', desc:'成功施放 20 次技能', target:20, points:10 },
+    { id:'daily_potions_3', stat:'potions', title:'補給測試', desc:'使用 3 瓶藥水', target:3, points:10 },
+    { id:'daily_potions_5', stat:'potions', title:'藥劑實戰', desc:'使用 5 瓶藥水', target:5, points:10 }
+  ]
 ];
-const WEEKLY_TASKS = [
-  { id:'weekly_kills', stat:'kills', title:'本週討伐', desc:'擊敗 180 隻怪物', target:180, points:30 },
-  { id:'weekly_floors', stat:'floors', title:'地城遠征', desc:'累計通過 20 個樓層', target:20, points:30 },
-  { id:'weekly_bosses', stat:'bosses', title:'首領獵人', desc:'擊敗 3 隻地城首領', target:3, points:30 }
+const WEEKLY_TASK_GROUPS = [
+  [
+    { id:'weekly_kills_120', stat:'kills', title:'本週討伐', desc:'擊敗 120 隻怪物', target:120, points:30 },
+    { id:'weekly_kills_180', stat:'kills', title:'大規模掃蕩', desc:'擊敗 180 隻怪物', target:180, points:30 },
+    { id:'weekly_elites_15', stat:'elites', title:'菁英清算', desc:'擊敗 15 隻菁英怪', target:15, points:30 },
+    { id:'weekly_elites_25', stat:'elites', title:'強敵殲滅', desc:'擊敗 25 隻菁英怪', target:25, points:30 }
+  ],
+  [
+    { id:'weekly_floors_15', stat:'floors', title:'地城巡禮', desc:'累計通過 15 個樓層', target:15, points:30 },
+    { id:'weekly_floors_25', stat:'floors', title:'地城遠征', desc:'累計通過 25 個樓層', target:25, points:30 },
+    { id:'weekly_bosses_2', stat:'bosses', title:'首領獵人', desc:'擊敗 2 隻地城首領', target:2, points:30 },
+    { id:'weekly_bosses_4', stat:'bosses', title:'王者終結者', desc:'擊敗 4 隻地城首領', target:4, points:30 }
+  ],
+  [
+    { id:'weekly_skills_80', stat:'skills', title:'技能修行', desc:'成功施放 80 次技能', target:80, points:30 },
+    { id:'weekly_skills_120', stat:'skills', title:'奧義鍛鍊', desc:'成功施放 120 次技能', target:120, points:30 },
+    { id:'weekly_potions_20', stat:'potions', title:'戰地補給', desc:'使用 20 瓶藥水', target:20, points:30 },
+    { id:'weekly_potions_30', stat:'potions', title:'藥劑達人', desc:'使用 30 瓶藥水', target:30, points:30 }
+  ]
 ];
+const DAILY_TASKS = DAILY_TASK_GROUPS.flat(), WEEKLY_TASKS = WEEKLY_TASK_GROUPS.flat();
+const ACTIVITY_STATS = ['kills','floors','skills','bosses','elites','potions'];
 const ACTIVITY_MILESTONES = [
   { points:50, label:'強化石 x2', enh:2, ench:0 },
   { points:120, label:'餘燼光環＋附魔塵 x2', enh:0, ench:2, aura:'ember' },
@@ -631,9 +663,11 @@ const AURA_DEFS = {
 };
 const activityState = {
   day:'', week:'', activity:0,
-  daily:{ kills:0, floors:0, skills:0, bosses:0 }, weekly:{ kills:0, floors:0, skills:0, bosses:0 },
+  daily:{ kills:0, floors:0, skills:0, bosses:0, elites:0, potions:0 }, weekly:{ kills:0, floors:0, skills:0, bosses:0, elites:0, potions:0 },
+  dailyTaskIds:[], weeklyTaskIds:[],
   claimedDaily:{}, claimedWeekly:{}, milestones:{}, cosmetics:['none'], aura:'none'
 };
+function emptyActivityCounters() { return Object.fromEntries(ACTIVITY_STATS.map(id => [id, 0])); }
 function localDayKey(date) {
   const d = date || new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -643,6 +677,15 @@ function localWeekKey(date) {
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return localDayKey(d);
 }
+function rotatingTaskIds(groups, periodKey) {
+  const serial = Math.floor(new Date(periodKey + 'T12:00:00').getTime() / 86400000);
+  return groups.map((group, i) => group[((serial + i * 2) % group.length + group.length) % group.length].id);
+}
+function currentActivityTasks(scope) {
+  const daily = scope === 'daily', ids = daily ? activityState.dailyTaskIds : activityState.weeklyTaskIds;
+  const pool = daily ? DAILY_TASKS : WEEKLY_TASKS;
+  return ids.map(id => pool.find(t => t.id === id)).filter(Boolean);
+}
 function saveActivity() {
   try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(activityState)); } catch (err) {}
 }
@@ -651,16 +694,20 @@ function refreshActivityPeriods(now) {
   let changed = false;
   if (activityState.week !== week) {
     activityState.week = week; activityState.activity = 0;
-    activityState.weekly = { kills:0, floors:0, skills:0, bosses:0 };
+    activityState.weekly = emptyActivityCounters();
+    activityState.weeklyTaskIds = rotatingTaskIds(WEEKLY_TASK_GROUPS, week);
     activityState.claimedWeekly = {}; activityState.milestones = {};
     changed = true;
   }
   if (activityState.day !== day) {
     activityState.day = day;
-    activityState.daily = { kills:0, floors:0, skills:0, bosses:0 };
+    activityState.daily = emptyActivityCounters();
+    activityState.dailyTaskIds = rotatingTaskIds(DAILY_TASK_GROUPS, day);
     activityState.claimedDaily = {};
     changed = true;
   }
+  if (activityState.dailyTaskIds.length !== 3) { activityState.dailyTaskIds = rotatingTaskIds(DAILY_TASK_GROUPS, day); changed = true; }
+  if (activityState.weeklyTaskIds.length !== 3) { activityState.weeklyTaskIds = rotatingTaskIds(WEEKLY_TASK_GROUPS, week); changed = true; }
   if (changed) saveActivity();
 }
 function loadActivity() {
@@ -670,7 +717,9 @@ function loadActivity() {
       activityState.day = typeof d.day === 'string' ? d.day : '';
       activityState.week = typeof d.week === 'string' ? d.week : '';
       activityState.activity = Math.max(0, Math.min(300, d.activity | 0));
-      for (const scope of ['daily','weekly']) for (const stat of ['kills','floors','skills','bosses']) activityState[scope][stat] = Math.max(0, (d[scope] && d[scope][stat]) | 0);
+      for (const scope of ['daily','weekly']) for (const stat of ACTIVITY_STATS) activityState[scope][stat] = Math.max(0, (d[scope] && d[scope][stat]) | 0);
+      activityState.dailyTaskIds = Array.isArray(d.dailyTaskIds) ? d.dailyTaskIds.filter(id => DAILY_TASKS.some(t => t.id === id)).slice(0, 3) : [];
+      activityState.weeklyTaskIds = Array.isArray(d.weeklyTaskIds) ? d.weeklyTaskIds.filter(id => WEEKLY_TASKS.some(t => t.id === id)).slice(0, 3) : [];
       activityState.claimedDaily = d.claimedDaily && typeof d.claimedDaily === 'object' ? d.claimedDaily : {};
       activityState.claimedWeekly = d.claimedWeekly && typeof d.claimedWeekly === 'object' ? d.claimedWeekly : {};
       activityState.milestones = d.milestones && typeof d.milestones === 'object' ? d.milestones : {};
@@ -683,6 +732,7 @@ function loadActivity() {
 }
 function activityProgress(stat, amount) {
   refreshActivityPeriods();
+  if (!ACTIVITY_STATS.includes(stat)) return;
   const n = Math.max(0, amount == null ? 1 : amount | 0);
   activityState.daily[stat] = Math.max(0, (activityState.daily[stat] || 0) + n);
   activityState.weekly[stat] = Math.max(0, (activityState.weekly[stat] || 0) + n);
@@ -690,7 +740,7 @@ function activityProgress(stat, amount) {
 }
 function claimActivityTask(scope, id) {
   refreshActivityPeriods();
-  const daily = scope === 'daily', defs = daily ? DAILY_TASKS : WEEKLY_TASKS;
+  const daily = scope === 'daily', defs = currentActivityTasks(scope);
   const task = defs.find(t => t.id === id), claims = daily ? activityState.claimedDaily : activityState.claimedWeekly;
   const progress = daily ? activityState.daily : activityState.weekly;
   if (!task || claims[id] || (progress[task.stat] || 0) < task.target) return;
@@ -719,8 +769,8 @@ function equipAura(id) {
 function hasActivityReward() {
   refreshActivityPeriods();
   const taskReady = (defs, progress, claims) => defs.some(t => !claims[t.id] && (progress[t.stat] || 0) >= t.target);
-  return taskReady(DAILY_TASKS, activityState.daily, activityState.claimedDaily)
-    || taskReady(WEEKLY_TASKS, activityState.weekly, activityState.claimedWeekly)
+  return taskReady(currentActivityTasks('daily'), activityState.daily, activityState.claimedDaily)
+    || taskReady(currentActivityTasks('weekly'), activityState.weekly, activityState.claimedWeekly)
     || ACTIVITY_MILESTONES.some(m => !activityState.milestones[m.points] && activityState.activity >= m.points);
 }
 loadActivity();
@@ -1570,6 +1620,7 @@ function hitMon(m, d, crit, noChain) {
     kills++;
     activityProgress('kills', 1);
     if (m.type === 'boss') activityProgress('bosses', 1);
+    else if (m.elite) activityProgress('elites', 1);
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
     if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
@@ -1655,6 +1706,7 @@ function usePot(t) {
     return;
   }
   p.bag[t]--; p.potCd = 30;
+  activityProgress('potions', 1);
   if (t === 'hp') { p.hp = Math.min(p.mhp, p.hp + 60); num(p.x, p.y - p.h - 10, '+60 HP', '#7dff8a'); }
   else { p.mp = Math.min(p.mmp, p.mp + 40); num(p.x, p.y - p.h - 10, '+40 MP', '#7f9cff'); }
   beep(1000, 0.07, 'sine', 0.04);
@@ -3644,8 +3696,8 @@ function renderActivityTaskPanel(scope, x, y, w, defs, title, resetText) {
 }
 function renderActivityTab() {
   refreshActivityPeriods(); activityBtns.length = 0;
-  renderActivityTaskPanel('daily', 24, 112, 448, DAILY_TASKS, '每 日 任 務', '每日 00:00 重置');
-  renderActivityTaskPanel('weekly', 488, 112, 448, WEEKLY_TASKS, '每 週 挑 戰', '週一 00:00 重置');
+  renderActivityTaskPanel('daily', 24, 112, 448, currentActivityTasks('daily'), '每 日 任 務', '每日輪替・00:00 重置');
+  renderActivityTaskPanel('weekly', 488, 112, 448, currentActivityTasks('weekly'), '每 週 挑 戰', '每週輪替・週一重置');
 
   const x = 24, y = 356, w = 912;
   drawStonePanel(x, y, w, 158, '本 週 活 躍  •  ' + activityState.activity + ' / 300');
