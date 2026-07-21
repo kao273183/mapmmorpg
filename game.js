@@ -3129,7 +3129,8 @@ function render() {
   if (p.eventAtk > 0) { ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('血祝+' + Math.round(p.eventAtk * 100) + '%', 92, H - 8); }
   bar(170, H - 36, 200, 12, p.hp / p.mhp, '#e23b3b', 'HP ' + Math.ceil(p.hp) + '/' + p.mhp);
   bar(170, H - 20, 200, 12, p.mp / p.mmp, '#3b6fe2', 'MP ' + Math.ceil(p.mp) + '/' + p.mmp);
-  bar(400, H - 28, 280, 12, p.xp / xpNeed(p.lv), '#d8c93a', 'EXP ' + (100 * p.xp / xpNeed(p.lv)).toFixed(0) + '%');
+  // 經驗條只使用快捷列左側空間，避免與衝刺冷卻框重疊。
+  bar(400, H - 28, 200, 12, p.xp / xpNeed(p.lv), '#d8c93a', 'EXP ' + (100 * p.xp / xpNeed(p.lv)).toFixed(0) + '%');
   ctx.textAlign = 'left';
   ctx.font = '12px "Courier New",monospace';
   ctx.fillStyle = p.bag.hp > 0 ? '#ff8a8a' : '#666';
