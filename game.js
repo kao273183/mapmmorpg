@@ -1589,8 +1589,17 @@ function checkFloorEventReward() {
   num(floorEvent.x, floorEvent.y - 84, '試煉完成! 稀有裝 + 附魔塵×' + dust, '#ffd36a');
   playSfx('enhanceSuccess', 0.85, 1.08);
 }
-function genFloor(n) {
+function promoteDungeonElite(m) {
+  if (!m || m.type === 'boss' || m.elite) return;
+  m.elite = true;
+  m.hp = Math.round(m.hp * 2.4); m.mhp = m.hp;
+  m.dmg = Math.round(m.dmg * 1.25); m.xpv = Math.round(m.xpv * 2);
+  m.w = Math.round(m.w * 1.15); m.h = Math.round(m.h * 1.15);
+}
+function genFloor(n, roomSpec) {
   if (n % 5 === 0) { genBossFloor(n); return; }
+  const spec = roomSpec || currentRoomSpec || makeRoomSpec('safe', n, 0);
+  const roomType = spec.type || 'safe';
   worldW = Math.min(1600 + n * 120, 2600);
   plats = [{ x: 0, y: 468, w: worldW, ground: true }];
   const rowsY = [405, 325, 250];
@@ -1616,18 +1625,38 @@ function genFloor(n) {
     px += pw + 60 + Math.random() * 130;
   }
   mons = [];
-  const count = Math.min(6 + n * 2, 22);
+  const baseCount = Math.min(6 + n * 2, 22);
+  const countMul = roomType === 'camp' ? 0 : roomType === 'treasure' ? 0.4 : roomType === 'event' ? 0.6 : roomType === 'elite' ? 0.65 : 1;
+  const count = countMul === 0 ? 0 : Math.max(3, Math.ceil(baseCount * countMul));
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1); // 線性+二次成長,深淵(21+)再×1.15
   const xpSc = 1 + 0.15 * (n - 1);
-  const eliteCh = Math.min(0.08 + 0.025 * n, 0.4);
+  const eliteCh = roomType === 'safe' ? Math.min(0.05 + 0.015 * n, 0.25) : 0;
   const pool = biomeOf(n).pool;
   for (let i = 0; i < count; i++) {
     spawnMon(pool[(Math.random() * pool.length) | 0], n, sc, xpSc, eliteCh);
   }
+  if (roomType === 'elite') {
+    const candidates = mons.filter(m => m.type !== 'bat').slice(0, 2);
+    while (candidates.length < Math.min(2, mons.length)) {
+      const extra = mons.find(m => !candidates.includes(m)); if (!extra) break; candidates.push(extra);
+    }
+    candidates.forEach(promoteDungeonElite);
+  }
   portal = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
-  spawnFloorEvent(n);
+  floorEvent = null; eventPanel = null;
+  if (roomType === 'treasure') {
+    floorEvent = { type:'chest', x:Math.round(worldW * 0.62), y:468, status:'idle' };
+  } else if (roomType === 'event') {
+    const rng = dungeonRng(spec.seed + ':event');
+    floorEvent = { type:rng() < 0.5 ? 'shrine' : 'challenge', x:Math.round(worldW * 0.62), y:468, status:'idle' };
+  } else if (roomType === 'camp') {
+    player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.25));
+    player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.25));
+    num(player.x, player.y - player.h - 34, '營地休整 · HP / MP +25%', '#8aa8ff');
+  }
   floorT = 90;
+  if (mons.length === 0) completeDungeonRoom();
 }
 function genBossFloor(n) {
   worldW = 1300;
@@ -1690,24 +1719,26 @@ function resetRun() {
   floor = 1; kills = 0; soulsRun = 0; gearSeq = 1;
   pendingPicks = 0;
   dmgNums.length = 0; parts.length = 0;
-  genFloor(1);
+  resetDungeonRun();
+  genFloor(1, currentRoomSpec);
   if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
   gameState = 'play';
   setHint(HINT_PLAY);
   beep(660, 0.1, 'sine', 0.04);
   setTimeout(() => beep(880, 0.15, 'sine', 0.04), 100);
 }
-function endRun() {
+function endRun(result) {
   const gained = Math.round(soulsRun * soulGainMul());
   meta.souls += gained;
   let stashed = 0;
   for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
-  lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource };
+  lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource, result:result === 'extract' ? 'extract' : 'death' };
   if (floor > bestFloor) bestFloor = floor;
   saveMeta();
   gameState = 'dead';
   setHint('Enter 返回基地');
-  beep(120, 0.4, 'sawtooth', 0.05);
+  if (lastRun.result === 'extract') playSfx('uiConfirm', 0.95, 1.08);
+  else beep(120, 0.4, 'sawtooth', 0.05);
 }
 
 // ---------- fx ----------
@@ -1740,11 +1771,7 @@ function removeMon(m) {
   const i = mons.indexOf(m);
   if (i < 0) return;
   mons.splice(i, 1);
-  if (mons.length === 0 && !portal) {
-    portal = { x: worldW - 70, y: 468 };
-    num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
-    beep(880, 0.2, 'sine', 0.05);
-  }
+  if (mons.length === 0) { checkFloorEventReward(); completeDungeonRoom(); }
 }
 function explodeBomber(m) {
   const p = player;
@@ -1835,11 +1862,7 @@ function hitMon(m, d, crit, noChain) {
       }
       burst(m.x, m.y - m.h / 2, '#d8f4ff', 12);
     }
-    if (mons.length === 0 && !portal) {
-      portal = { x: worldW - 70, y: 468 };
-      num(player.x, player.y - player.h - 40, '傳送門開啟!', '#b05ae0');
-      beep(880, 0.2, 'sine', 0.05);
-    }
+    if (mons.length === 0) completeDungeonRoom();
   }
 }
 function gainXp(n) {
@@ -2059,6 +2082,7 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (settingsOpen) { if (k === 'escape' && !settingsMode) { settingsOpen = false; closeSaveEdit(); clearGameInputs(); } return; }
   if (statsOpen) { if (k === 'p' || k === 'escape') { statsOpen = false; clearGameInputs(); } return; }
+  if (handleDungeonPanelKey(k)) return;
   if (gameState === 'town') {
     if (chatting) {
       if (k === 'enter') { const t = chatInput.trim(); if (t) sendChat(t); chatInput = ''; chatting = false; }
@@ -2116,6 +2140,7 @@ window.addEventListener('blur', clearGameInputs);
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearGameInputs(); });
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+  if (handleDungeonPanelTap(mx, my)) return;
   if (eventPanel) {
     for (const b of eventChoiceBtns) if (inside(b)) { chooseFloorEvent(b.choice); return; }
     return;
@@ -2272,7 +2297,7 @@ cv.addEventListener('touchstart', e => {
   unlockAudio();
   for (const t of e.changedTouches) {
     const [mx, my] = touchPos(t);
-    if (eventPanel) { handleTap(mx, my); continue; }
+    if (eventPanel || dungeonPanelOpen()) { handleTap(mx, my); continue; }
     if (gameState === 'play') {
       const b = vbtnAt(mx, my);
       if (b) {
@@ -2314,7 +2339,7 @@ function touchEnd(e) {
 cv.addEventListener('touchend', touchEnd, { passive: false });
 cv.addEventListener('touchcancel', touchEnd, { passive: false });
 function drawTouchUI() {
-  if (!isTouch || gameState !== 'play' || eventPanel) return;
+  if (!isTouch || gameState !== 'play' || eventPanel || dungeonPanelOpen()) return;
   const held = new Set(Object.values(touchMap));
   ctx.textAlign = 'center';
   for (const b of vbtns) {
@@ -2424,16 +2449,7 @@ function update() {
 
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
-    floor++;
-    activityProgress('floors', 1);
-    const campHeal = 0.05 * perkV('camp');
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * (0.15 + campHeal)));
-    if (campHeal > 0) p.mp = Math.min(p.mmp, p.mp + Math.round(p.mmp * campHeal));
-    genFloor(floor);
-    if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
-    p.x = 80; p.y = 468; p.vy = 0;
-    num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層', '#b05ae0');
-    beep(660, 0.15, 'sine', 0.05);
+    advanceDungeonPortal();
     return;
   }
 
@@ -2861,6 +2877,7 @@ function render() {
     for (let x = q.x; x < q.x + q.w; x += 18) ctx.fillRect(x + 6, q.y + 4, 6, 3);
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
+  drawDungeonRoomWorld();
   drawFloorEventWorld();
   // Lv3/Lv5 技能區域特效（燃燒地面、餘震、龍捲與二次衝擊）
   for (const z of skillZones) {
@@ -2890,7 +2907,7 @@ function render() {
     }
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText('下一層', portal.x, portal.y - ph - 8);
+    ctx.fillText(portal.kind === 'chapter' ? '章節結算' : (floor + 1) % 5 === 0 ? '挑戰 BOSS' : '選擇路線', portal.x, portal.y - ph - 8);
   }
   // gear drops
   for (const gd of gearDrops) {
@@ -3095,6 +3112,7 @@ function render() {
   ctx.fillText('第 ' + floor + ' 層 ' + biomeOf(floor).name, 12, 20);
   ctx.fillStyle = '#c8cdec';
   ctx.fillText(portal ? '前往傳送門 →' : '殘存 ' + mons.length, 244, 20);
+  drawDungeonHud();
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
     bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, biomeOf(floor).bcol, biomeOf(floor).boss + '  第' + bossM.phase + '階段');
@@ -3176,6 +3194,7 @@ function render() {
   if (p.itemWin) drawItemWin();
   drawTouchUI();
   drawEventPanel();
+  drawDungeonPanels();
 }
 function bar(x, y, w, h, ratio, color, label) {
   ctx.fillStyle = '#111'; ctx.fillRect(x, y, w, h);
@@ -3425,15 +3444,16 @@ function drawPick() {
 function drawDead() {
   ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 36px "Courier New",monospace';
-  ctx.fillText('你 倒 下 了 ...', W / 2, 180);
+  const extracted = lastRun && lastRun.result === 'extract';
+  ctx.fillStyle = extracted ? '#7dffd6' : '#ff6b6b'; ctx.font = 'bold 36px "Courier New",monospace';
+  ctx.fillText(extracted ? '成 功 撤 退！' : '你 倒 下 了 ...', W / 2, 180);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 18px "Courier New",monospace';
   ctx.fillText('到達 第 ' + lastRun.floor + ' 層', W / 2, 240);
   ctx.fillText('擊殺 ' + lastRun.kills + ' 隻怪物', W / 2, 270);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('獲得靈魂 +' + lastRun.gained, W / 2, 300);
-  ctx.fillStyle = '#ffb0b0'; ctx.font = 'bold 14px "Courier New",monospace';
-  ctx.fillText('最後傷害：' + (lastRun.cause || '未知攻擊'), W / 2, 326);
+  ctx.fillStyle = extracted ? '#9ecbff' : '#ffb0b0'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText(extracted ? '本章獎勵與探索成果已保存' : '最後傷害：' + (lastRun.cause || '未知攻擊'), W / 2, 326);
   if (lastRun.stashed) { ctx.fillStyle = '#d8b365'; ctx.fillText('裝備存入倉庫 ' + lastRun.stashed + ' 件', W / 2, 350); }
   ctx.fillStyle = Math.floor(frame / 30) % 2 === 0 ? '#ffe680' : '#8890b8';
   ctx.font = '15px "Courier New",monospace';
@@ -4290,7 +4310,7 @@ function fixedTick() {
   tickCombatFeel();
   if (gameState === 'town') {
     updateTown();
-  } else if (gameState === 'play' && !statsOpen && !settingsOpen) {
+  } else if (gameState === 'play' && !statsOpen && !settingsOpen && !dungeonPanelOpen()) {
     captureBufferedInputs();
     if (hitStopT > 0) hitStopT--;
     else update();
