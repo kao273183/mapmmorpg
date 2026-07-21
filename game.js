@@ -44,6 +44,38 @@ function drawItemIcon(it, x, y, s) { // 在 (x,y) 畫 s×s 圖示
   ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(cx - s * 0.05, cy - s * 0.23, s * 0.05, 0, Math.PI * 2); ctx.fill();
 }
 function drawPotionIcon(type, x, y, s) { if (itemsheetReady) ctx.drawImage(itemsheet, (type === 'hp' ? 5 : 6) * 32, 0, 32, 32, Math.round(x), Math.round(y), s, s); }
+
+// Skill artwork: 256px codex icons plus compact 72px horizontal VFX sheets.
+const SKILL_ICON_FILES = {
+  slash:11, spin:21, dash:52, quake:42, rage:62,
+  fire:25, bolt:7, ice:59, meteor:1, shield:3
+};
+const skillIcons = {}, skillIconsGray = {};
+for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
+  const normal = new Image(), gray = new Image();
+  normal.src = 'Skill/256x256px/Normal/' + n + ' Icon.png';
+  gray.src = 'Skill/256x256px/Gray/' + n + ' Icon.png';
+  skillIcons[id] = normal; skillIconsGray[id] = gray;
+}
+const SKILL_VFX_DEFS = {
+  groundBurst:{ src:'Skill/1 Magic/1.png', frames:8 },
+  rune:{ src:'Skill/1 Magic/2.png', frames:8 },
+  beam:{ src:'Skill/1 Magic/3.png', frames:8 },
+  slashBeam:{ src:'Skill/1 Magic/3_2.png', frames:8 },
+  fireball:{ src:'Skill/1 Magic/4.png', frames:4 },
+  fireballDiag:{ src:'Skill/1 Magic/4_1.png', frames:4 },
+  explosion:{ src:'Skill/1 Magic/4_2.png', frames:4 },
+  impact:{ src:'Skill/1 Magic/6.png', frames:4 },
+  groundImpact:{ src:'Skill/1 Magic/6_2.png', frames:4 },
+  iceSpikes:{ src:'Skill/1 Magic/7.png', frames:8 },
+  roots:{ src:'Skill/1 Magic/8.png', frames:8 },
+  smoke:{ src:'Skill/1 Magic/9.png', frames:8 },
+  teleport:{ src:'Skill/1 Magic/10.png', frames:6 }
+};
+const skillVfxImages = {};
+for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
+  const img = new Image(); img.src = def.src; skillVfxImages[id] = img;
+}
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
@@ -569,7 +601,7 @@ const eventChoiceBtns = [];
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
 let plats = [], mons = [];
-const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [], skillZones = [];
+const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [], skillZones = [], skillAnims = [];
 const clouds = [];
 for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + (i * 53) % 120, w: 70 + (i * 31) % 60 });
 
@@ -799,11 +831,45 @@ function chainSkillTargets(start, seen, hops, mult, grow) {
 function addSkillZone(kind, x, y, rx, ry, delay, duration, interval, mult, color, opts) {
   skillZones.push({ kind, x, y, rx, ry, delay:delay || 0, t:duration, maxT:duration, interval:interval || duration, mult, color, opts:opts || {}, fired:false });
 }
+function playSkillAnim(key, x, y, options) {
+  if (!SKILL_VFX_DEFS[key]) return;
+  const o = options || {}, life = o.life || SKILL_VFX_DEFS[key].frames * 4;
+  skillAnims.push({ key, x, y, life, maxLife:life, scale:o.scale || 1, flip:!!o.flip, rotation:o.rotation || 0, alpha:o.alpha == null ? 1 : o.alpha, layer:o.layer || 'front' });
+}
+function drawSkillVfxFrame(key, x, y, frameIndex, scale, flip, rotation, alpha) {
+  const def = SKILL_VFX_DEFS[key], img = skillVfxImages[key];
+  if (!def || !img || !img.complete || !img.naturalWidth) return false;
+  const fi = Math.max(0, Math.min(def.frames - 1, frameIndex % def.frames));
+  const size = 72 * (scale || 1);
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y));
+  if (rotation) ctx.rotate(rotation);
+  if (flip) ctx.scale(-1, 1);
+  ctx.globalAlpha *= alpha == null ? 1 : alpha;
+  ctx.drawImage(img, fi * 72, 0, 72, 72, -size / 2, -size / 2, size, size);
+  ctx.restore();
+  return true;
+}
+function drawSkillAnimations(layer) {
+  for (const a of skillAnims) {
+    if (a.layer !== layer) continue;
+    const def = SKILL_VFX_DEFS[a.key], elapsed = a.maxLife - a.life;
+    const fi = Math.min(def.frames - 1, Math.floor(elapsed / a.maxLife * def.frames));
+    drawSkillVfxFrame(a.key, a.x, a.y, fi, a.scale, a.flip, a.rotation, a.alpha);
+  }
+}
+function playZoneAnim(z) {
+  if (z.kind === 'burn' || z.kind === 'sunfire') playSkillAnim('groundBurst', z.x, z.y - 30, { scale:Math.max(1, z.rx / 58), layer:'back', alpha:0.82 });
+  else if (z.kind === 'aftershock' || z.kind === 'rupture') playSkillAnim('roots', z.x, z.y - 30, { scale:Math.max(1, z.rx / 64), layer:'back' });
+  else if (z.kind === 'impact') playSkillAnim('groundImpact', z.x, z.y - 30, { scale:Math.max(1, z.rx / 64), layer:'back' });
+  else if (z.kind === 'thunder') playSkillAnim('impact', z.x, z.y, { scale:1.05 });
+  else if (z.kind === 'wind' || z.kind === 'whirlwind') playSkillAnim('smoke', z.x, z.y, { scale:Math.max(1.1, z.rx / 74), layer:'back', alpha:0.75 });
+}
 // 技能效果:回傳 false = 施放失敗(不扣MP不進CD)
 const SKILL_FX = {
   slash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
+    playSkillAnim('slashBeam', p.x + p.face * 42, p.y - 30, { scale:1.05 * t.area, flip:p.face < 0, rotation:p.face < 0 ? -0.08 : 0.08 });
     playSfx('swordSwing');
     p.skillCasts.slash = (p.skillCasts.slash || 0) + 1;
     const combo = t.ultimate && t.branch === 1 && p.skillCasts.slash % 3 === 0;
@@ -836,6 +902,7 @@ const SKILL_FX = {
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12; p.spinT = 14;
+    playSkillAnim('rune', p.x, p.y - 28, { scale:Math.max(1.55, radius / 60), layer:'back', alpha:0.85 });
     playSfx('swordSwing', 0.85, 0.82);
     if (t.ultimate && t.branch === 0) addSkillZone('whirlwind', p.x, p.y - 28, radius * 1.1, 85, 18, 1, 1, 1.2 * t.dmg, '#e8a84c', { knock:18 });
     if (t.ultimate && t.branch === 1 && kills > beforeKills) { num(p.x, p.y - p.h - 22, '利刃重置!', '#ffe680'); return { resetCd:true }; }
@@ -856,6 +923,8 @@ const SKILL_FX = {
       }
     }
     for (let i = 0; i < 8; i++) parts.push({ x: x0 + (nx - x0) * i / 8, y: p.y - 20, vx: 0, vy: -0.5, t: 14, color: '#c8cdec' });
+    playSkillAnim('smoke', x0, p.y - 28, { scale:1.1, flip:p.face < 0, layer:'back', alpha:0.75 });
+    playSkillAnim('teleport', nx, p.y - 30, { scale:1.05, flip:p.face < 0, alpha:0.8 });
     p.x = nx; p.inv = Math.max(p.inv, t.mechanic && t.branch === 0 ? 25 : 10);
     if (t.ultimate && t.branch === 0) addSkillZone('wind', (x0 + nx) / 2, p.y - 24, Math.abs(nx - x0) / 2 + 20, 52, 8, 1, 1, 1.1 * t.dmg, '#8ec9df');
     playSfx('swordSwing', 0.9, 1.16);
@@ -880,6 +949,7 @@ const SKILL_FX = {
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12;
+    playSkillAnim('groundImpact', p.x + p.face * range * 0.55, p.y - 31, { scale:Math.max(1.35, range / 115), flip:p.face < 0, layer:'back' });
     for (let i = 1; i < 6; i++) parts.push({ x: p.x + p.face * i * range / 6, y: p.y - 2, vx: 0, vy: -2 - Math.random(), t: 18, color: '#d8b365' });
     if (t.mechanic && t.branch === 0) addSkillZone('aftershock', p.x + p.face * range / 2, p.y - 25, range / 2, 80, 18, 1, 1, 1.15 * t.dmg, '#d8b365', t.ultimate ? { knock:55 } : {});
     beep(120, 0.2, 'sawtooth', 0.05);
@@ -894,6 +964,7 @@ const SKILL_FX = {
     p.rageExtend = t.ultimate && t.branch === 1 ? 90 : 0;
     p.rageBlood = blood; p.rageUltimate = t.ultimate;
     p.cast = 8;
+    playSkillAnim('groundBurst', p.x, p.y - 31, { scale:t.ultimate ? 1.75 : 1.35, layer:'back' });
     burst(p.x, p.y - p.h / 2, '#ff5a5a', 20);
     beep(200, 0.2, 'square', 0.05);
   },
@@ -911,6 +982,8 @@ const SKILL_FX = {
       if (Math.abs(m.x - p.x) < 240 * t.area && hit < cap) {
         hit++;
         bolts.push({ x: m.x, y: m.y - m.h / 2, t: 14 });
+        playSkillAnim('beam', m.x, m.y - m.h / 2 - 25, { scale:focused ? 1.55 : 1.15, rotation:Math.PI / 2, layer:'back', alpha:0.72 });
+        playSkillAnim('impact', m.x, m.y - m.h / 2, { scale:focused ? 1.35 : 1 });
         const r = skillDmg(1.8 * t.dmg * (focused ? 1.6 : 1));
         hitMon(m, r.d, (t.ultimate && t.branch === 1) || r.crit);
         if (t.ultimate && t.branch === 1 && mons.includes(m)) { m.freezeT = Math.max(m.freezeT || 0, 60); num(m.x, m.y - m.h - 20, '麻痺', '#ffe680'); }
@@ -948,6 +1021,7 @@ const SKILL_FX = {
     p.shieldReflect = t.mechanic && t.branch === 1 ? 0.2 : 0;
     p.shieldBurst = t.ultimate && t.branch === 1;
     p.cast = 10;
+    playSkillAnim('rune', p.x, p.y - p.h / 2, { scale:1.2, layer:'back', alpha:0.85 });
     burst(p.x, p.y - p.h / 2, '#7dcfff', 18);
     beep(700, 0.15, 'sine', 0.04);
   }
@@ -1236,7 +1310,7 @@ function genFloor(n) {
     spawnMon(pool[(Math.random() * pool.length) | 0], n, sc, xpSc, eliteCh);
   }
   portal = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
   spawnFloorEvent(n);
   floorT = 90;
 }
@@ -1255,7 +1329,7 @@ function genBossFloor(n) {
   }];
   portal = null;
   floorEvent = null; eventPanel = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
   floorT = 150;
 }
 function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增加混亂壓力)
@@ -1931,9 +2005,11 @@ function update() {
           if (tt.ultimate && tt.branch === 0) { m.freezeT = Math.max(m.freezeT || 0, 90); num(m.x, m.y - m.h - 18, '凍結', '#d8f4ff'); }
           if (tt.ultimate && tt.branch === 1) skillAreaDamage(m.x, m.y - m.h / 2, 58, 55, 0.65 * pr.mult, '#d8f4ff', { exclude:new Set([m]), particles:5 });
           burst(pr.x, pr.y, '#7dcfff', 8);
+          playSkillAnim('iceSpikes', m.x, m.y - 34, { scale:tt.ultimate ? 1.35 : 1.05, layer:'back' });
           pr.hits.push(m);
         } else {
           burst(pr.x, pr.y, '#ff8c2e', 10);
+          playSkillAnim('explosion', m.x, m.y - m.h / 2, { scale:tt.ultimate ? 1.45 : 1.05 });
           if (tt.mechanic && tt.branch === 0) {
             skillAreaDamage(m.x, m.y - m.h / 2, 72 * tt.area, 62 * tt.area, 0.7 * pr.mult, '#ff8c2e', { exclude:new Set([m]), particles:8 });
             if (tt.ultimate) addSkillZone('burn', m.x, m.y, 78 * tt.area, 45, 0, 240, 30, 0.28 * pr.mult, '#ff6b2e');
@@ -1961,6 +2037,8 @@ function update() {
     }
     if (mt.y >= 495) {
       burst(mt.x, 495, '#ff8c2e', 20);
+      playSkillAnim('groundBurst', mt.x, 462, { scale:Math.max(1.4, mt.r / 40), layer:'back' });
+      playSkillAnim('explosion', mt.x, 455, { scale:Math.max(1.2, mt.r / 48) });
       beep(100, 0.2, 'sawtooth', 0.05);
       for (const m of mons.slice()) { // 落地範圍爆炸,補打附近地面怪
         if (mt.hits.indexOf(m) >= 0) continue;
@@ -1978,6 +2056,11 @@ function update() {
     }
   }
 
+  for (const a of skillAnims.slice()) {
+    a.life--;
+    if (a.life <= 0) skillAnims.splice(skillAnims.indexOf(a), 1);
+  }
+
   // 技能持續區域與延遲餘波
   for (const z of skillZones.slice()) {
     if (z.delay > 0) { z.delay--; continue; }
@@ -1988,6 +2071,7 @@ function update() {
       z.fired = true;
       skillAreaDamage(z.x, z.y, z.rx, z.ry, z.mult, z.color, z.opts);
       burst(z.x, z.y, z.color, z.maxT > 1 ? 5 : 18);
+      playZoneAnim(z);
       if (z.kind === 'thunder') bolts.push({ x:z.x, y:z.y, t:12 });
     }
     if (z.t <= 0) skillZones.splice(skillZones.indexOf(z), 1);
@@ -2306,6 +2390,7 @@ function render() {
     }
     ctx.globalAlpha = 1;
   }
+  drawSkillAnimations('back');
   // portal
   if (portal) {
     const ph = 64, pw = 40;
@@ -2426,18 +2511,22 @@ function render() {
       ctx.fillStyle = '#7dcfff'; ctx.fillRect(pr.x - 8, pr.y - 4, 16, 8);
       ctx.fillStyle = '#d8f4ff'; ctx.fillRect(pr.x - 3, pr.y - 2, 6, 4);
     } else {
-      drawSprite(FIRE, pr.x - 9, pr.y - 9, 3, pr.vx < 0);
-      ctx.fillStyle = 'rgba(255,140,46,0.35)';
-      ctx.fillRect(pr.x - pr.vx * 2 - 6, pr.y - 6, 12, 12);
+      if (!drawSkillVfxFrame('fireball', pr.x, pr.y, Math.floor(frame / 4), 1.05, pr.vx < 0, 0, 1)) {
+        drawSprite(FIRE, pr.x - 9, pr.y - 9, 3, pr.vx < 0);
+        ctx.fillStyle = 'rgba(255,140,46,0.35)'; ctx.fillRect(pr.x - pr.vx * 2 - 6, pr.y - 6, 12, 12);
+      }
     }
   }
   // 隕石
   for (const mt of meteors) {
-    ctx.fillStyle = '#ff8c2e'; ctx.fillRect(mt.x - 7, mt.y - 14, 14, 18);
-    ctx.fillStyle = '#ffe680'; ctx.fillRect(mt.x - 3, mt.y - 8, 6, 8);
+    if (!drawSkillVfxFrame('fireballDiag', mt.x, mt.y, Math.floor(frame / 4), Math.max(1, mt.r / 48), false, Math.PI / 2, 1)) {
+      ctx.fillStyle = '#ff8c2e'; ctx.fillRect(mt.x - 7, mt.y - 14, 14, 18);
+      ctx.fillStyle = '#ffe680'; ctx.fillRect(mt.x - 3, mt.y - 8, 6, 8);
+    }
   }
   // 魔法盾泡泡
   if (player.shieldHp > 0) {
+    drawSkillVfxFrame('rune', player.x, player.y - player.h / 2, Math.floor(frame / 5), 1.25, false, 0, 0.7);
     ctx.strokeStyle = 'rgba(125,207,255,0.7)'; ctx.lineWidth = 2;
     ctx.strokeRect(player.x - 22, player.y - player.h - 8, 44, player.h + 12);
   }
@@ -2456,6 +2545,7 @@ function render() {
     }
     ctx.stroke();
   }
+  drawSkillAnimations('front');
   for (const q of parts) { ctx.fillStyle = q.color; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); }
   ctx.font = 'bold 16px "Courier New",monospace';
   ctx.textAlign = 'center';
@@ -3220,7 +3310,13 @@ function drawSkillSigil(id, x, y, r, active, locked) {
   ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, Math.PI * 2); ctx.stroke();
   ctx.strokeStyle = locked ? '#302f31' : 'rgba(255,230,180,0.35)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.strokeStyle = locked ? '#555' : col; ctx.fillStyle = locked ? '#555' : col; ctx.lineWidth = Math.max(2, r * 0.1);
+  ctx.shadowBlur = 0;
+  const icon = locked ? skillIconsGray[id] : skillIcons[id];
+  if (icon && icon.complete && icon.naturalWidth) {
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(icon, -r + 5, -r + 5, r * 2 - 10, r * 2 - 10); ctx.restore();
+  } else {
+    ctx.strokeStyle = locked ? '#555' : col; ctx.fillStyle = locked ? '#555' : col; ctx.lineWidth = Math.max(2, r * 0.1);
   if (id === 'slash' || id === 'dash') {
     ctx.rotate(id === 'dash' ? -0.65 : -0.35); ctx.fillRect(-2, -r * 0.62, 4, r * 1.05); ctx.fillRect(-r * 0.22, r * 0.3, r * 0.44, 3);
   } else if (id === 'spin') {
@@ -3239,6 +3335,7 @@ function drawSkillSigil(id, x, y, r, active, locked) {
     for (let i = 0; i < 3; i++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, -r * 0.62); ctx.lineTo(0, r * 0.62); ctx.stroke(); }
   } else if (id === 'shield') {
     ctx.beginPath(); ctx.moveTo(0, -r * 0.58); ctx.lineTo(r * 0.48, -r * 0.3); ctx.lineTo(r * 0.36, r * 0.36); ctx.lineTo(0, r * 0.62); ctx.lineTo(-r * 0.36, r * 0.36); ctx.lineTo(-r * 0.48, -r * 0.3); ctx.closePath(); ctx.stroke();
+  }
   }
   if (locked) {
     ctx.fillStyle = 'rgba(0,0,0,0.58)'; ctx.beginPath(); ctx.arc(0, 0, r - 5, 0, Math.PI * 2); ctx.fill();
