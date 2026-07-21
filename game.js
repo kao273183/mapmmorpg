@@ -3330,126 +3330,134 @@ function renderStashTab() {
   stashBtns.length = 0; stashActBtns.length = 0;
   if (pendingStashDel && !meta.stash.some(s => s.uid === pendingStashDel)) pendingStashDel = null;
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 14px "Courier New",monospace';
-  ctx.fillText('強化石 x' + meta.mats.enh + '    附魔塵 x' + meta.mats.ench + '    倉庫 ' + meta.stash.length + '/' + STASH_CAP, 40, 116);
-  ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
-  ctx.fillText('開局出戰裝備:', 40, 148);
+  ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.fillText('裝備倉庫', 24, 130);
+  ctx.fillStyle = '#747b9e'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('管理出戰配置，強化與附魔收藏裝備', 115, 130);
+  const stashResources = [
+    { x: 620, w: 104, icon: '◆', label: '強化石', value: meta.mats.enh, color: '#ffbd72' },
+    { x: 732, w: 104, icon: '✦', label: '附魔塵', value: meta.mats.ench, color: '#d9a8ff' },
+    { x: 844, w: 92, icon: '▣', label: '容量', value: meta.stash.length + '/' + STASH_CAP, color: '#9fc7ff' }
+  ];
+  for (const r of stashResources) {
+    fillRoundRect(r.x, 112, r.w, 28, 4, 'rgba(255,255,255,0.045)', '#343850', 1);
+    ctx.fillStyle = r.color; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText(r.icon, r.x + 8, 130);
+    ctx.fillStyle = '#717895'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(r.label, r.x + 23, 123);
+    ctx.fillStyle = '#edf0ff'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText(String(r.value), r.x + 23, 136);
+  }
+
+  const loadPanel = { x: 24, y: 150, w: 286, h: 366 };
+  const gridPanel = { x: 326, y: 150, w: 610, h: 190 };
+  const workPanel = { x: 326, y: 352, w: 610, h: 164 };
+  drawMenuPanel(loadPanel.x, loadPanel.y, loadPanel.w, loadPanel.h);
+  drawMenuPanel(gridPanel.x, gridPanel.y, gridPanel.w, gridPanel.h);
+  drawMenuPanel(workPanel.x, workPanel.y, workPanel.w, workPanel.h);
+
+  ctx.fillStyle = '#eef0ff'; ctx.font = 'bold 14px ' + STAT_FONT; ctx.fillText('出戰配置', loadPanel.x + 16, loadPanel.y + 24);
+  ctx.fillStyle = '#68708e'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('進入地城時自動穿戴', loadPanel.x + 16, loadPanel.y + 41);
   for (let i = 0; i < 5; i++) {
-    const part = GEAR_PARTS[i], y = 158 + i * 50;
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(40, y, 285, 44);
-    ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(40, y, 285, 44);
-    ctx.fillStyle = '#889'; ctx.font = 'bold 12px "Courier New",monospace';
-    ctx.fillText(PART_NAME[part], 50, y + 26);
+    const part = GEAR_PARTS[i], y = loadPanel.y + 52 + i * 60;
     const uid = meta.loadout[part];
     const it = uid ? meta.stash.find(s => s.uid === uid) : null;
+    const selected = it && selStash === it.uid;
+    fillRoundRect(loadPanel.x + 12, y, loadPanel.w - 24, 52, 5, selected ? 'rgba(125,255,214,0.1)' : 'rgba(255,255,255,0.035)', selected ? '#68c1ac' : '#33374f', selected ? 2 : 1);
+    ctx.fillStyle = '#656d8c'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.fillText(PART_NAME[part], loadPanel.x + 22, y + 18);
     if (it) {
-      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 13px "Courier New",monospace';
-      ctx.fillText(gearLabel(it), 100, y + 19);
-      ctx.fillStyle = '#8890b8'; ctx.font = '10px "Courier New",monospace';
-      ctx.fillText(gearDesc(it), 100, y + 35);
+      stashBtns.push({ x: loadPanel.x + 12, y, w: loadPanel.w - 24, h: 52, uid: it.uid });
+      drawItemIcon(it, loadPanel.x + 62, y + 6, 40);
+      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(gearLabel(it), loadPanel.x + 108, y + 20);
+      ctx.fillStyle = '#7b829f'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(gearDesc(it), loadPanel.x + 108, y + 38);
+      ctx.fillStyle = '#76e2c6'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'right'; ctx.fillText('出戰中', loadPanel.x + loadPanel.w - 22, y + 18); ctx.textAlign = 'left';
     } else {
-      ctx.fillStyle = '#556'; ctx.font = '12px "Courier New",monospace';
-      ctx.fillText('(空 — 從右側倉庫設定)', 100, y + 27);
+      fillRoundRect(loadPanel.x + 62, y + 8, 36, 36, 4, 'rgba(0,0,0,0.16)', '#30344a', 1);
+      ctx.fillStyle = '#464c68'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('+', loadPanel.x + 80, y + 32); ctx.textAlign = 'left';
+      ctx.fillStyle = '#565d7b'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('尚未設定', loadPanel.x + 108, y + 31);
     }
   }
-  ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
-  ctx.fillText('倉庫(點擊選擇):', 360, 148);
-  const gx = 360, gy = 158, cell = 52, gap = 4, cols = 10;
+
+  ctx.fillStyle = '#eef0ff'; ctx.font = 'bold 14px ' + STAT_FONT; ctx.fillText('收藏裝備', gridPanel.x + 16, gridPanel.y + 24);
+  ctx.fillStyle = '#68708e'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('點擊裝備，在下方工作台管理', gridPanel.x + 94, gridPanel.y + 24);
+  const gx = gridPanel.x + 30, gy = gridPanel.y + 38, cell = 46, gap = 5, cols = 10;
   for (let i = 0; i < STASH_CAP; i++) {
     const it = meta.stash[i];
     const cxx = gx + (i % cols) * (cell + gap), cyy = gy + Math.floor(i / cols) * (cell + gap);
     const on = it && selStash === it.uid;
-    ctx.fillStyle = it ? (on ? 'rgba(125,255,214,0.2)' : 'rgba(255,255,255,0.06)') : 'rgba(0,0,0,0.2)';
-    ctx.fillRect(cxx, cyy, cell, cell);
-    ctx.strokeStyle = it ? (on ? '#7dffd6' : RARITY_COL[it.r]) : '#2a2a3a'; ctx.lineWidth = on ? 2 : 1;
-    ctx.strokeRect(cxx, cyy, cell, cell);
+    if (on) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 7; }
+    fillRoundRect(cxx, cyy, cell, cell, 4, it ? (on ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.045)') : 'rgba(0,0,0,0.16)', it ? (on ? '#7dffd6' : RARITY_COL[it.r]) : '#292d43', on ? 2 : 1);
+    ctx.shadowBlur = 0;
     if (it) {
       stashBtns.push({ x: cxx, y: cyy, w: cell, h: cell, uid: it.uid });
-      drawItemIcon(it, cxx + (cell - 40) / 2, cyy + (cell - 40) / 2 - 2, 40);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#889'; ctx.font = '10px "Courier New",monospace';
-      ctx.fillText(RARITY_ABBR[it.r], cxx + cell / 2, cyy + cell - 4);
-      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('▲', cxx + 8, cyy + 12); }
+      drawItemIcon(it, cxx + 5, cyy + 3, 36);
+      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('▲', cxx + 4, cyy + 11); }
       if (it.enh > 0) { ctx.fillStyle = '#ffcf6a'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('+' + it.enh, cxx + cell - 3, cyy + 12); }
       const enchanted = (it.affixes || []).filter(Boolean).length;
-      if (enchanted) { ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 10px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('✦' + enchanted, cxx + cell - 3, cyy + cell - 4); }
+      if (enchanted) { ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 9px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('✦' + enchanted, cxx + cell - 3, cyy + cell - 4); }
       ctx.textAlign = 'left';
     }
   }
   const sel = selStash ? meta.stash.find(s => s.uid === selStash) : null;
-  const dyy = 333;
   if (sel) {
     normalizeGear(sel);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = RARITY_COL[sel.r]; ctx.font = 'bold 15px "Courier New",monospace';
-    ctx.fillText(gearLabel(sel), 360, dyy + 13);
-    ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-    ctx.fillText('[' + PART_NAME[sel.kind] + '] ' + gearDesc(sel), 360, dyy + 30);
+    const wx = workPanel.x, wy = workPanel.y;
+    drawItemIcon(sel, wx + 16, wy + 14, 44);
+    ctx.textAlign = 'left'; ctx.fillStyle = RARITY_COL[sel.r]; ctx.font = 'bold 14px ' + STAT_FONT;
+    ctx.fillText(gearLabel(sel), wx + 70, wy + 25);
+    ctx.fillStyle = '#777e9d'; ctx.font = '10px ' + STAT_FONT;
+    ctx.fillText(RARITY_NAME[sel.r] + ' ' + PART_NAME[sel.kind] + '  •  ' + gearDesc(sel), wx + 70, wy + 43);
     const lv = sel.enh || 0;
     const equipped = meta.loadout[sel.kind] === sel.uid;
-    const b1 = { x: 360, y: dyy + 38, w: 138, h: 27, act: 'equip' };
+    const b1 = { x: wx + 278, y: wy + 13, w: 92, h: 36, act: 'equip' };
     stashActBtns.push(b1);
-    ctx.fillStyle = equipped ? 'rgba(125,255,214,0.25)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b1.x, b1.y, b1.w, b1.h);
-    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b1.x, b1.y, b1.w, b1.h);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(equipped ? '✓ 出戰中(卸下)' : '設為開局出戰', b1.x + b1.w / 2, b1.y + 18);
+    fillRoundRect(b1.x, b1.y, b1.w, b1.h, 4, equipped ? 'rgba(125,255,214,0.16)' : 'rgba(255,255,255,0.055)', equipped ? '#68c1ac' : '#42465d', 1);
+    ctx.fillStyle = equipped ? '#8affdc' : '#d5d8e8'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText(equipped ? '✓ 卸下裝備' : '設為出戰', b1.x + b1.w / 2, b1.y + 23);
     const pend = pendingStashDel === sel.uid;
-    const b2 = { x: 505, y: dyy + 38, w: 120, h: 27, act: 'dismantle' };
-    stashActBtns.push(b2);
-    ctx.fillStyle = pend ? 'rgba(226,59,59,0.35)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b2.x, b2.y, b2.w, b2.h);
-    ctx.strokeStyle = '#44485f'; ctx.strokeRect(b2.x, b2.y, b2.w, b2.h);
-    ctx.fillStyle = '#fff'; ctx.fillText(pend ? '確認分解?' : '分解成材料', b2.x + b2.w / 2, b2.y + 18);
+    const b2 = { x: wx + 488, y: wy + 13, w: 104, h: 36, act: 'dismantle' };
+    stashActBtns.push(b2); fillRoundRect(b2.x, b2.y, b2.w, b2.h, 4, pend ? 'rgba(226,59,59,0.26)' : 'rgba(255,255,255,0.04)', pend ? '#e05b66' : '#42465d', 1);
+    ctx.fillStyle = pend ? '#ff9aa1' : '#a4a9be'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText(pend ? '再次點擊確認' : '分解成材料', b2.x + b2.w / 2, b2.y + 23);
     if (lv < ENH_MAX) {
-      const b3 = { x: 632, y: dyy + 38, w: 138, h: 27, act: 'enhance' };
+      const b3 = { x: wx + 378, y: wy + 13, w: 102, h: 36, act: 'enhance' };
       stashActBtns.push(b3);
       const can = meta.mats.enh >= enhCost(lv);
-      ctx.fillStyle = can ? 'rgba(255,140,46,0.28)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(b3.x, b3.y, b3.w, b3.h);
-      ctx.strokeStyle = '#ff8c2e'; ctx.lineWidth = 1; ctx.strokeRect(b3.x, b3.y, b3.w, b3.h);
-      ctx.fillStyle = can ? '#ffcf9e' : '#888'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-      ctx.fillText('⚒ 強化 石×' + enhCost(lv), b3.x + b3.w / 2, b3.y + 18);
+      fillRoundRect(b3.x, b3.y, b3.w, b3.h, 4, can ? 'rgba(255,140,46,0.18)' : 'rgba(255,255,255,0.035)', can ? '#d98944' : '#3c4057', 1);
+      ctx.fillStyle = can ? '#ffc48c' : '#6f7590'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+      ctx.fillText('⚒ 強化  ◆' + enhCost(lv), b3.x + b3.w / 2, b3.y + 23);
     }
-    ctx.textAlign = 'left'; ctx.font = '10px "Courier New",monospace';
+    ctx.textAlign = 'left'; ctx.font = '9px ' + STAT_FONT;
     if (lv < ENH_MAX) {
       const zone = enhZone(lv), zt = zone === 'safe' ? '安全保級' : zone === 'down' ? '失敗降級' : '爆裝 ' + Math.round(enhBoomRate(lv) * 100) + '%';
-      ctx.fillStyle = '#9aa1c5';
-      ctx.fillText('強化 +' + lv + '→+' + (lv + 1) + ' · 成功 ' + Math.round(enhRate(lv) * 100) + '% · ' + zt, 778, dyy + 56);
-    } else { ctx.fillStyle = '#ffe680'; ctx.fillText('強化已滿 +' + ENH_MAX, 778, dyy + 56); }
+      ctx.fillStyle = '#747b98'; ctx.fillText('強化 +' + lv + ' → +' + (lv + 1) + '  •  成功 ' + Math.round(enhRate(lv) * 100) + '%  •  ' + zt, wx + 16, wy + 66);
+    } else { ctx.fillStyle = '#ffe680'; ctx.fillText('強化已滿 +' + ENH_MAX, wx + 16, wy + 66); }
 
-    ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 12px "Courier New",monospace';
-    ctx.fillText('✦ 附魔詞綴  (' + sel.affixes.filter(Boolean).length + '/' + sel.affixes.length + ')', 360, dyy + 84);
+    ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 10px ' + STAT_FONT;
+    ctx.fillText('✦ 附魔詞綴  ' + sel.affixes.filter(Boolean).length + '/' + sel.affixes.length, wx + 16, wy + 87);
     for (let i = 0; i < sel.affixes.length; i++) {
-      const a = sel.affixes[i], y = dyy + 92 + i * 29;
-      ctx.fillStyle = 'rgba(217,168,255,0.07)'; ctx.fillRect(360, y, 552, 25);
-      ctx.strokeStyle = a && AFFIX_BY_ID[a.id].rare ? '#ffcf6a' : '#594870'; ctx.lineWidth = 1; ctx.strokeRect(360, y, 552, 25);
+      const a = sel.affixes[i], y = wy + 94 + i * 22;
+      fillRoundRect(wx + 16, y, workPanel.w - 32, 19, 3, 'rgba(217,168,255,0.055)', a && AFFIX_BY_ID[a.id].rare ? '#9c7940' : '#4b405e', 1);
       ctx.fillStyle = a ? (AFFIX_BY_ID[a.id].rare ? '#ffcf6a' : '#eadcff') : '#77728a';
-      ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'left';
-      ctx.fillText('槽 ' + (i + 1) + '  ' + (a ? affixText(a) : '— 空槽 —'), 370, y + 17);
+      ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('槽 ' + (i + 1) + '  ' + (a ? affixText(a) : '— 空槽 —'), wx + 26, y + 13);
       if (a) {
-        ctx.fillStyle = '#8f8aa1'; ctx.font = '10px "Courier New",monospace';
-        ctx.fillText('剩 ' + (AFFIX_MAX_REROLLS - a.rerolls) + ' 次', 666, y + 16);
+        ctx.fillStyle = '#77728a'; ctx.font = '8px ' + STAT_FONT; ctx.fillText('可重洗 ' + (AFFIX_MAX_REROLLS - a.rerolls) + ' 次', wx + 346, y + 13);
       }
       if (!a || a.rerolls < AFFIX_MAX_REROLLS) {
         const cost = a ? AFFIX_REROLL_COST[a.rerolls] : 3;
-        const eb = { x: 770, y: y + 2, w: 132, h: 21, act: 'enchant', slot: i };
+        const eb = { x: wx + 472, y: y + 1, w: 106, h: 17, act: 'enchant', slot: i };
         stashActBtns.push(eb);
         const can = meta.mats.ench >= cost;
-        ctx.fillStyle = can ? 'rgba(176,90,224,0.30)' : 'rgba(255,255,255,0.04)'; ctx.fillRect(eb.x, eb.y, eb.w, eb.h);
-        ctx.strokeStyle = can ? '#b86fe0' : '#4b4755'; ctx.strokeRect(eb.x, eb.y, eb.w, eb.h);
-        ctx.fillStyle = can ? '#eadcff' : '#777'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
-        ctx.fillText((a ? '重洗' : '附魔') + ' 塵×' + cost, eb.x + eb.w / 2, eb.y + 15);
+        fillRoundRect(eb.x, eb.y, eb.w, eb.h, 3, can ? 'rgba(176,90,224,0.22)' : 'rgba(255,255,255,0.025)', can ? '#9361ae' : '#3d3a48', 1);
+        ctx.fillStyle = can ? '#eadcff' : '#6d6978'; ctx.font = 'bold 8px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText((a ? '重洗' : '附魔') + '  ✦' + cost, eb.x + eb.w / 2, eb.y + 12);
       } else {
-        ctx.fillStyle = '#6c6678'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
-        ctx.fillText('已鎖定', 836, y + 17);
+        ctx.fillStyle = '#6c6678'; ctx.font = 'bold 8px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('已鎖定', wx + 525, y + 13);
       }
     }
     ctx.textAlign = 'left';
   } else {
-    ctx.fillStyle = '#667'; ctx.font = '12px "Courier New",monospace'; ctx.textAlign = 'left';
-    ctx.fillText('點擊右側裝備，可設定出戰、強化、附魔或分解。', 360, dyy + 18);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#4f5674'; ctx.font = 'bold 28px ' + STAT_FONT; ctx.fillText('◇', workPanel.x + workPanel.w / 2, workPanel.y + 58);
+    ctx.fillStyle = '#9ca2bc'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(meta.stash.length ? '選擇一件裝備開始管理' : '倉庫目前沒有裝備', workPanel.x + workPanel.w / 2, workPanel.y + 88);
+    ctx.fillStyle = '#5f6685'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(meta.stash.length ? '可設定出戰、強化、附魔或分解' : '從地城帶回裝備後會存放在這裡', workPanel.x + workPanel.w / 2, workPanel.y + 108);
+    ctx.textAlign = 'left';
   }
   if (menuMsg) {
     ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(menuMsg.text, W / 2, 528);
+    ctx.fillText(menuMsg.text, W / 2, 532);
     if (--menuMsg.t <= 0) menuMsg = null;
     ctx.textAlign = 'left';
   }
