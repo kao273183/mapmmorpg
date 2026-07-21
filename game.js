@@ -29,7 +29,8 @@ const PAL = {
   '4':'#8153e0', '5':'#5636a8', '6':'#ffd9b3', '7':'#232323',
   '8':'#f4c542', 'a':'#a05a2c', 'b':'#d8d4f2', 'c':'#6d5aa8',
   'o':'#ff8c2e', 'y':'#ffd23e', 'r':'#e23b3b', 'm':'#7a4a22',
-  'e':'#b05ae0', 'f':'#7a2fa8'
+  'e':'#b05ae0', 'f':'#7a2fa8',
+  'g':'#9ab55c', 'p':'#e0687f', 'k':'#6a6a7c'
 };
 const RARITY_COL = ['#e8e8e8', '#6f9dff', '#ffd23e'];
 const MAGE = [
@@ -56,6 +57,14 @@ const BAT = [
 ];
 const FIRE = [
   ".oyyo.","oyyyyo","yyyyyy","yyyyyy","oyyyyo",".oyyo."
+];
+const MUSH = [
+  "............","...pppppp...","..pppppppp..",".pp2pp2pppp.",
+  ".pppppppppp.","....2222....","....2772....","....2222...."
+];
+const SPORE = [
+  "............","....gggg....","...gggggg...","..gg7gg7gg..",
+  "..gggggggg..","...gggggg...","....gggg....","..g..gg..g.."
 ];
 function drawSprite(rows, x, y, s, flip, flash) {
   const w = rows[0].length;
@@ -290,6 +299,16 @@ let plats = [], mons = [];
 const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [];
 const clouds = [];
 for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + (i * 53) % 120, w: 70 + (i * 31) % 60 });
+
+// ---------- biomes(群系:每 5 層一個,決定配色與怪物池)----------
+const BIOMES = [
+  { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', pool:['slime','slime','bat','mush'] },
+  { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', pool:['slime','bat','bat','spore'] },
+  { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', pool:['slime','mush','bat','spore'] },
+  { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', pool:['slime','spore','bat','mush'] },
+  { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', pool:['slime','bat','mush','spore'] }
+];
+function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 1) / 5))]; }
 
 const player = {
   x: 80, y: 500, vx: 0, vy: 0, w: 26, h: 46, face: 1,
@@ -578,6 +597,38 @@ function dismantle(it) {
 }
 
 // ---------- floor generation ----------
+function spawnMon(type, n, sc, xpSc, eliteCh) {
+  if (type === 'bat') {
+    const bx = 350 + Math.random() * (worldW - 550);
+    const by = 170 + Math.random() * 140;
+    mons.push({ type:'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 200,
+      hp: Math.round(20 * sc), mhp: Math.round(20 * sc), xpv: Math.round(16 * xpSc),
+      dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  const cand = plats.filter(q => q.ground || q.w > 120);
+  const pl = cand[(Math.random() * cand.length) | 0];
+  const sx = pl.ground ? 350 + Math.random() * (worldW - 550) : pl.x + 30 + Math.random() * (pl.w - 60);
+  const minx = Math.max(pl.x + 20, sx - 140), maxx = Math.min(pl.x + pl.w - 20, sx + 140);
+  if (type === 'mush') {
+    const hp = Math.round(30 * sc);
+    mons.push({ type:'mush', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), vy: 0, onG: true, jt: 30 + Math.random() * 60,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(14 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'spore') {
+    const hp = Math.round(22 * sc);
+    mons.push({ type:'spore', x: sx, y: pl.y, vx: (0.3 + Math.random() * 0.25) * (Math.random() < 0.5 ? -1 : 1), st: 60 + Math.random() * 60,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  const elite = Math.random() < eliteCh;
+  const hp = Math.round(26 * sc * (elite ? 3.2 : 1));
+  mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
+    minx, maxx, hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
+    dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
+    w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3 });
+}
 function genFloor(n) {
   if (n % 5 === 0) { genBossFloor(n); return; }
   worldW = Math.min(1600 + n * 120, 2600);
@@ -609,29 +660,9 @@ function genFloor(n) {
   const sc = 1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1); // 線性+微幅二次成長,對抗玩家的乘法成長
   const xpSc = 1 + 0.15 * (n - 1);
   const eliteCh = Math.min(0.08 + 0.025 * n, 0.4);
+  const pool = biomeOf(n).pool;
   for (let i = 0; i < count; i++) {
-    if (Math.random() < 0.35) {
-      const bx = 350 + Math.random() * (worldW - 550);
-      const by = 170 + Math.random() * 140;
-      mons.push({
-        type:'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 200,
-        hp: Math.round(20 * sc), mhp: Math.round(20 * sc), xpv: Math.round(16 * xpSc),
-        dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3
-      });
-    } else {
-      const cand = plats.filter(q => q.ground || q.w > 120);
-      const pl = cand[(Math.random() * cand.length) | 0];
-      let sx = pl.ground ? 350 + Math.random() * (worldW - 550) : pl.x + 30 + Math.random() * (pl.w - 60);
-      const elite = Math.random() < eliteCh;
-      const hp = Math.round(26 * sc * (elite ? 3.2 : 1));
-      mons.push({
-        type:'slime', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
-        minx: Math.max(pl.x + 20, sx - 140), maxx: Math.min(pl.x + pl.w - 20, sx + 140),
-        hp: hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
-        dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
-        w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3
-      });
-    }
+    spawnMon(pool[(Math.random() * pool.length) | 0], n, sc, xpSc, eliteCh);
   }
   portal = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
@@ -714,7 +745,7 @@ function hitMon(m, d, crit) {
     if (Math.random() < 0.13 + 0.08 * player.cd.pot) {
       drops.push({
         x: m.x + 10, y: m.y - m.h, vy: -3.5, vx: (Math.random() - 0.5) * 2,
-        type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'slime' ? m.y : 500
+        type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 500 : (m.baseY || m.y)
       });
     }
     if (m.type === 'boss') {
@@ -724,7 +755,7 @@ function hitMon(m, d, crit) {
     } else if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
       gearDrops.push({
         x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
-        it: genGear(floor), t: 900, ground: m.type === 'slime' ? m.y : 500
+        it: genGear(floor), t: 900, ground: m.type === 'bat' ? 500 : (m.baseY || m.y)
       });
     }
     mons.splice(mons.indexOf(m), 1);
@@ -1046,6 +1077,26 @@ function update() {
       m.x += m.vx * slowF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
+    } else if (m.type === 'mush') {
+      m.x += m.vx * slowF;
+      if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
+      if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
+      m.jt--;
+      if (m.jt <= 0 && m.onG) { m.vy = -8.5; m.onG = false; m.jt = 70 + Math.random() * 40; }
+      if (!m.onG) {
+        m.vy += 0.5; m.y += m.vy;
+        if (m.y >= m.baseY) { m.y = m.baseY; m.vy = 0; m.onG = true; }
+      }
+    } else if (m.type === 'spore') {
+      m.x += m.vx * 0.5 * slowF;
+      if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
+      if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
+      m.st--;
+      if (m.st <= 0 && Math.abs(p.x - m.x) < 420 && p.y > 300) {
+        espits.push({ x: m.x, y: m.y - m.h + 4, vx: (p.x - m.x) / 65, vy: -3.5, dmg: Math.round(m.dmg * 0.8) });
+        m.st = 110;
+        beep(400, 0.08, 'square', 0.03);
+      }
     } else if (m.type === 'boss') {
       m.t++;
       const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
@@ -1189,33 +1240,34 @@ function render() {
   const p = player;
   camX += ((Math.max(0, Math.min(worldW - W, p.x - W / 2))) - camX) * 0.12;
 
+  const bi = biomeOf(floor);
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#87c5f0'); g.addColorStop(0.7, '#c8e4f5'); g.addColorStop(1, '#e8f4fa');
+  g.addColorStop(0, bi.sky[0]); g.addColorStop(0.7, bi.sky[1]); g.addColorStop(1, bi.sky[2]);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillStyle = bi.cloud;
   for (const c of clouds) {
     const cx = ((c.x - camX * 0.3) % (worldW * 0.5) + worldW * 0.5) % (worldW * 0.5) - 100;
     ctx.fillRect(cx, c.y, c.w, 14);
     ctx.fillRect(cx + 10, c.y - 8, c.w - 24, 10);
   }
-  ctx.fillStyle = '#a8d8a0';
+  ctx.fillStyle = bi.hill;
   for (let i = 0; i < 8; i++) {
     const hx = i * 400 - (camX * 0.5) % 400 - 200;
     ctx.beginPath(); ctx.arc(hx + 200, 520, 150, Math.PI, 0); ctx.fill();
   }
-  // depth tint
-  const tint = Math.min(0.06 * (floor - 1), 0.45);
-  if (tint > 0) { ctx.fillStyle = 'rgba(30,10,60,' + tint.toFixed(2) + ')'; ctx.fillRect(0, 0, W, H); }
+  // depth tint(群系內每層漸深,換群系重置)
+  const tint = 0.05 * ((floor - 1) % 5);
+  if (tint > 0) { ctx.fillStyle = 'rgba(10,6,20,' + tint.toFixed(2) + ')'; ctx.fillRect(0, 0, W, H); }
 
   ctx.save();
   ctx.translate(-Math.round(camX), 0);
 
-  // platforms
+  // platforms(群系配色)
   for (const q of plats) {
     const hgt = q.ground ? H - q.y : 14;
-    ctx.fillStyle = '#8a5a33'; ctx.fillRect(q.x, q.y, q.w, hgt);
-    ctx.fillStyle = '#59b83a'; ctx.fillRect(q.x, q.y, q.w, 6);
-    ctx.fillStyle = '#3f9127';
+    ctx.fillStyle = bi.ground; ctx.fillRect(q.x, q.y, q.w, hgt);
+    ctx.fillStyle = bi.grass; ctx.fillRect(q.x, q.y, q.w, 6);
+    ctx.fillStyle = bi.dot;
     for (let x = q.x; x < q.x + q.w; x += 18) ctx.fillRect(x + 6, q.y + 4, 6, 3);
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
@@ -1258,7 +1310,7 @@ function render() {
   }
   // monsters
   for (const m of mons) {
-    const rows = m.type === 'slime' || m.type === 'boss' ? (m.elite ? ESLIME : SLIME) : BAT;
+    const rows = m.type === 'mush' ? MUSH : m.type === 'spore' ? SPORE : m.type === 'bat' ? BAT : (m.elite ? ESLIME : SLIME);
     drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0);
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
       ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
@@ -1371,11 +1423,11 @@ function render() {
   ctx.textAlign = 'left';
   ctx.font = 'bold 15px "Courier New",monospace';
   ctx.fillStyle = 'rgba(20,22,43,0.7)';
-  ctx.fillRect(0, 0, 250, 30);
+  ctx.fillRect(0, 0, 330, 30);
   ctx.fillStyle = '#b05ae0';
-  ctx.fillText('第 ' + floor + ' 層', 12, 20);
+  ctx.fillText('第 ' + floor + ' 層 ' + biomeOf(floor).name, 12, 20);
   ctx.fillStyle = '#c8cdec';
-  ctx.fillText(portal ? '前往傳送門 →' : '殘存怪物 ' + mons.length, 100, 20);
+  ctx.fillText(portal ? '前往傳送門 →' : '殘存 ' + mons.length, 244, 20);
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
     bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, '#b05ae0', '地城領主  第' + bossM.phase + '階段');
@@ -1417,6 +1469,9 @@ function render() {
     ctx.font = 'bold 40px "Courier New",monospace';
     ctx.textAlign = 'center';
     ctx.fillText('第 ' + floor + ' 層' + (floor % 5 === 0 ? '  ⚠ BOSS' : ''), W / 2, 180);
+    ctx.font = 'bold 22px "Courier New",monospace';
+    ctx.fillStyle = '#ffe680';
+    ctx.fillText('— ' + biomeOf(floor).name + ' —', W / 2, 214);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
   }
