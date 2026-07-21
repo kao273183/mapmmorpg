@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<base href="../">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon D1 Smoke Test</title>
+<link rel="stylesheet" href="style.css?v=0.26.0">
+</head>
+<body>
+<canvas id="cv" width="960" height="540"></canvas>
+<div id="hint">Dungeon D1 Smoke Test</div>
+<script src="tiles.js?v=1"></script>
+<script src="items.js?v=1"></script>
+<script src="dungeon-data.js?v=0.26.0"></script>
+<script src="dungeon.js?v=0.26.0"></script>
+<script src="dungeon-ui.js?v=0.26.0"></script>
+<script src="game.js?v=0.26.1"></script>
+<script>
+const mode = new URLSearchParams(location.search).get('mode') || 'route';
+resetRun();
+if (mode === 'route') {
+  mons.length = 0;
+  completeDungeonRoom();
+  openRouteSelection();
+} else if (mode === 'camp') {
+  enterDungeonRoom(makeRoomSpec('camp', 4, 0));
+} else if (mode === 'treasure') {
+  enterDungeonRoom(makeRoomSpec('treasure', 3, 0));
+} else if (mode === 'chapter') {
+  enterDungeonRoom(makeRoomSpec('boss', 5, 0));
+  mons.length = 0;
+  dungeonRun.explorationScore = 6;
+  completeDungeonRoom();
+  openChapterSummary();
+} else if (mode === 'validate') {
+  const issues = [];
+  for (let seed = 1; seed <= 1000; seed++) {
+    dungeonRun.seed = seed;
+    dungeonRun.roomHistory = ['safe'];
+    dungeonRun.chapterUsed = { camp:false, treasure:false };
+    player.hp = player.mhp;
+    for (let atFloor = 2; atFloor <= 4; atFloor++) {
+      const choices = generateRouteChoices(atFloor);
+      if (choices.length !== 2 || choices[0].type === choices[1].type) issues.push('duplicate:' + seed + ':' + atFloor);
+      if (atFloor === 4 && !choices.some(c => ['safe', 'camp', 'treasure'].includes(c.type))) issues.push('unsafe:' + seed);
+      const chosen = choices[seed % 2];
+      dungeonRun.roomHistory.push(chosen.type);
+      if (chosen.type === 'camp') dungeonRun.chapterUsed.camp = true;
+      if (chosen.type === 'treasure') dungeonRun.chapterUsed.treasure = true;
+    }
+  }
+  window.__dungeonSmokeResult = { seeds:1000, issues:issues.slice(0, 20), issueCount:issues.length };
+  document.title = issues.length ? 'Dungeon D1 Validate FAIL ' + issues.length : 'Dungeon D1 Validate PASS 1000';
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+}
+</script>
+</body>
+</html>
