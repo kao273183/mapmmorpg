@@ -396,12 +396,12 @@ function buyMeta(d) {
 
 // ---------- skills ----------
 const SKILL_DEFS = {
-  slash:  { cls:'warrior', name:'揮砍',   mp:4,  cd:15,  basic:true, desc:'近戰扇形攻擊,最多3目標' },
+  slash:  { cls:'warrior', name:'揮砍',   mp:4,  cd:45, minCd:18, basic:true, desc:'近戰扇形攻擊,最多3目標' },
   spin:   { cls:'warrior', name:'旋風斬', mp:15, cd:140, desc:'360度範圍攻擊,1.5倍傷害' },
   dash:   { cls:'warrior', name:'突進斬', mp:10, cd:120, desc:'向前衝刺,路徑上1.3倍傷害' },
   quake:  { cls:'warrior', name:'震地波', mp:14, cd:160, desc:'震擊前方地面目標,1.6倍傷害' },
   rage:   { cls:'warrior', name:'狂暴',   mp:18, cd:480, desc:'6秒內傷害+30% 移速+0.8' },
-  fire:   { cls:'mage', name:'火球術', mp:8,  cd:22,  basic:true, desc:'直線火球投射物' },
+  fire:   { cls:'mage', name:'火球術', mp:8,  cd:45, minCd:18, basic:true, desc:'直線火球投射物' },
   bolt:   { cls:'mage', name:'落雷術', mp:20, cd:170, desc:'範圍內最多4目標,1.8倍傷害' },
   ice:    { cls:'mage', name:'冰錐術', mp:10, cd:90,  desc:'穿透冰錐,命中緩速敵人' },
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
@@ -819,7 +819,7 @@ const player = {
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   items: [], itemWin: false,
-  cd: { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0 }
+  cd: { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0, def: 0, heal: 0, ifr: 0 }
 };
 
 // ---------- level-up cards ----------
@@ -836,6 +836,9 @@ const CARDS = [
   { id:'ls',   r:0, stat:1, name:'嗜血',     desc:'擊殺回復 3 HP' },
   { id:'mp',   r:0, stat:1, name:'心靈之泉', desc:'MP上限+15 回魔+50%' },
   { id:'pot',  r:0, stat:1, name:'藥劑師',   desc:'藥水掉落率 +4%' },
+  { id:'def',  r:0, stat:1, name:'鋼鐵皮膚', desc:'固定減傷 +1' },
+  { id:'heal', r:0, stat:1, name:'藥效增幅', desc:'藥水回復量 +10%' },
+  { id:'ifr',  r:0, stat:1, name:'閃避本能', desc:'受傷無敵時間 +0.1秒' },
   // 稀有:特殊被動(走 perk)
   { id:'vamp',   r:1, name:'吸血鬼',   desc:'造成傷害回復 6% HP' },
   { id:'thorns', r:1, name:'荊棘護甲', desc:'受擊反彈 40% 攻擊力' },
@@ -844,12 +847,18 @@ const CARDS = [
   { id:'greed',  r:1, name:'貪婪',     desc:'靈魂獲取 +10%' },
   { id:'aegis',  r:1, name:'守護結界', desc:'每12秒獲得護盾' },
   { id:'bloodpact', r:1, name:'血祭', desc:'HP上限-15% 攻擊+30%' },
+  { id:'focus',   r:1, name:'完美狀態', desc:'HP達95%時攻擊 +8%' },
+  { id:'execute', r:1, name:'處決者',   desc:'對低於25% HP敵人傷害 +10%' },
+  { id:'camp',    r:1, name:'層間休整', desc:'進入新樓層回復 5% HP與MP' },
+  { id:'barrier', r:1, name:'守門護盾', desc:'進入樓層獲得 5% HP護盾' },
   // 傳說:強力/獨特(走 perk)
   { id:'berserk', r:2, name:'絕地反擊', desc:'HP<35%時攻擊+50%' },
   { id:'chain',   r:2, name:'連鎖爆炸', desc:'擊殺時範圍爆炸' },
   { id:'phoenix', r:2, name:'不死鳥',   desc:'每場一次致死復活' },
   { id:'brute',   r:2, name:'蠻力',     desc:'攻擊+40% 攻速-18%' },
-  { id:'glass',   r:2, name:'玻璃大砲', desc:'攻擊+45% 受傷+25%' }
+  { id:'glass',   r:2, name:'玻璃大砲', desc:'攻擊+45% 受傷+25%' },
+  { id:'overcharge', r:2, name:'奧術超載', desc:'MP達70%時技能傷害 +10%' },
+  { id:'echo',       r:2, name:'技能迴響', desc:'施放技能有 4%機率立即冷卻' }
 ];
 const pickBtns = [];
 function perkV(id) { return player.perk[id] || 0; }
@@ -900,17 +909,18 @@ function atkMultiplier() {
   const p = player;
   let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (1 + affixV('atkPct')) * (1 + (p.eventAtk || 0)) * (p.rageT > 0 ? 1 + (p.rageAtk || 0.3) : 1);
   m *= (1 + 0.30 * perkV('bloodpact')) * (1 + 0.40 * perkV('brute')) * (1 + 0.45 * perkV('glass'));
+  if (p.hp >= p.mhp * 0.95) m *= 1 + 0.08 * perkV('focus');
   if (p.hp < p.mhp * 0.35) m *= (1 + 0.50 * perkV('berserk')) * (1 + affixV('lowHpAtk')); // 絕地反擊/嗜血狂
   return m;
 }
 function atkPow() { return atkBase() * atkMultiplier(); }
 function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit'); }
 function armorDef() {
-  return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def'));
+  return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def);
 }
 function moveSpd() { return (1.6 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
-function skillDamageMul() { return 1 + 0.15 * player.cd.xdmg; }
+function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
 function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
 function gearDropChance(elite, atFloor = floor) {
@@ -964,9 +974,9 @@ function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死�
       }
       p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false;
     }
-    if (d <= 0) { p.inv = 30; num(p.x, p.y - p.h - 10, '吸收', '#7dcfff'); beep(500, 0.06, 'sine', 0.03); return false; }
+    if (d <= 0) { p.inv = 30 + 3 * p.cd.ifr; num(p.x, p.y - p.h - 10, '吸收', '#7dcfff'); beep(500, 0.06, 'sine', 0.03); return false; }
   }
-  p.hp -= d; p.inv = 60;
+  p.hp -= d; p.inv = 60 + 6 * p.cd.ifr;
   num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
   playSfx('hurt');
   if (p.hp <= 0) {
@@ -1232,7 +1242,12 @@ function trySkill(i) {
   if (result === false) { p.slotCd[i] = 20; return; }
   activityProgress('skills', 1);
   if (!result || !result.free) p.mp -= def.mp;
-  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
+  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(def.minCd || 6, Math.round(def.cd * t.cd * cooldownMul()));
+  if (p.slotCd[i] > 0 && perkV('echo') > 0 && Math.random() < 0.04 * perkV('echo')) {
+    p.slotCd[i] = 0;
+    num(p.x, p.y - p.h - 24, '技能迴響!', '#ffd23e');
+    playSfx('uiConfirm', 0.55, 1.15);
+  }
 }
 
 // ---------- gear generation ----------
@@ -1517,11 +1532,12 @@ function genBossFloor(n) {
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const hp = Math.round(800 * sc * 1.35); // Boss 小幅加厚，避免戰鬥過短
+  const introBoss = n === 5;
+  const hp = Math.round(800 * sc * (introBoss ? 1.08 : 1.35)); // 首領教學關較短，後續 Boss 維持原耐久
   mons = [{
-    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
+    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: introBoss ? 150 : 120, tele: 0, phase: 1, intro: introBoss,
     hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
-    dmg: Math.round(15 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
+    dmg: Math.round(15 * sc * (introBoss ? 0.82 : 1)), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
   floorEvent = null; eventPanel = null;
@@ -1542,7 +1558,7 @@ function resetRun() {
   const p = player;
   p.cls = chosenCls;
   p.lv = 1; p.xp = 0;
-  p.cd = { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0 };
+  p.cd = { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0, def: 0, heal: 0, ifr: 0 };
   p.items = []; p.eq = { weapon: null, armor: null, helmet: null, boots: null, acc: null };
   for (const part of GEAR_PARTS) { // 從倉庫穿戴開局裝備(副本帶出,倉庫原件保留)
     const uid = meta.loadout[part];
@@ -1566,6 +1582,7 @@ function resetRun() {
   pendingPicks = 0;
   dmgNums.length = 0; parts.length = 0;
   genFloor(1);
+  if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
   gameState = 'play';
   setHint(HINT_PLAY);
   beep(660, 0.1, 'sine', 0.04);
@@ -1618,6 +1635,7 @@ function explodeBomber(m) {
   return dead;
 }
 function hitMon(m, d, crit, noChain) {
+  if (m.hp < m.mhp * 0.25 && perkV('execute') > 0) d = Math.max(1, Math.round(d * (1 + 0.1 * perkV('execute'))));
   if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
   m.hp -= d; m.hitT = 8;
   const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
@@ -1716,7 +1734,7 @@ function usePot(t) {
   }
   p.bag[t]--; p.potCd = 30;
   activityProgress('potions', 1);
-  const potMul = 1 + 0.05 * meta.up.alchemy;
+  const potMul = (1 + 0.05 * meta.up.alchemy) * (1 + 0.1 * p.cd.heal);
   if (t === 'hp') { const heal = Math.round(60 * potMul); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
   else { const heal = Math.round(40 * potMul); p.mp = Math.min(p.mmp, p.mp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' MP', '#7f9cff'); }
   beep(1000, 0.07, 'sine', 0.04);
@@ -2192,8 +2210,11 @@ function update() {
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
     floor++;
     activityProgress('floors', 1);
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.15));
+    const campHeal = 0.05 * perkV('camp');
+    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * (0.15 + campHeal)));
+    if (campHeal > 0) p.mp = Math.min(p.mmp, p.mp + Math.round(p.mmp * campHeal));
     genFloor(floor);
+    if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
     p.x = 80; p.y = 468; p.vy = 0;
     num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層', '#b05ae0');
     beep(660, 0.15, 'sine', 0.05);
@@ -2295,18 +2316,20 @@ function update() {
   }
 
   // monsters
+  const MONSTER_MOVE_MUL = 0.72;
   for (const m of mons) {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
     if (m.freezeT > 0) m.freezeT--;
     if (m.vulnT > 0) m.vulnT--; else m.vulnMul = 1;
     const slowF = m.freezeT > 0 ? 0 : m.slowT > 0 ? 0.5 : 1;
+    const moveF = slowF * MONSTER_MOVE_MUL;
     if (m.type === 'slime' || m.type === 'icer' || m.type === 'splitter') {
-      m.x += m.vx * slowF;
+      m.x += m.vx * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
     } else if (m.type === 'mush') {
-      m.x += m.vx * slowF;
+      m.x += m.vx * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
       m.jt--;
@@ -2316,7 +2339,7 @@ function update() {
         if (m.y >= m.baseY) { m.y = m.baseY; m.vy = 0; m.onG = true; }
       }
     } else if (m.type === 'spore') {
-      m.x += m.vx * 0.5 * slowF;
+      m.x += m.vx * 0.5 * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
       m.st--;
@@ -2327,7 +2350,7 @@ function update() {
       }
     } else if (m.type === 'bomber') {
       const dir = p.x < m.x ? -1 : 1;
-      m.x += dir * 1.4 * slowF;
+      m.x += dir * 1.4 * moveF;
       if (m.fuse != null) {
         m.fuse--;
         if (m.fuse <= 0) m.boom = true;
@@ -2338,7 +2361,7 @@ function update() {
     } else if (m.type === 'charger') {
       if (m.chg > 0) {
         m.chg--;
-        m.x += m.dir * 7.5 * slowF;
+        m.x += m.dir * 7.5 * moveF;
         if (m.x < 40) { m.x = 40; m.chg = 0; }
         if (m.x > worldW - 40) { m.x = worldW - 40; m.chg = 0; }
         if (m.chg === 0) { m.minx = Math.max(20, m.x - 140); m.maxx = Math.min(worldW - 20, m.x + 140); } // 衝刺後巡邏範圍跟到當前位置,避免瞬移
@@ -2346,7 +2369,7 @@ function update() {
         m.tel--; m.hitT = 2;
         if (m.tel === 0) { m.chg = 26; beep(300, 0.1, 'sawtooth', 0.04); }
       } else {
-        m.x += m.vx * slowF;
+        m.x += m.vx * moveF;
         if (m.x < m.minx) m.vx = Math.abs(m.vx); // 軟反彈,不設值避免瞬移
         if (m.x > m.maxx) m.vx = -Math.abs(m.vx);
         if (Math.abs(p.y - m.y) < 46 && Math.abs(p.x - m.x) < 320) { m.dir = p.x < m.x ? -1 : 1; m.tel = 28; }
@@ -2354,7 +2377,7 @@ function update() {
     } else if (m.type === 'boss') {
       m.t++;
       const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
-      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(ph); } // 進階段召喚援軍
+      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(m.intro ? Math.max(1, ph - 1) : ph); } // 第一隻 Boss 減少援軍，後續維持原數量
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 468 && m.vy >= 0;
       if (m.atkT > 0) {
@@ -2369,7 +2392,7 @@ function update() {
             const bb = biomeOf(floor);
             const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
             const chill = bb.name === '冰霜凍原';
-            const nsp = (ph === 1 ? 1 : ph === 2 ? 3 : 5) + (hot ? 2 : 0);
+            const nsp = Math.max(1, (ph === 1 ? 1 : ph === 2 ? 3 : 5) - (m.intro ? 1 : 0)) + (hot ? 2 : 0);
             const vsc = hot ? 1.25 : 1; // 熔岩彈更快
             for (let i = 0; i < nsp; i++) {
               espits.push({
@@ -2380,20 +2403,21 @@ function update() {
             }
             beep(320, 0.12, 'square', 0.04);
           }
-          m.atkT = ph === 1 ? 100 : ph === 2 ? 74 : 54;
+          const recovery = ph === 1 ? 100 : ph === 2 ? 74 : 54;
+          m.atkT = Math.round(recovery * (m.intro ? 1.2 : 1));
         }
       } else if (grounded) {
-        m.tele = 36;
+        m.tele = m.intro ? 48 : 36;
       }
       m.vy += 0.6; if (m.vy > 14) m.vy = 14;
-      m.x += m.vx * slowF; m.y += m.vy;
+      m.x += m.vx * moveF; m.y += m.vy;
       if (m.x < 60) m.x = 60;
       if (m.x > worldW - 60) m.x = worldW - 60;
       if (m.y >= 468) {
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
           burst(m.x, 468, '#b05ae0', 26);
           beep(90, 0.2, 'sawtooth', 0.06);
-          if (p.onGround && Math.abs(p.x - m.x) < 150 && p.inv === 0) {
+          if (p.onGround && Math.abs(p.x - m.x) < (m.intro ? 130 : 150) && p.inv === 0) {
             const d = Math.max(1, Math.round(m.dmg * 0.9) - armorDef());
             p.vx = (p.x < m.x ? -1 : 1) * 6; p.vy = -6; p.onGround = false;
             if (dmgPlayer(d)) return;
@@ -2407,16 +2431,16 @@ function update() {
       const dist = Math.hypot(ddx, ddy) || 1;
       if (dist < 360) {
         // 俯衝追擊玩家
-        const sp = Math.min(2.2, 1.1 + floor * 0.06) * slowF;
-        m.x += ddx / dist * sp + Math.sin(m.t * 0.15) * 0.5;
-        m.y += ddy / dist * sp + Math.cos(m.t * 0.13) * 0.5;
+        const sp = Math.min(2.2, 1.1 + floor * 0.06) * moveF;
+        m.x += ddx / dist * sp + Math.sin(m.t * 0.15) * 0.5 * MONSTER_MOVE_MUL;
+        m.y += ddy / dist * sp + Math.cos(m.t * 0.13) * 0.5 * MONSTER_MOVE_MUL;
         m.vx = ddx;
       } else {
         // 緩慢飄回巡邏點
         const bx2 = m.ax + Math.sin(m.t * 0.02) * 90;
         const by2 = m.ay + Math.sin(m.t * 0.055) * 34;
-        m.x += (bx2 - m.x) * 0.03;
-        m.y += (by2 - m.y) * 0.03;
+        m.x += (bx2 - m.x) * 0.03 * MONSTER_MOVE_MUL;
+        m.y += (by2 - m.y) * 0.03 * MONSTER_MOVE_MUL;
       }
       if (m.y > 448) m.y = 448;
     }
@@ -3006,7 +3030,7 @@ function drawStatsPanel() {
     ['傷害範圍', Math.round(atk * 0.85) + '～' + Math.round(atk * 1.15), '每次攻擊隨機 85%～115%'],
     ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 永久' + (meta.up.crit * 0.5).toFixed(1) + '% + 卡/裝/附魔'],
     ['爆擊傷害', Math.round((1.6 + affixV('critDmg')) * 100) + '%', '基礎160% + 狂虐附魔'],
-    ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg],
+    ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg + (perkV('overcharge') ? '；奧術超載 Lv' + perkV('overcharge') : '')],
     ['冷卻倍率', '×' + cooldownMul().toFixed(2), '迅捷出手 Lv' + p.cd.aspd + '；永久冷卻 -' + (meta.up.haste * 1.5).toFixed(1) + '%'],
     ['承受傷害', '×' + recvMul.toFixed(2), '防禦本能 -' + meta.up.guard + '%' + (perkV('glass') ? '；玻璃大砲放大' : '')],
     ['吸血／擊殺回血', Math.round((perkV('vamp') * 0.06 + affixV('lifesteal')) * 100) + '% / ' + (p.cd.ls * 3), '吸血鬼、吸血附魔／嗜血卡']
@@ -3014,18 +3038,18 @@ function drawStatsPanel() {
   const survivalRows = [
     ['HP', Math.ceil(p.hp) + ' / ' + p.mhp, '公式基礎 ' + Math.round(hpBase) + '；裝備HP ' + Math.round(gearHp), '#ff8a8a'],
     ['MP', Math.ceil(p.mp) + ' / ' + p.mmp, '等級、職業與心靈之泉'],
-    ['固定減傷', armorDef(), '防具/頭盔 ' + Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def')) + ' + 附魔 ' + Math.round(affixV('def'))],
+    ['固定減傷', armorDef(), '裝備 ' + Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def')) + ' + 鋼鐵皮膚 ' + p.cd.def + ' + 附魔 ' + Math.round(affixV('def'))],
     ['HP回復', (0.48 * recoveryMul).toFixed(2) + ' /秒', '營火調息 Lv' + meta.up.recovery],
     ['MP回復', (3 * (1 + 0.5 * p.cd.mp) * recoveryMul).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp + '；營火調息 Lv' + meta.up.recovery],
     ['移動速度', moveSpd().toFixed(1), '基礎1.6 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
-    ['跳躍力', jumpV().toFixed(1), '基礎11.5 + 鞋子跳躍'],
+    ['受傷無敵', ((60 + 6 * p.cd.ifr) / 60).toFixed(1) + ' 秒', '閃避本能 Lv' + p.cd.ifr],
     ['護盾', Math.round(p.shieldHp || 0), perkV('aegis') ? '守護結界 Lv' + perkV('aegis') : '目前沒有護盾來源']
   ];
   const economyRows = [
     ['升級進度', Math.round(p.xp) + ' / ' + xpNeed(p.lv), 'Lv' + p.lv + ' → Lv' + (p.lv + 1), '#9ecbff'],
     ['裝備掉率', (gearDropChance(false) * 100).toFixed(1) + '%', '第' + floor + '層一般怪；含尋寶附魔'],
     ['菁英裝備率', (gearDropChance(true) * 100).toFixed(1) + '%', '一般怪機率 +15%；總上限50%'],
-    ['藥水掉率', (potionDropChance() * 100).toFixed(1) + '%', '基礎7% + 藥劑師 Lv' + p.cd.pot + '×4%；回復量 +' + (meta.up.alchemy * 5) + '%'],
+    ['藥水掉率', (potionDropChance() * 100).toFixed(1) + '%', '藥劑師 Lv' + p.cd.pot + '；回復量 +' + (meta.up.alchemy * 5 + p.cd.heal * 10) + '%'],
     ['靈魂掉率', (SOUL_DROP_CHANCE * 100) + '%', '一般怪；菁英2顆／Boss 8顆'],
     ['靈魂結算', '×' + soulGainMul().toFixed(2), '共鳴、貪婪卡與貪婪附魔'],
     ['永久戰鬥成長', '攻+' + (meta.up.atk * 4) + '% HP+' + (meta.up.vit * 8) + '%', '爆擊+' + (meta.up.crit * 0.5).toFixed(1) + '%；減傷' + meta.up.guard + '%；冷卻-' + (meta.up.haste * 1.5).toFixed(1) + '%'],
