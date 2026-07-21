@@ -1,0 +1,4 @@
+  html,body{margin:0;height:100%;background:#14162b;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Courier New",monospace;overscroll-behavior:none;}
+  canvas{image-rendering:pixelated;border:4px solid #2c2f4a;border-radius:4px;max-width:96vw;max-height:92vh;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+  #hint{color:#8890b8;margin-top:10px;font-size:13px;letter-spacing:1px;}
+  @media (pointer:coarse){ #hint{display:none;} canvas{border-width:2px;max-width:100vw;max-height:100vh;} }
