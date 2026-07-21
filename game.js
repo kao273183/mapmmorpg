@@ -264,7 +264,7 @@ function drawEquippedAura(x, y, w, h) {
 
 // ---------- meta progression ----------
 const meta = {
-  souls: 0, up: { atk: 0, vit: 0, pots: 0, treasure: 0, soul: 0 },
+  souls: 0, up: { atk: 0, vit: 0, crit: 0, guard: 0, haste: 0, pots: 0, treasure: 0, soul: 0, recovery: 0, alchemy: 0 },
   stash: [], mats: { enh: 0, ench: 0 }, stashSeq: 1,
   loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   playerName: '勇者'
@@ -373,11 +373,16 @@ function stashGear(it) { // 存入倉庫;已在庫(開局帶出的)跳過;滿則
   return true;
 }
 const META_DEFS = [
-  { id:'atk',      name:'攻擊強化', desc:'攻擊 +4%/級',        max:10, cost:l => 20 + l * 15 },
-  { id:'vit',      name:'體魄強化', desc:'HP上限 +8%/級',      max:10, cost:l => 20 + l * 15 },
-  { id:'pots',     name:'起始藥水', desc:'開局紅藍藥水 +1/級', max:3,  cost:l => 30 + l * 25 },
-  { id:'treasure', name:'尋寶直覺', desc:'裝備掉落率 +1%/級',  max:5,  cost:l => 40 + l * 30 },
-  { id:'soul',     name:'靈魂共鳴', desc:'靈魂獲取 +5%/級',    max:5,  cost:l => 50 + l * 40 }
+  { id:'atk',      group:'combat',   name:'攻擊強化', desc:'攻擊 +4%/級',          max:10, cost:l => 20 + l * 15 },
+  { id:'vit',      group:'combat',   name:'體魄強化', desc:'HP上限 +8%/級',        max:10, cost:l => 20 + l * 15 },
+  { id:'crit',     group:'combat',   name:'精準訓練', desc:'爆擊率 +0.5%/級',      max:5,  cost:l => 35 + l * 25 },
+  { id:'guard',    group:'combat',   name:'防禦本能', desc:'受到傷害 -1%/級',      max:5,  cost:l => 40 + l * 30 },
+  { id:'haste',    group:'combat',   name:'戰技熟練', desc:'技能冷卻 -1.5%/級',    max:5,  cost:l => 45 + l * 35 },
+  { id:'pots',     group:'adventure', name:'起始藥水', desc:'開局紅藍藥水 +1/級', max:3,  cost:l => 30 + l * 25 },
+  { id:'treasure', group:'adventure', name:'尋寶直覺', desc:'裝備掉落率 +1%/級',  max:5,  cost:l => 40 + l * 30 },
+  { id:'soul',     group:'adventure', name:'靈魂共鳴', desc:'靈魂獲取 +5%/級',    max:5,  cost:l => 50 + l * 40 },
+  { id:'recovery', group:'adventure', name:'營火調息', desc:'自然回復速度 +10%/級', max:5, cost:l => 30 + l * 20 },
+  { id:'alchemy',  group:'adventure', name:'藥劑調和', desc:'藥水回復量 +5%/級',   max:5,  cost:l => 35 + l * 25 }
 ];
 function buyMeta(d) {
   const lv = meta.up[d.id];
@@ -535,7 +540,8 @@ function applySkillNums(a) {
 
 // ---------- save ----------
 const SAVE_KEY = 'pixelrogue_save';
-const UP_IDS = ['atk', 'vit', 'pots', 'treasure', 'soul'];
+// 前 5 項維持舊版順序，確保 localStorage 與 v1/v2 存檔碼可直接升級。
+const UP_IDS = ['atk', 'vit', 'pots', 'treasure', 'soul', 'crit', 'guard', 'haste', 'recovery', 'alchemy'];
 let bestFloor = 0;
 let menuMsg = null; // {text, color, t} 基地畫面的提示訊息
 function applyMeta(souls, ups, best) {
@@ -568,17 +574,19 @@ function loadMeta() {
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
 function encodeSave() {
-  const a = [2, meta.souls, ...UP_IDS.map(id => meta.up[id]), bestFloor, ...skillsToNums()];
+  const a = [3, meta.souls, ...UP_IDS.map(id => meta.up[id]), bestFloor, ...skillsToNums()];
   a.push(saveChk(a));
   return btoa(a.join(','));
 }
 const V2_LEN = 1 + 1 + 5 + 1 + 46 + 1; // 版本+靈魂+強化5+最深層+技能46+校驗
+const V3_LEN = 1 + 1 + 10 + 1 + 46 + 1; // 版本+靈魂+強化10+最深層+技能46+校驗
 function decodeSave(str) {
   try {
     const a = atob(String(str).trim()).split(',').map(Number);
     const v1 = a.length === 9 && a[0] === 1;
     const v2 = a.length === V2_LEN && a[0] === 2;
-    if ((!v1 && !v2) || a.some(v => !Number.isFinite(v))) return null;
+    const v3 = a.length === V3_LEN && a[0] === 3;
+    if ((!v1 && !v2 && !v3) || a.some(v => !Number.isFinite(v))) return null;
     const chk = a.pop();
     if (saveChk(a) !== chk) return null;
     return a;
@@ -599,8 +607,9 @@ function importSave() {
     beep(150, 0.15, 'square', 0.04);
     return;
   }
-  applyMeta(a[1], a.slice(2, 7), a[7]);
-  if (a[0] >= 2) applySkillNums(a.slice(8, 8 + 46)); // v1 舊碼:技能維持預設
+  const upCount = a[0] >= 3 ? 10 : 5;
+  applyMeta(a[1], a.slice(2, 2 + upCount), a[2 + upCount]);
+  if (a[0] >= 2) applySkillNums(a.slice(3 + upCount, 3 + upCount + 46)); // v1 舊碼:技能維持預設
   saveMeta();
   menuMsg = { text: '匯入成功!靈魂 ' + meta.souls, color: '#7dffd6', t: 240 };
   beep(900, 0.1, 'sine', 0.04);
@@ -895,14 +904,14 @@ function atkMultiplier() {
   return m;
 }
 function atkPow() { return atkBase() * atkMultiplier(); }
-function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit') + affixV('crit'); }
+function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit'); }
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def'));
 }
 function moveSpd() { return (2.8 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return 1 + 0.15 * player.cd.xdmg; }
-function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')); }
+function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
 function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
 function gearDropChance(elite, atFloor = floor) {
   const base = Math.min(0.025 + 0.0025 * atFloor + 0.01 * meta.up.treasure, 0.10);
@@ -931,7 +940,7 @@ function skillDmg(mult) { // 絕技精通卡:全部出戰技能傷害+15%/層
 }
 function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死亡)
   const p = player;
-  d = Math.round(d * (1 + 0.25 * perkV('glass'))); // 玻璃大砲:受傷放大
+  d = Math.max(1, Math.round(d * (1 + 0.25 * perkV('glass')) * (1 - 0.01 * meta.up.guard))); // 玻璃大砲／永久防禦本能
   const thorns = 0.4 * perkV('thorns') + affixV('thorns');
   if (thorns > 0) { // 荊棘護甲/荊棘詞綴:反彈周圍敵人
     const td = Math.max(1, Math.round(atkPow() * thorns));
@@ -1707,8 +1716,9 @@ function usePot(t) {
   }
   p.bag[t]--; p.potCd = 30;
   activityProgress('potions', 1);
-  if (t === 'hp') { p.hp = Math.min(p.mhp, p.hp + 60); num(p.x, p.y - p.h - 10, '+60 HP', '#7dff8a'); }
-  else { p.mp = Math.min(p.mmp, p.mp + 40); num(p.x, p.y - p.h - 10, '+40 MP', '#7f9cff'); }
+  const potMul = 1 + 0.05 * meta.up.alchemy;
+  if (t === 'hp') { const heal = Math.round(60 * potMul); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
+  else { const heal = Math.round(40 * potMul); p.mp = Math.min(p.mmp, p.mp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' MP', '#7f9cff'); }
   beep(1000, 0.07, 'sine', 0.04);
 }
 
@@ -1716,6 +1726,7 @@ function usePot(t) {
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
 let expBtn = null, impBtn = null, backTownBtn = null, gearBtn = null;
+let metaCategory = 'combat';
 let statsOpen = false, statsBtn = null, statsCloseBtn = null;
 function openStats() { statsOpen = true; player.itemWin = false; }
 function drawGear(cx, cy, r, col) {
@@ -1989,7 +2000,11 @@ function handleTap(mx, my) {
       return;
     }
     for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
-    for (const b of metaBtns) if (inside(b)) { buyMeta(b.d); return; }
+    for (const b of metaBtns) if (inside(b)) {
+      if (b.act === 'category') { metaCategory = b.category; playSfx('uiSelect', 0.65); }
+      else if (b.d) buyMeta(b.d);
+      return;
+    }
     if (inside(startBtn)) resetRun();
     return;
   }
@@ -2479,8 +2494,9 @@ function update() {
   for (const b of bolts.slice()) { b.t--; if (b.t <= 0) bolts.splice(bolts.indexOf(b), 1); }
 
   // regen
-  if (p.hp < p.mhp) p.hp = Math.min(p.mhp, p.hp + 0.008);
-  if (p.mp < p.mmp) p.mp = Math.min(p.mmp, p.mp + 0.05 * (1 + 0.5 * p.cd.mp));
+  const recoveryMul = 1 + 0.1 * meta.up.recovery;
+  if (p.hp < p.mhp) p.hp = Math.min(p.mhp, p.hp + 0.008 * recoveryMul);
+  if (p.mp < p.mmp) p.mp = Math.min(p.mmp, p.mp + 0.05 * (1 + 0.5 * p.cd.mp) * recoveryMul);
 }
 
 // ---------- render ----------
@@ -2983,23 +2999,24 @@ function drawStatsPanel() {
   const p = player;
   const atk = atkPow(), crit = critRate(), gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
   const hpBase = 60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp;
-  const recvMul = 1 + 0.25 * perkV('glass');
+  const recvMul = (1 + 0.25 * perkV('glass')) * (1 - 0.01 * meta.up.guard);
+  const recoveryMul = 1 + 0.1 * meta.up.recovery;
   const combatRows = [
     ['攻擊力', Math.round(atk), '基礎 ' + atkBase().toFixed(1) + ' × 倍率 ' + atkMultiplier().toFixed(2), '#ffe680'],
     ['傷害範圍', Math.round(atk * 0.85) + '～' + Math.round(atk * 1.15), '每次攻擊隨機 85%～115%'],
-    ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 卡' + (p.cd.crit * 6) + '% + 裝/附魔' + ((accV('crit') + affixV('crit')) * 100).toFixed(1) + '%'],
+    ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 永久' + (meta.up.crit * 0.5).toFixed(1) + '% + 卡/裝/附魔'],
     ['爆擊傷害', Math.round((1.6 + affixV('critDmg')) * 100) + '%', '基礎160% + 狂虐附魔'],
     ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg],
-    ['冷卻倍率', '×' + cooldownMul().toFixed(2), '迅捷出手 Lv' + p.cd.aspd + '；數值越低越快'],
-    ['承受傷害', '×' + recvMul.toFixed(2), perkV('glass') ? '玻璃大砲 Lv' + perkV('glass') : '無額外受傷倍率'],
+    ['冷卻倍率', '×' + cooldownMul().toFixed(2), '迅捷出手 Lv' + p.cd.aspd + '；永久冷卻 -' + (meta.up.haste * 1.5).toFixed(1) + '%'],
+    ['承受傷害', '×' + recvMul.toFixed(2), '防禦本能 -' + meta.up.guard + '%' + (perkV('glass') ? '；玻璃大砲放大' : '')],
     ['吸血／擊殺回血', Math.round((perkV('vamp') * 0.06 + affixV('lifesteal')) * 100) + '% / ' + (p.cd.ls * 3), '吸血鬼、吸血附魔／嗜血卡']
   ];
   const survivalRows = [
     ['HP', Math.ceil(p.hp) + ' / ' + p.mhp, '公式基礎 ' + Math.round(hpBase) + '；裝備HP ' + Math.round(gearHp), '#ff8a8a'],
     ['MP', Math.ceil(p.mp) + ' / ' + p.mmp, '等級、職業與心靈之泉'],
     ['固定減傷', armorDef(), '防具/頭盔 ' + Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def')) + ' + 附魔 ' + Math.round(affixV('def'))],
-    ['HP回復', '0.48 /秒', '戰鬥中自然回復'],
-    ['MP回復', (3 * (1 + 0.5 * p.cd.mp)).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp],
+    ['HP回復', (0.48 * recoveryMul).toFixed(2) + ' /秒', '營火調息 Lv' + meta.up.recovery],
+    ['MP回復', (3 * (1 + 0.5 * p.cd.mp) * recoveryMul).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp + '；營火調息 Lv' + meta.up.recovery],
     ['移動速度', moveSpd().toFixed(1), '基礎2.8 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
     ['跳躍力', jumpV().toFixed(1), '基礎11.5 + 鞋子跳躍'],
     ['護盾', Math.round(p.shieldHp || 0), perkV('aegis') ? '守護結界 Lv' + perkV('aegis') : '目前沒有護盾來源']
@@ -3008,10 +3025,10 @@ function drawStatsPanel() {
     ['升級進度', Math.round(p.xp) + ' / ' + xpNeed(p.lv), 'Lv' + p.lv + ' → Lv' + (p.lv + 1), '#9ecbff'],
     ['裝備掉率', (gearDropChance(false) * 100).toFixed(1) + '%', '第' + floor + '層一般怪；含尋寶附魔'],
     ['菁英裝備率', (gearDropChance(true) * 100).toFixed(1) + '%', '一般怪機率 +15%；總上限50%'],
-    ['藥水掉率', (potionDropChance() * 100).toFixed(1) + '%', '基礎7% + 藥劑師 Lv' + p.cd.pot + '×4%'],
+    ['藥水掉率', (potionDropChance() * 100).toFixed(1) + '%', '基礎7% + 藥劑師 Lv' + p.cd.pot + '×4%；回復量 +' + (meta.up.alchemy * 5) + '%'],
     ['靈魂掉率', (SOUL_DROP_CHANCE * 100) + '%', '一般怪；菁英2顆／Boss 8顆'],
     ['靈魂結算', '×' + soulGainMul().toFixed(2), '共鳴、貪婪卡與貪婪附魔'],
-    ['永久攻擊／HP', '+' + (meta.up.atk * 4) + '% / +' + (meta.up.vit * 8) + '%', '攻擊強化／體魄強化'],
+    ['永久戰鬥成長', '攻+' + (meta.up.atk * 4) + '% HP+' + (meta.up.vit * 8) + '%', '爆擊+' + (meta.up.crit * 0.5).toFixed(1) + '%；減傷' + meta.up.guard + '%；冷卻-' + (meta.up.haste * 1.5).toFixed(1) + '%'],
     ['目前樓層', String(floor), biomeOf(floor).name + (floor % 5 === 0 ? '・Boss層' : '')]
   ];
 
@@ -3884,40 +3901,53 @@ function renderMenu() {
   ctx.fillStyle = '#777e9f'; ctx.font = '10px ' + STAT_FONT;
   ctx.fillText(lastRun ? '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
 
-  // 永久強化改為具進度、價格按鈕和購買狀態的清單。
+  // 永久成長分成戰鬥／冒險兩頁，維持清楚密度並方便繼續擴充。
   metaBtns.length = 0;
-  const sx = right.x + 14, sy = right.y + 55, sw = right.w - 28;
+  const sx = right.x + 14, sy = right.y + 99, sw = right.w - 28;
   ctx.textAlign = 'left'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.fillText('永久成長', right.x + 18, right.y + 28);
-  ctx.fillStyle = '#747b9e'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('靈魂會永久保留，點擊項目立即強化', right.x + 18, right.y + 47);
+  ctx.fillStyle = '#747b9e'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('靈魂永久保留，所有職業共用', right.x + 18, right.y + 47);
   fillRoundRect(right.x + right.w - 132, right.y + 13, 114, 30, 5, 'rgba(125,255,214,0.08)', '#405c5b', 1);
   ctx.fillStyle = '#83f4d1'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('◆ ' + meta.souls + ' 靈魂', right.x + right.w - 75, right.y + 33);
-  for (let i = 0; i < META_DEFS.length; i++) {
-    const d = META_DEFS[i];
+  const categoryDefs = [
+    { id:'combat', label:'⚔ 戰鬥成長', sub:'輸出與生存' },
+    { id:'adventure', label:'◇ 冒險成長', sub:'補給與探索' }
+  ];
+  for (let i = 0; i < categoryDefs.length; i++) {
+    const c = categoryDefs[i], b = { x:right.x + 14 + i * 218, y:right.y + 60, w:206, h:30, act:'category', category:c.id };
+    metaBtns.push(b);
+    const on = metaCategory === c.id;
+    fillRoundRect(b.x, b.y, b.w, b.h, 4, on ? 'rgba(176,90,224,0.22)' : 'rgba(255,255,255,0.035)', on ? '#a962cf' : '#363a52', on ? 2 : 1);
+    ctx.textAlign = 'left'; ctx.fillStyle = on ? '#f0dcfa' : '#858ba8'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(c.label, b.x + 12, b.y + 19);
+    ctx.textAlign = 'right'; ctx.fillStyle = on ? '#a98bb9' : '#575e7b'; ctx.font = '8px ' + STAT_FONT; ctx.fillText(c.sub, b.x + b.w - 10, b.y + 19);
+  }
+  const visibleMeta = META_DEFS.filter(d => d.group === metaCategory);
+  for (let i = 0; i < visibleMeta.length; i++) {
+    const d = visibleMeta[i];
     const lv = meta.up[d.id];
-    const ry = sy + i * 60;
+    const ry = sy + i * 52;
     const maxed = lv >= d.max;
     const cost = maxed ? 0 : d.cost(lv);
     const afford = !maxed && meta.souls >= cost;
     const rowFill = afford ? 'rgba(125,255,214,0.055)' : 'rgba(255,255,255,0.035)';
-    fillRoundRect(sx, ry, sw, 52, 5, rowFill, afford ? '#3f6966' : '#30344c', 1);
-    if (!maxed) metaBtns.push({ x: sx, y: ry, w: sw, h: 52, d: d });
-    ctx.textAlign = 'left'; ctx.font = 'bold 12px ' + STAT_FONT;
-    ctx.fillStyle = maxed ? '#ffe680' : afford ? '#f3f5ff' : '#a2a7bf'; ctx.fillText(d.name, sx + 12, ry + 19);
-    ctx.font = '10px ' + STAT_FONT; ctx.fillStyle = '#737a9b'; ctx.fillText(d.desc, sx + 12, ry + 37);
+    fillRoundRect(sx, ry, sw, 45, 5, rowFill, afford ? '#3f6966' : '#30344c', 1);
+    if (!maxed) metaBtns.push({ x: sx, y: ry, w: sw, h: 45, act:'buy', d: d });
+    ctx.textAlign = 'left'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillStyle = maxed ? '#ffe680' : afford ? '#f3f5ff' : '#a2a7bf'; ctx.fillText(d.name, sx + 11, ry + 17);
+    ctx.font = '9px ' + STAT_FONT; ctx.fillStyle = '#737a9b'; ctx.fillText(d.desc, sx + 11, ry + 34);
     ctx.fillStyle = '#5b607c';
     const pipCount = d.max, pipW = Math.min(8, 78 / pipCount);
     for (let p = 0; p < pipCount; p++) {
       ctx.fillStyle = p < lv ? (maxed ? '#ffe680' : '#b05ae0') : '#393d56';
-      ctx.fillRect(sx + 188 + p * (pipW + 2), ry + 14, pipW, 5);
+      ctx.fillRect(sx + 188 + p * (pipW + 2), ry + 12, pipW, 5);
     }
-    ctx.fillStyle = '#737a9b'; ctx.font = '9px "Courier New",monospace'; ctx.fillText('LV ' + lv + '/' + d.max, sx + 188, ry + 37);
-    const cb = { x: sx + sw - 102, y: ry + 9, w: 90, h: 34 };
+    ctx.fillStyle = '#737a9b'; ctx.font = '8px "Courier New",monospace'; ctx.fillText('LV ' + lv + '/' + d.max, sx + 188, ry + 33);
+    const cb = { x: sx + sw - 92, y: ry + 7, w: 80, h: 31 };
     fillRoundRect(cb.x, cb.y, cb.w, cb.h, 4, maxed ? 'rgba(255,230,128,0.1)' : afford ? 'rgba(125,255,214,0.14)' : 'rgba(255,255,255,0.025)', maxed ? '#877a48' : afford ? '#65b5a0' : '#3d4159', 1);
-    ctx.textAlign = 'center'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillStyle = maxed ? '#ffe680' : afford ? '#88f7d5' : '#767c99';
-    ctx.fillText(maxed ? '已滿級' : '◆ ' + cost, cb.x + cb.w / 2, cb.y + 22);
+    ctx.textAlign = 'center'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillStyle = maxed ? '#ffe680' : afford ? '#88f7d5' : '#767c99';
+    ctx.fillText(maxed ? '已滿級' : '◆ ' + cost, cb.x + cb.w / 2, cb.y + 20);
   }
   ctx.textAlign = 'center'; ctx.fillStyle = '#666d8e'; ctx.font = '10px ' + STAT_FONT;
-  ctx.fillText('購買後立即生效  •  所有職業共用', right.x + right.w / 2, right.y + 374);
+  ctx.fillText('購買後立即生效  •  共 ' + META_DEFS.length + ' 種永久能力', right.x + right.w / 2, right.y + 374);
   ctx.textAlign = 'left';
 }
 
