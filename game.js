@@ -429,6 +429,20 @@ function toggleLoadout(id) {
   }
   saveMeta();
 }
+function assignSkillSlot(id, slot) {
+  const lo = loadouts[chosenCls];
+  if (!skillState[id] || !skillState[id].unl || slot < 0 || slot >= lo.length) return;
+  const current = lo.indexOf(id);
+  if (current === slot) {
+    if (lo.filter(Boolean).length <= 1) { menuMsg = { text: '至少要裝備一招技能', color: '#ff5a5a', t: 180 }; playSfx('uiError'); return; }
+    lo[slot] = null;
+  } else {
+    if (current >= 0) lo[current] = null;
+    lo[slot] = id;
+  }
+  saveMeta();
+  playSfx('uiConfirm', 0.75);
+}
 function skillsToNums() {
   const a = [];
   for (const id of SKILL_IDS) { const t = skillState[id]; a.push(t.unl ? 1 : 0, t.pts, t.spent, t.branch + 1); }
@@ -1566,12 +1580,13 @@ function handleTap(mx, my) {
     if (inside(gearBtn)) { openTownPanel('save'); return; }
     if (menuTab === 'skills') {
       if (inside(gachaBtn)) { drawSkillGacha(); return; }
-      for (const b of skillBtns) if (inside(b)) { selSkill = b.id; pendingReset = null; return; }
+      for (const b of skillBtns) if (inside(b)) { selSkill = b.id; pendingReset = null; playSfx('uiSelect', 0.7); return; }
       for (const b of skillActBtns) {
         if (!inside(b)) continue;
-        if (b.act === 'cls') { chosenCls = b.cls; selSkill = null; pendingReset = null; return; }
+        if (b.act === 'cls') { chosenCls = b.cls; selSkill = null; pendingReset = null; playSfx('uiSelect', 0.7); return; }
         if (b.act === 'invest') { investTalent(selSkill, b.br); return; }
         if (b.act === 'equip') { toggleLoadout(selSkill); return; }
+        if (b.act === 'slot') { assignSkillSlot(selSkill, b.slot); return; }
         if (b.act === 'reset') {
           if (pendingReset && pendingReset.id === selSkill && frame - pendingReset.f < 150) { resetTalent(selSkill); pendingReset = null; }
           else pendingReset = { id: selSkill, f: frame };
@@ -2316,13 +2331,20 @@ function render() {
   ctx.fillText('[S]藍水x' + p.bag.mp, 500, H - 4);
   if (p.shieldHp > 0) { ctx.fillStyle = '#7dcfff'; ctx.fillRect(170, H - 40, 200 * Math.min(1, p.shieldHp / p.mhp), 3); }
   if (p.rageT > 0) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('狂暴' + Math.ceil(p.rageT / 60), 110, H - 8); }
-  ctx.font = 'bold 12px "Courier New",monospace';
-  const loH = loadouts[p.cls], keyN = ['Z', 'X', 'C'], skCol = ['#ff8c2e', '#ffe680', '#7dcfff'];
+  const loH = loadouts[p.cls], keyN = ['Z', 'X', 'C'];
   for (let i = 0; i < 3; i++) {
-    const sid = loH[i];
-    ctx.fillStyle = !sid ? '#555' : p.slotCd[i] > 0 ? '#666' : skCol[i];
-    ctx.fillText('[' + keyN[i] + ']' + (sid ? SKILL_DEFS[sid].name : '—') + (sid && p.slotCd[i] > 60 ? ' ' + Math.ceil(p.slotCd[i] / 60) + 's' : ''), 690, H - 32 + i * 14);
+    const sid = loH[i], sx = 672 + i * 57, sy = H - 43;
+    ctx.fillStyle = 'rgba(8,7,9,0.94)'; ctx.fillRect(sx, sy, 52, 38);
+    ctx.strokeStyle = sid ? '#80633d' : '#3d3935'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, 52, 38);
+    if (sid) drawSkillSigil(sid, sx + 19, sy + 19, 15, p.slotCd[i] <= 0, false);
+    ctx.fillStyle = '#8c2f25'; ctx.fillRect(sx + 36, sy + 3, 13, 13);
+    ctx.fillStyle = '#fff1d0'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText(keyN[i], sx + 42.5, sy + 13);
+    if (sid && p.slotCd[i] > 0) {
+      ctx.fillStyle = 'rgba(5,5,7,0.68)'; ctx.fillRect(sx + 2, sy + 2, 33, 34);
+      ctx.fillStyle = '#ddd6ca'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText((p.slotCd[i] / 60).toFixed(1), sx + 19, sy + 23);
+    }
   }
+  ctx.textAlign = 'left';
   ctx.font = 'bold 12px "Courier New",monospace';
   ctx.fillStyle = '#c8cdec';
   ctx.fillText('[I]裝備', 845, H - 8);
@@ -3014,141 +3036,163 @@ function drawEnchantAnim() {
   if (--a.t <= 0) enchantAnim = null;
   ctx.textAlign = 'left';
 }
+const SKILL_COLORS = {
+  slash:'#d9c7a2', spin:'#e8a84c', dash:'#8ec9df', quake:'#c98b59', rage:'#d95745',
+  fire:'#ff7a36', bolt:'#e9d45a', ice:'#71c9e8', meteor:'#d85132', shield:'#9575d5'
+};
+function drawSkillSigil(id, x, y, r, active, locked) {
+  const col = SKILL_COLORS[id] || '#d8b365';
+  ctx.save(); ctx.translate(x, y);
+  if (active && !locked) { ctx.shadowColor = col; ctx.shadowBlur = 12 + Math.sin(frame * 0.08) * 3; }
+  ctx.fillStyle = locked ? '#17171a' : '#211d1a';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = locked ? '#4a4845' : col; ctx.lineWidth = active ? 3 : 2;
+  ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = locked ? '#302f31' : 'rgba(255,230,180,0.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.strokeStyle = locked ? '#555' : col; ctx.fillStyle = locked ? '#555' : col; ctx.lineWidth = Math.max(2, r * 0.1);
+  if (id === 'slash' || id === 'dash') {
+    ctx.rotate(id === 'dash' ? -0.65 : -0.35); ctx.fillRect(-2, -r * 0.62, 4, r * 1.05); ctx.fillRect(-r * 0.22, r * 0.3, r * 0.44, 3);
+  } else if (id === 'spin') {
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.46, -2.4, 1.7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r * 0.44, -r * 0.05); ctx.lineTo(-r * 0.62, -r * 0.2); ctx.lineTo(-r * 0.38, -r * 0.3); ctx.fill();
+  } else if (id === 'quake') {
+    ctx.beginPath(); ctx.moveTo(-r * 0.58, r * 0.38); ctx.lineTo(-r * 0.2, -r * 0.35); ctx.lineTo(0, r * 0.08); ctx.lineTo(r * 0.22, -r * 0.5); ctx.lineTo(r * 0.58, r * 0.38); ctx.stroke();
+  } else if (id === 'rage') {
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.58); ctx.lineTo(r * 0.45, -r * 0.05); ctx.lineTo(r * 0.2, r * 0.55); ctx.lineTo(-r * 0.2, r * 0.55); ctx.lineTo(-r * 0.45, -r * 0.05); ctx.closePath(); ctx.fill();
+  } else if (id === 'fire' || id === 'meteor') {
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.62); ctx.bezierCurveTo(r * 0.58, -r * 0.12, r * 0.42, r * 0.54, 0, r * 0.62); ctx.bezierCurveTo(-r * 0.52, r * 0.32, -r * 0.45, -r * 0.12, 0, -r * 0.62); ctx.fill();
+    if (id === 'meteor') { ctx.strokeStyle = '#fff1a8'; ctx.beginPath(); ctx.moveTo(-r * 0.42, -r * 0.5); ctx.lineTo(-r * 0.62, -r * 0.72); ctx.moveTo(r * 0.05, -r * 0.6); ctx.lineTo(r * 0.22, -r * 0.82); ctx.stroke(); }
+  } else if (id === 'bolt') {
+    ctx.beginPath(); ctx.moveTo(r * 0.08, -r * 0.68); ctx.lineTo(-r * 0.38, r * 0.02); ctx.lineTo(-r * 0.02, r * 0.02); ctx.lineTo(-r * 0.2, r * 0.66); ctx.lineTo(r * 0.48, -r * 0.14); ctx.lineTo(r * 0.1, -r * 0.14); ctx.closePath(); ctx.fill();
+  } else if (id === 'ice') {
+    for (let i = 0; i < 3; i++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, -r * 0.62); ctx.lineTo(0, r * 0.62); ctx.stroke(); }
+  } else if (id === 'shield') {
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.58); ctx.lineTo(r * 0.48, -r * 0.3); ctx.lineTo(r * 0.36, r * 0.36); ctx.lineTo(0, r * 0.62); ctx.lineTo(-r * 0.36, r * 0.36); ctx.lineTo(-r * 0.48, -r * 0.3); ctx.closePath(); ctx.stroke();
+  }
+  if (locked) {
+    ctx.fillStyle = 'rgba(0,0,0,0.58)'; ctx.beginPath(); ctx.arc(0, 0, r - 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#777'; ctx.lineWidth = 2; ctx.strokeRect(-6, 0, 12, 10); ctx.beginPath(); ctx.arc(0, 0, 6, Math.PI, 0); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawStonePanel(x, y, w, h, title) {
+  ctx.fillStyle = 'rgba(11,10,12,0.82)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#5b4a34'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  ctx.strokeStyle = '#2f2921'; ctx.lineWidth = 1; ctx.strokeRect(x + 5, y + 5, w - 10, h - 10);
+  if (title) { ctx.fillStyle = '#c5a66a'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText(title, x + 12, y + 18); }
+}
 function renderSkillTab() {
   skillBtns.length = 0; skillActBtns.length = 0;
   if (pendingReset && (frame - pendingReset.f > 150 || pendingReset.id !== selSkill)) pendingReset = null;
-  // 職業切換
+  const list = classSkills(chosenCls), lo = loadouts[chosenCls];
+  if (!selSkill || !SKILL_DEFS[selSkill] || SKILL_DEFS[selSkill].cls !== chosenCls) selSkill = list[0];
+
+  // 頂部職業切換與技能秘典
   const clsList = ['warrior', 'mage'];
   for (let i = 0; i < 2; i++) {
-    const b = { x: 40 + i * 122, y: 118, w: 112, h: 32, act: 'cls', cls: clsList[i] };
+    const b = { x: 30 + i * 128, y: 118, w: 118, h: 34, act: 'cls', cls: clsList[i] };
     skillActBtns.push(b);
     const on = chosenCls === clsList[i];
-    ctx.fillStyle = on ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.05)';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = on ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = on ? '#fff' : '#889'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(CLASSES[clsList[i]].name, b.x + b.w / 2, b.y + 21);
+    ctx.fillStyle = on ? 'rgba(124,55,32,0.8)' : 'rgba(18,17,19,0.78)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = on ? '#c88a4b' : '#51483d'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = on ? '#f0d8ad' : '#80766a'; ctx.font = 'bold 13px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText((i === 0 ? '⚔ ' : '✦ ') + CLASSES[clsList[i]].name, b.x + b.w / 2, b.y + 22);
   }
-  // 抽取按鈕
-  gachaBtn = { x: 660, y: 118, w: 260, h: 32 };
-  const pool = classSkills(chosenCls).filter(id => !(skillState[id].unl && skillState[id].pts >= 5));
-  ctx.fillStyle = pool.length ? (Math.floor(frame / 30) % 2 === 0 ? 'rgba(176,90,224,0.35)' : 'rgba(176,90,224,0.22)') : 'rgba(255,255,255,0.05)';
-  ctx.fillRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
-  ctx.strokeStyle = '#b05ae0'; ctx.lineWidth = 2; ctx.strokeRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
-  ctx.fillText(pool.length ? '抽取技能(40 靈魂)' : '技能池已全滿', gachaBtn.x + gachaBtn.w / 2, gachaBtn.y + 21);
-  // 技能清單(左欄)
-  const list = classSkills(chosenCls);
-  const lo = loadouts[chosenCls];
-  ctx.textAlign = 'left';
+  gachaBtn = { x: 676, y: 118, w: 254, h: 34 };
+  const pool = list.filter(id => !(skillState[id].unl && skillState[id].pts >= 5));
+  const pulse = 0.18 + (Math.sin(frame * 0.08) + 1) * 0.05;
+  ctx.fillStyle = pool.length ? 'rgba(118,61,130,' + pulse.toFixed(2) + ')' : 'rgba(255,255,255,0.035)'; ctx.fillRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
+  ctx.strokeStyle = pool.length ? '#9e6cad' : '#4b4540'; ctx.lineWidth = 2; ctx.strokeRect(gachaBtn.x, gachaBtn.y, gachaBtn.w, gachaBtn.h);
+  ctx.fillStyle = pool.length ? '#ead8ef' : '#706a65'; ctx.font = 'bold 13px ' + STAT_FONT; ctx.textAlign = 'center';
+  ctx.fillText(pool.length ? '✦ 解讀技能秘典   40 靈魂' : '技能秘典已全部掌握', gachaBtn.x + gachaBtn.w / 2, gachaBtn.y + 22);
+
+  // 技能樹石板
+  const tx = 28, ty = 162, tw = 508, th = 274;
+  drawStonePanel(tx, ty, tw, th, '技 能 樹  •  點選節點查看與配點');
+  const pos = [[78,142],[208,84],[208,204],[382,84],[382,204]];
+  const edges = [[0,1],[0,2],[1,3],[2,4],[1,4]];
+  for (const e of edges) {
+    const a = pos[e[0]], b = pos[e[1]];
+    const lit = skillState[list[e[0]]].unl && skillState[list[e[1]]].unl;
+    ctx.strokeStyle = lit ? 'rgba(190,139,72,0.72)' : '#34302c'; ctx.lineWidth = lit ? 3 : 2;
+    ctx.beginPath(); ctx.moveTo(tx + a[0], ty + a[1]); ctx.lineTo(tx + b[0], ty + b[1]); ctx.stroke();
+  }
   for (let i = 0; i < list.length; i++) {
-    const id = list[i], s = skillState[id], d = SKILL_DEFS[id];
-    const b = { x: 40, y: 162 + i * 58, w: 280, h: 52, act: 'sel', id: id };
-    skillBtns.push(b);
-    const sel = selSkill === id;
-    ctx.fillStyle = sel ? 'rgba(125,255,214,0.12)' : 'rgba(255,255,255,0.05)';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = sel ? '#7dffd6' : '#3a3450'; ctx.lineWidth = sel ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.font = 'bold 14px "Courier New",monospace';
-    ctx.fillStyle = s.unl ? '#fff' : '#556';
-    ctx.fillText((s.unl ? '' : '? ') + d.name, b.x + 12, b.y + 21);
+    const id = list[i], s = skillState[id], p = pos[i], cx = tx + p[0], cy = ty + p[1];
+    const selected = selSkill === id, canSpend = s.unl && s.pts > s.spent;
+    skillBtns.push({ x: cx - 39, y: cy - 39, w: 78, h: 88, act: 'sel', id });
+    if (canSpend) { ctx.strokeStyle = '#f0c76b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 38 + Math.sin(frame * 0.1) * 2, 0, Math.PI * 2); ctx.stroke(); }
+    if (selected) { ctx.strokeStyle = '#c87942'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke(); }
+    drawSkillSigil(id, cx, cy, selected ? 34 : 31, selected || canSpend, !s.unl);
+    ctx.textAlign = 'center'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillStyle = !s.unl ? '#69645f' : selected ? '#f2d7a6' : '#c4b9a9';
+    ctx.fillText(s.unl ? SKILL_DEFS[id].name : '未知技能', cx, cy + 49);
+    ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillStyle = canSpend ? '#f0c76b' : '#777069';
+    ctx.fillText(s.unl ? ('等級 ' + s.spent + '/5' + (canSpend ? '  +' : '')) : '秘典解鎖', cx, cy + 63);
     const li = lo.indexOf(id);
-    if (li >= 0) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('出戰[' + ['Z', 'X', 'C'][li] + ']', b.x + 205, b.y + 21); }
-    ctx.font = '11px "Courier New",monospace'; ctx.fillStyle = '#8890b8';
-    if (s.unl) {
-      let stars = '';
-      for (let k = 0; k < 5; k++) stars += k < s.spent ? '★' : (k < s.pts ? '☆' : '·');
-      ctx.fillText(stars + (s.branch >= 0 ? ' [' + BRANCH_NAMES[id][s.branch] + ']' : '') + (s.pts - s.spent > 0 ? ' 可投點!' : ''), b.x + 12, b.y + 40);
-    } else {
-      ctx.fillText('未解鎖(抽取獲得)', b.x + 12, b.y + 40);
+    if (li >= 0) {
+      ctx.fillStyle = '#b74132'; ctx.beginPath(); ctx.arc(cx + 25, cy - 25, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#e3b96e'; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = '#fff1d0'; ctx.font = 'bold 10px ' + STAT_FONT;
+      ctx.fillText(['Z','X','C'][li], cx + 25, cy - 21);
     }
   }
-  // 右側詳情:天賦樹
-  const dx = 360, dy = 162, dw = 560, dh = 262;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(dx, dy, dw, dh);
-  ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(dx, dy, dw, dh);
-  if (!selSkill || SKILL_DEFS[selSkill].cls !== chosenCls) {
-    ctx.fillStyle = '#667'; ctx.font = '13px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText('← 點選左側技能查看天賦樹', dx + dw / 2, dy + dh / 2);
+
+  // 右側技能詳情與天賦階級
+  const dx = 548, dy = 162, dw = 384, dh = 274;
+  drawStonePanel(dx, dy, dw, dh, '技 能 詳 情');
+  const id = selSkill, s = skillState[id], d = SKILL_DEFS[id], col = SKILL_COLORS[id];
+  drawSkillSigil(id, dx + 48, dy + 58, 27, true, !s.unl);
+  ctx.textAlign = 'left'; ctx.fillStyle = s.unl ? '#f0d8ad' : '#77716c'; ctx.font = 'bold 19px ' + STAT_FONT; ctx.fillText(s.unl ? d.name : '未解鎖技能', dx + 86, dy + 52);
+  ctx.fillStyle = '#948b81'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('MP ' + d.mp + '   冷卻 ' + (d.cd / 60).toFixed(1) + '秒', dx + 86, dy + 72);
+  ctx.fillStyle = s.unl ? '#c7beb3' : '#6e6863'; ctx.font = '12px ' + STAT_FONT; drawFitText(s.unl ? d.desc : '透過技能秘典解鎖這項能力。', dx + 18, dy + 103, dw - 36);
+  ctx.strokeStyle = '#3b342d'; ctx.beginPath(); ctx.moveTo(dx + 16, dy + 118); ctx.lineTo(dx + dw - 16, dy + 118); ctx.stroke();
+  if (s.unl) {
+    const labels = ['傷害+12%', s.branch < 0 ? '流派選擇' : BRANCH_NAMES[id][s.branch], s.branch === 1 ? '傷害+15%' : '範圍+20%', '冷卻-15%', s.branch === 1 ? '傷害+18%' : '範圍+傷害'];
+    ctx.fillStyle = '#9d8c74'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText('天賦階級', dx + 18, dy + 139);
+    for (let k = 0; k < 5; k++) {
+      const nx = dx + 42 + k * 74, ny = dy + 166, invested = s.spent > k, available = k === s.spent && s.pts > s.spent;
+      if (k < 4) { ctx.strokeStyle = s.spent > k + 1 ? col : '#403a34'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(nx + 15, ny); ctx.lineTo(nx + 59, ny); ctx.stroke(); }
+      ctx.fillStyle = invested ? col : '#1c1a19'; ctx.beginPath(); ctx.arc(nx, ny, available ? 15 : 13, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = available ? '#f0c76b' : invested ? '#f6d59a' : '#5b534a'; ctx.lineWidth = available ? 2 : 1; ctx.stroke();
+      ctx.textAlign = 'center'; ctx.fillStyle = invested ? '#201912' : '#887f75'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(String(k + 1), nx, ny + 4);
+      ctx.fillStyle = invested ? '#d9c9b3' : '#716a63'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(labels[k].slice(0, 7), nx, ny + 29);
+    }
+    const avail = s.pts - s.spent;
+    ctx.textAlign = 'left'; ctx.fillStyle = avail > 0 ? '#f0c76b' : '#7e766e'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillText('可用天賦點  ' + avail + (s.branch >= 0 ? '   流派：' + BRANCH_NAMES[id][s.branch] : ''), dx + 18, dy + 215);
+    let ax = dx + 18;
+    const actionBtn = (label, act, extra, color, width) => {
+      const b = Object.assign({ x:ax, y:dy + 226, w:width || Math.max(74, label.length * 13 + 18), h:32, act }, extra || {}); skillActBtns.push(b);
+      ctx.fillStyle = color || 'rgba(255,255,255,0.055)'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = color ? '#aa7a48' : '#564c40'; ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = '#e5d5bd'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText(label, b.x + b.w / 2, b.y + 21); ax += b.w + 8;
+    };
+    if (avail > 0 && s.spent < 5) {
+      if (s.spent === 1) { actionBtn(BRANCH_NAMES[id][0], 'invest', {br:0}, 'rgba(90,115,85,0.35)', 74); actionBtn(BRANCH_NAMES[id][1], 'invest', {br:1}, 'rgba(126,65,39,0.38)', 74); }
+      else actionBtn('升級天賦', 'invest', {}, 'rgba(126,83,35,0.42)', 86);
+    }
+    actionBtn(lo.indexOf(id) >= 0 ? '卸下技能' : '加入快捷列', 'equip', {}, undefined, 94);
+    if (s.spent > 0 && ax < dx + dw - 74) {
+      const pend = pendingReset && pendingReset.id === id;
+      actionBtn(pend ? '確認?' : '重置', 'reset', {}, pend ? 'rgba(120,35,35,0.48)' : undefined, 62);
+    }
   } else {
-    const id = selSkill, s = skillState[id], d = SKILL_DEFS[id];
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#d8b365'; ctx.font = 'bold 16px "Courier New",monospace';
-    ctx.fillText(d.name, dx + 16, dy + 26);
-    ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-    ctx.fillText(d.desc + ' | MP' + d.mp + ' CD' + (d.cd / 60).toFixed(1) + 's', dx + 130, dy + 26);
-    if (!s.unl) {
-      ctx.fillStyle = '#667'; ctx.font = '13px "Courier New",monospace';
-      ctx.fillText('尚未解鎖,透過上方抽取獲得', dx + 16, dy + 90);
-    } else {
-      const labels = [
-        '傷害+12%',
-        s.branch === -1 ? '分支二選一' : '流派:' + BRANCH_NAMES[id][s.branch],
-        s.branch === 1 ? '傷害+15%' : '範圍+20%',
-        '冷卻-15%',
-        s.branch === 1 ? '傷害+18%' : '範圍+15% 傷害+10%'
-      ];
-      for (let k = 0; k < 5; k++) {
-        const nx = dx + 14 + k * 108, ny = dy + 44, nw = 100, nh = 66;
-        const invested = s.spent > k;
-        ctx.fillStyle = invested ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.04)';
-        ctx.fillRect(nx, ny, nw, nh);
-        ctx.strokeStyle = invested ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(nx, ny, nw, nh);
-        ctx.fillStyle = invested ? '#7dffd6' : '#889'; ctx.font = 'bold 11px "Courier New",monospace';
-        ctx.fillText('Lv' + (k + 1) + (k === 1 ? ' ★' : ''), nx + 6, ny + 16);
-        ctx.font = '10px "Courier New",monospace'; ctx.fillStyle = invested ? '#cfe' : '#778';
-        ctx.fillText(labels[k].slice(0, 9), nx + 6, ny + 36);
-        if (labels[k].length > 9) ctx.fillText(labels[k].slice(9), nx + 6, ny + 52);
-      }
-      const avail = s.pts - s.spent;
-      ctx.fillStyle = avail > 0 ? '#7dffd6' : '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
-      ctx.fillText('可用天賦點:' + avail + '(重複抽取同技能獲得)', dx + 16, dy + 132);
-      let bx2 = dx + 16;
-      const mkBtn = (label, act, extra, color) => {
-        const w2 = 16 + label.length * 14;
-        const b = Object.assign({ x: bx2, y: dy + 148, w: w2, h: 34, act: act }, extra);
-        skillActBtns.push(b);
-        ctx.fillStyle = color || 'rgba(255,255,255,0.08)';
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'left';
-        ctx.fillText(label, b.x + 8, b.y + 22);
-        bx2 += w2 + 12;
-      };
-      if (avail > 0 && s.spent < 5) {
-        if (s.spent === 1) {
-          mkBtn('選' + BRANCH_NAMES[id][0], 'invest', { br: 0 }, 'rgba(125,255,214,0.2)');
-          mkBtn('選' + BRANCH_NAMES[id][1], 'invest', { br: 1 }, 'rgba(255,140,46,0.2)');
-        } else {
-          mkBtn('投入1點', 'invest', {}, 'rgba(125,255,214,0.2)');
-        }
-      }
-      mkBtn(loadouts[chosenCls].indexOf(id) >= 0 ? '卸下' : '裝備出戰', 'equip', {});
-      if (s.spent > 0) {
-        const pend = pendingReset && pendingReset.id === id;
-        mkBtn(pend ? '確認重置?' : '重置(' + (30 + 20 * s.spent) + '魂)', 'reset', {}, pend ? 'rgba(226,59,59,0.35)' : undefined);
-      }
-      if (s.branch >= 0) {
-        ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace';
-        ctx.fillText('流派已鎖定:' + BRANCH_NAMES[id][s.branch] + '(A=範圍/持續 B=傷害;重置可重選)', dx + 16, dy + 206);
-      }
-    }
+    ctx.textAlign = 'center'; ctx.fillStyle = '#756e67'; ctx.font = '12px ' + STAT_FONT;
+    ctx.fillText('未知的力量尚未回應你。', dx + dw / 2, dy + 172);
+    ctx.fillStyle = '#9e6cad'; ctx.fillText('使用上方「技能秘典」獲得。', dx + dw / 2, dy + 197);
   }
-  // 出戰欄
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
-  ctx.fillText('出戰技能(最多 3 招,槽位=按鍵):', 360, 448);
-  const lo2 = loadouts[chosenCls];
+
+  // 暗黑風格快捷列：點槽位可將目前技能直接綁定到 Z/X/C
+  ctx.textAlign = 'left'; ctx.fillStyle = '#bca27b'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText('技能快捷列  •  點擊槽位綁定目前技能', 30, 458);
   for (let i = 0; i < 3; i++) {
-    const bx3 = 360 + i * 190, by3 = 458;
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(bx3, by3, 180, 40);
-    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(bx3, by3, 180, 40);
-    ctx.fillStyle = lo2[i] ? ['#ff8c2e', '#ffe680', '#7dcfff'][i] : '#556';
-    ctx.font = 'bold 13px "Courier New",monospace';
-    ctx.fillText('[' + ['Z', 'X', 'C'][i] + '] ' + (lo2[i] ? SKILL_DEFS[lo2[i]].name : '(空)'), bx3 + 10, by3 + 25);
+    const bx = 352 + i * 192, by = 447, b = { x:bx, y:by, w:176, h:62, act:'slot', slot:i };
+    skillActBtns.push(b); ctx.fillStyle = 'rgba(10,9,10,0.9)'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = lo[i] ? '#80633d' : '#443d35'; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#7f261f'; ctx.fillRect(b.x + 8, b.y + 9, 38, 42); ctx.strokeStyle = '#c08b50'; ctx.lineWidth = 1; ctx.strokeRect(b.x + 8, b.y + 9, 38, 42);
+    ctx.fillStyle = '#f3dfbd'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText(['Z','X','C'][i], b.x + 27, b.y + 36);
+    if (lo[i]) drawSkillSigil(lo[i], b.x + 70, b.y + 31, 22, false, false);
+    ctx.textAlign = 'left'; ctx.fillStyle = lo[i] ? '#e2d1b9' : '#625d57'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(lo[i] ? SKILL_DEFS[lo[i]].name : '空槽位', b.x + 100, b.y + 27);
+    ctx.fillStyle = '#746d65'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(lo[i] === id ? '再點卸下' : '點擊綁定', b.x + 100, b.y + 44);
   }
-  ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-  ctx.fillText('Enter 開始冒險', 40, 480);
+  ctx.fillStyle = '#746d65'; ctx.font = '11px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('Enter 開始冒險', 30, 494);
 }
 function renderMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
