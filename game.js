@@ -3555,6 +3555,23 @@ function drawStonePanel(x, y, w, h, title) {
   ctx.strokeStyle = '#2f2921'; ctx.lineWidth = 1; ctx.strokeRect(x + 5, y + 5, w - 10, h - 10);
   if (title) { ctx.fillStyle = '#c5a66a'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText(title, x + 12, y + 18); }
 }
+function roundRectPath(x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y); ctx.lineTo(x + w - rr, y); ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr); ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr); ctx.quadraticCurveTo(x, y, x + rr, y); ctx.closePath();
+}
+function fillRoundRect(x, y, w, h, r, fill, stroke, lineWidth) {
+  roundRectPath(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth || 1; ctx.stroke(); }
+}
+function drawMenuPanel(x, y, w, h) {
+  fillRoundRect(x, y, w, h, 8, 'rgba(10,12,28,0.58)', '#3c405c', 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.025)'; ctx.fillRect(x + 1, y + 1, w - 2, 4);
+}
 function renderSkillTab() {
   skillBtns.length = 0; skillActBtns.length = 0;
   if (pendingReset && (frame - pendingReset.f > 150 || pendingReset.id !== selSkill)) pendingReset = null;
@@ -3735,45 +3752,56 @@ function renderActivityTab() {
 }
 function renderMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#1a1c2c'); g.addColorStop(1, '#2c2f4a');
+  g.addColorStop(0, '#131526'); g.addColorStop(1, '#242842');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 34px "Courier New",monospace';
-  ctx.fillText('像 素 地 城', 600, 68);
-  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 18px "Courier New",monospace';
-  ctx.fillText('靈魂 ' + meta.souls + (bestFloor > 0 ? '   最深 ' + bestFloor + ' 層' : ''), 600, 102);
+  ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(0, 0, W, 104);
+
+  // 緊湊的品牌、資源列與導覽，讓內容成為畫面主角。
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#c36cf0'; ctx.font = 'bold 22px ' + STAT_FONT;
+  ctx.fillText('像素地城', 24, 33);
+  ctx.fillStyle = '#777c9d'; ctx.font = '10px "Courier New",monospace';
+  ctx.fillText('PIXEL DUNGEON', 25, 47);
+  const resources = [
+    { x: 424, w: 118, icon: '◆', label: '靈魂', value: meta.souls, color: '#83f4d1' },
+    { x: 550, w: 118, icon: '▼', label: '最深', value: bestFloor + ' 層', color: '#9fc7ff' },
+    { x: 676, w: 118, icon: '✦', label: '活躍', value: activityState.activity, color: '#ffe080' }
+  ];
+  for (const r of resources) {
+    fillRoundRect(r.x, 14, r.w, 34, 5, 'rgba(255,255,255,0.055)', '#343850', 1);
+    ctx.fillStyle = r.color; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(r.icon, r.x + 10, 35);
+    ctx.fillStyle = '#7f86a7'; ctx.font = '10px ' + STAT_FONT; ctx.fillText(r.label, r.x + 28, 27);
+    ctx.fillStyle = '#eef1ff'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(String(r.value), r.x + 28, 41);
+  }
   // 存檔碼按鈕
-  gearBtn = { x: 906, y: 28, w: 38, h: 38 };
-  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
-  ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
+  gearBtn = { x: 910, y: 14, w: 34, h: 34 };
+  fillRoundRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h, 5, 'rgba(255,255,255,0.07)', '#44485f', 1);
   drawGear(gearBtn.x + gearBtn.w / 2, gearBtn.y + gearBtn.h / 2, 12, '#c8cdec');
   if (menuMsg) {
     ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'right';
-    ctx.fillText(menuMsg.text, 892, 78); ctx.textAlign = 'center';
+    ctx.fillText(menuMsg.text, 892, 91); ctx.textAlign = 'center';
     if (--menuMsg.t <= 0) menuMsg = null;
   }
   // 分頁:基地 / 技能 / 倉庫 / 契約
   tabBtns.length = 0;
-  const tabs = [['base', '基 地'], ['skills', '技 能'], ['stash', '倉 庫'], ['activity', '契 約']];
+  const tabs = [['base', '⌂  基地'], ['skills', '✦  技能'], ['stash', '▣  倉庫'], ['activity', '▤  契約']];
   for (let i = 0; i < tabs.length; i++) {
-    const b = { x: 20 + i * 108, y: 30, w: 98, h: 32, tab: tabs[i][0] };
+    const b = { x: 24 + i * 100, y: 62, w: 92, h: 30, tab: tabs[i][0] };
     tabBtns.push(b);
     const on = menuTab === b.tab;
-    ctx.fillStyle = on ? 'rgba(176,90,224,0.35)' : 'rgba(255,255,255,0.07)';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = on ? '#b05ae0' : '#44485f'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = on ? '#fff' : '#8890b8'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 21);
+    fillRoundRect(b.x, b.y, b.w, b.h, 4, on ? 'rgba(176,90,224,0.3)' : 'rgba(255,255,255,0.035)', on ? '#b05ae0' : '#383c55', on ? 2 : 1);
+    ctx.fillStyle = on ? '#fff' : '#8c92b1'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 20);
     if (b.tab === 'activity' && hasActivityReward()) { ctx.fillStyle = '#ffe680'; ctx.beginPath(); ctx.arc(b.x + b.w - 7, b.y + 7, 4, 0, Math.PI * 2); ctx.fill(); }
   }
   backTownBtn = null;
   if (fromTown) {
-    backTownBtn = { x: 706, y: 30, w: 150, h: 34 }; // 標題與 ⚙ 之間,留足空間
-    ctx.fillStyle = 'rgba(125,255,214,0.18)'; ctx.fillRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
-    ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 1; ctx.strokeRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
+    backTownBtn = { x: 798, y: 62, w: 146, h: 30 };
+    fillRoundRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h, 4, 'rgba(125,255,214,0.12)', '#6bbaa8', 1);
     ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText('← 返回城鎮', backTownBtn.x + backTownBtn.w / 2, backTownBtn.y + 21);
+    ctx.fillText('← 返回城鎮', backTownBtn.x + backTownBtn.w / 2, backTownBtn.y + 20);
   }
+  ctx.fillStyle = '#343850'; ctx.fillRect(24, 103, 912, 1);
   if (menuTab === 'skills') {
     selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
     renderSkillTab();
@@ -3790,73 +3818,98 @@ function renderMenu() {
     return;
   }
   skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
-  if (lastRun) {
-    ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-    ctx.fillText('上次:第' + lastRun.floor + '層 / 擊殺' + lastRun.kills + ' / 靈魂+' + lastRun.gained, W / 2, 126);
-  }
-  // class cards
+  // 基地主頁：左側準備出戰，右側永久成長。
+  const left = { x: 24, y: 116, w: 430, h: 388 };
+  const right = { x: 470, y: 116, w: 466, h: 388 };
+  drawMenuPanel(left.x, left.y, left.w, left.h);
+  drawMenuPanel(right.x, right.y, right.w, right.h);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.fillText('選擇冒險者', left.x + 18, left.y + 28);
+  ctx.fillStyle = '#747b9e'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('選擇職業並確認本次出戰技能', left.x + 18, left.y + 47);
+
+  // 更有辨識度的職業卡。
   selBtns.length = 0;
   const cls = ['warrior', 'mage'];
   for (let i = 0; i < 2; i++) {
     const c = cls[i];
-    const cw = 150, ch = 170;
-    const cx = 180 + i * 180, cy = 150;
+    const cw = 190, ch = 132;
+    const cx = left.x + 18 + i * 202, cy = left.y + 60;
     const sel = chosenCls === c;
-    ctx.fillStyle = sel ? 'rgba(125,255,214,0.12)' : 'rgba(20,22,43,0.9)';
-    ctx.fillRect(cx, cy, cw, ch);
-    ctx.strokeStyle = sel ? '#7dffd6' : '#44485f';
-    ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cw, ch);
+    if (sel) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 9; }
+    fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : '#3c4058', sel ? 2 : 1);
+    ctx.shadowBlur = 0;
     selBtns.push({ x: cx, y: cy, w: cw, h: ch, cls: c });
-    drawSprite(c === 'mage' ? MAGE : WAR, cx + cw / 2 - 24, cy + 18, 4, false);
-    ctx.fillStyle = sel ? '#fff' : '#889';
-    ctx.font = 'bold 16px "Courier New",monospace';
-    ctx.fillText('[' + (i + 1) + '] ' + CLASSES[c].name, cx + cw / 2, cy + 110);
-    ctx.font = '11px "Courier New",monospace';
-    ctx.fillStyle = '#9ecbff';
-    ctx.fillText(c === 'warrior' ? '近戰 高血量' : '遠程 高爆發', cx + cw / 2, cy + 132);
-    if (sel) { ctx.fillStyle = '#7dffd6'; ctx.fillText('✓ 已選擇', cx + cw / 2, cy + 152); }
+    drawSprite(c === 'mage' ? MAGE : WAR, cx + 16, cy + 22, 3, false);
+    ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
+    ctx.fillText(CLASSES[c].name, cx + 86, cy + 36);
+    ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT;
+    ctx.fillText(c === 'warrior' ? '近戰  •  高生存' : '遠程  •  高爆發', cx + 86, cy + 57);
+    ctx.fillStyle = '#6f7695'; ctx.font = '10px ' + STAT_FONT;
+    ctx.fillText(c === 'warrior' ? '穩定推進，正面迎敵' : '掌控距離，範圍清場', cx + 86, cy + 77);
+    if (sel) {
+      fillRoundRect(cx + 86, cy + 92, 78, 24, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
+      ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 108);
+    } else {
+      ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 108);
+    }
   }
-  // meta shop
+
+  // 目前裝備的三個技能。
+  ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
+  ctx.fillText('出戰技能', left.x + 18, left.y + 218);
+  const equipped = loadouts[chosenCls];
+  for (let i = 0; i < equipped.length; i++) {
+    const id = equipped[i], ix = left.x + 32 + i * 126, iy = left.y + 252;
+    drawSkillSigil(id, ix, iy, 20, !!id, !id);
+    ctx.fillStyle = id ? '#dfe3f5' : '#6c728f'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(id ? SKILL_DEFS[id].name : '尚未裝備', ix + 30, iy - 3);
+    ctx.fillStyle = '#686f90'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('技能 ' + (i + 1), ix + 30, iy + 13);
+  }
+  ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 286, left.w - 36, 1);
+  const bw2 = left.w - 36, bh2 = 54;
+  startBtn = { x: left.x + 18, y: left.y + 304, w: bw2, h: bh2 };
+  const pulse = 0.32 + (Math.sin(frame * 0.07) + 1) * 0.06;
+  ctx.shadowColor = '#b05ae0'; ctx.shadowBlur = 8;
+  fillRoundRect(startBtn.x, startBtn.y, bw2, bh2, 6, 'rgba(176,90,224,' + pulse.toFixed(2) + ')', '#c56ef0', 2);
+  ctx.shadowBlur = 0; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 18px ' + STAT_FONT;
+  ctx.fillText('進入地城', startBtn.x + bw2 / 2 - 22, startBtn.y + 33);
+  ctx.fillStyle = '#e3c4f3'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('[ ENTER ]', startBtn.x + bw2 / 2 + 82, startBtn.y + 33);
+  ctx.fillStyle = '#777e9f'; ctx.font = '10px ' + STAT_FONT;
+  ctx.fillText(lastRun ? '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
+
+  // 永久強化改為具進度、價格按鈕和購買狀態的清單。
   metaBtns.length = 0;
-  const sx = 560, sy = 150, sw = 360;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 15px "Courier New",monospace';
-  ctx.fillText('永久強化(點擊購買)', sx, sy - 8);
+  const sx = right.x + 14, sy = right.y + 55, sw = right.w - 28;
+  ctx.textAlign = 'left'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.fillText('永久成長', right.x + 18, right.y + 28);
+  ctx.fillStyle = '#747b9e'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('靈魂會永久保留，點擊項目立即強化', right.x + 18, right.y + 47);
+  fillRoundRect(right.x + right.w - 132, right.y + 13, 114, 30, 5, 'rgba(125,255,214,0.08)', '#405c5b', 1);
+  ctx.fillStyle = '#83f4d1'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('◆ ' + meta.souls + ' 靈魂', right.x + right.w - 75, right.y + 33);
   for (let i = 0; i < META_DEFS.length; i++) {
     const d = META_DEFS[i];
     const lv = meta.up[d.id];
-    const ry = sy + 14 + i * 44;
+    const ry = sy + i * 60;
     const maxed = lv >= d.max;
     const cost = maxed ? 0 : d.cost(lv);
     const afford = !maxed && meta.souls >= cost;
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    ctx.fillRect(sx, ry - 14, sw, 38);
-    if (!maxed) metaBtns.push({ x: sx, y: ry - 14, w: sw, h: 38, d: d });
-    ctx.font = 'bold 13px "Courier New",monospace';
-    ctx.fillStyle = afford ? '#fff' : (maxed ? '#ffe680' : '#889');
-    ctx.fillText(d.name + '  Lv' + lv + '/' + d.max, sx + 10, ry);
-    ctx.font = '11px "Courier New",monospace';
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(d.desc, sx + 10, ry + 15);
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 13px "Courier New",monospace';
-    ctx.fillStyle = maxed ? '#ffe680' : (afford ? '#7dffd6' : '#a06060');
-    ctx.fillText(maxed ? 'MAX' : cost + ' 靈魂', sx + sw - 10, ry + 6);
-    ctx.textAlign = 'left';
+    const rowFill = afford ? 'rgba(125,255,214,0.055)' : 'rgba(255,255,255,0.035)';
+    fillRoundRect(sx, ry, sw, 52, 5, rowFill, afford ? '#3f6966' : '#30344c', 1);
+    if (!maxed) metaBtns.push({ x: sx, y: ry, w: sw, h: 52, d: d });
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px ' + STAT_FONT;
+    ctx.fillStyle = maxed ? '#ffe680' : afford ? '#f3f5ff' : '#a2a7bf'; ctx.fillText(d.name, sx + 12, ry + 19);
+    ctx.font = '10px ' + STAT_FONT; ctx.fillStyle = '#737a9b'; ctx.fillText(d.desc, sx + 12, ry + 37);
+    ctx.fillStyle = '#5b607c';
+    const pipCount = d.max, pipW = Math.min(8, 78 / pipCount);
+    for (let p = 0; p < pipCount; p++) {
+      ctx.fillStyle = p < lv ? (maxed ? '#ffe680' : '#b05ae0') : '#393d56';
+      ctx.fillRect(sx + 188 + p * (pipW + 2), ry + 14, pipW, 5);
+    }
+    ctx.fillStyle = '#737a9b'; ctx.font = '9px "Courier New",monospace'; ctx.fillText('LV ' + lv + '/' + d.max, sx + 188, ry + 37);
+    const cb = { x: sx + sw - 102, y: ry + 9, w: 90, h: 34 };
+    fillRoundRect(cb.x, cb.y, cb.w, cb.h, 4, maxed ? 'rgba(255,230,128,0.1)' : afford ? 'rgba(125,255,214,0.14)' : 'rgba(255,255,255,0.025)', maxed ? '#877a48' : afford ? '#65b5a0' : '#3d4159', 1);
+    ctx.textAlign = 'center'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillStyle = maxed ? '#ffe680' : afford ? '#88f7d5' : '#767c99';
+    ctx.fillText(maxed ? '已滿級' : '◆ ' + cost, cb.x + cb.w / 2, cb.y + 22);
   }
-  // start button
-  const bw2 = 260, bh2 = 54;
-  startBtn = { x: 180 + 165 - bw2 / 2, y: 370, w: bw2, h: bh2 };
-  ctx.fillStyle = Math.floor(frame / 30) % 2 === 0 ? 'rgba(176,90,224,0.35)' : 'rgba(176,90,224,0.2)';
-  ctx.fillRect(startBtn.x, startBtn.y, bw2, bh2);
-  ctx.strokeStyle = '#b05ae0'; ctx.lineWidth = 2;
-  ctx.strokeRect(startBtn.x, startBtn.y, bw2, bh2);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px "Courier New",monospace';
-  ctx.fillText('開始冒險 [Enter]', startBtn.x + bw2 / 2, startBtn.y + 34);
-  ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-  ctx.fillText('清光每層怪物開啟傳送門,看你能下到第幾層!', startBtn.x + bw2 / 2, startBtn.y + 80);
-  ctx.fillText('死亡後獲得靈魂,購買永久強化再次出發。', startBtn.x + bw2 / 2, startBtn.y + 100);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#666d8e'; ctx.font = '10px ' + STAT_FONT;
+  ctx.fillText('購買後立即生效  •  所有職業共用', right.x + right.w / 2, right.y + 374);
   ctx.textAlign = 'left';
 }
 
