@@ -396,7 +396,7 @@ function buyMeta(d) {
 
 // ---------- skills ----------
 const SKILL_DEFS = {
-  slash:  { cls:'warrior', name:'揮砍',   mp:4,  cd:15,  basic:true, desc:'近戰扇形攻擊,最多3目標' },
+  slash:  { cls:'warrior', name:'揮砍',   mp:4,  cd:45, minCd:18, basic:true, desc:'近戰扇形攻擊,最多3目標' },
   spin:   { cls:'warrior', name:'旋風斬', mp:15, cd:140, desc:'360度範圍攻擊,1.5倍傷害' },
   dash:   { cls:'warrior', name:'突進斬', mp:10, cd:120, desc:'向前衝刺,路徑上1.3倍傷害' },
   quake:  { cls:'warrior', name:'震地波', mp:14, cd:160, desc:'震擊前方地面目標,1.6倍傷害' },
@@ -1242,7 +1242,7 @@ function trySkill(i) {
   if (result === false) { p.slotCd[i] = 20; return; }
   activityProgress('skills', 1);
   if (!result || !result.free) p.mp -= def.mp;
-  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
+  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(def.minCd || 6, Math.round(def.cd * t.cd * cooldownMul()));
   if (p.slotCd[i] > 0 && perkV('echo') > 0 && Math.random() < 0.04 * perkV('echo')) {
     p.slotCd[i] = 0;
     num(p.x, p.y - p.h - 24, '技能迴響!', '#ffd23e');
@@ -2315,18 +2315,20 @@ function update() {
   }
 
   // monsters
+  const MONSTER_MOVE_MUL = 0.72;
   for (const m of mons) {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
     if (m.freezeT > 0) m.freezeT--;
     if (m.vulnT > 0) m.vulnT--; else m.vulnMul = 1;
     const slowF = m.freezeT > 0 ? 0 : m.slowT > 0 ? 0.5 : 1;
+    const moveF = slowF * MONSTER_MOVE_MUL;
     if (m.type === 'slime' || m.type === 'icer' || m.type === 'splitter') {
-      m.x += m.vx * slowF;
+      m.x += m.vx * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
     } else if (m.type === 'mush') {
-      m.x += m.vx * slowF;
+      m.x += m.vx * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
       m.jt--;
@@ -2336,7 +2338,7 @@ function update() {
         if (m.y >= m.baseY) { m.y = m.baseY; m.vy = 0; m.onG = true; }
       }
     } else if (m.type === 'spore') {
-      m.x += m.vx * 0.5 * slowF;
+      m.x += m.vx * 0.5 * moveF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
       m.st--;
@@ -2347,7 +2349,7 @@ function update() {
       }
     } else if (m.type === 'bomber') {
       const dir = p.x < m.x ? -1 : 1;
-      m.x += dir * 1.4 * slowF;
+      m.x += dir * 1.4 * moveF;
       if (m.fuse != null) {
         m.fuse--;
         if (m.fuse <= 0) m.boom = true;
@@ -2358,7 +2360,7 @@ function update() {
     } else if (m.type === 'charger') {
       if (m.chg > 0) {
         m.chg--;
-        m.x += m.dir * 7.5 * slowF;
+        m.x += m.dir * 7.5 * moveF;
         if (m.x < 40) { m.x = 40; m.chg = 0; }
         if (m.x > worldW - 40) { m.x = worldW - 40; m.chg = 0; }
         if (m.chg === 0) { m.minx = Math.max(20, m.x - 140); m.maxx = Math.min(worldW - 20, m.x + 140); } // 衝刺後巡邏範圍跟到當前位置,避免瞬移
@@ -2366,7 +2368,7 @@ function update() {
         m.tel--; m.hitT = 2;
         if (m.tel === 0) { m.chg = 26; beep(300, 0.1, 'sawtooth', 0.04); }
       } else {
-        m.x += m.vx * slowF;
+        m.x += m.vx * moveF;
         if (m.x < m.minx) m.vx = Math.abs(m.vx); // 軟反彈,不設值避免瞬移
         if (m.x > m.maxx) m.vx = -Math.abs(m.vx);
         if (Math.abs(p.y - m.y) < 46 && Math.abs(p.x - m.x) < 320) { m.dir = p.x < m.x ? -1 : 1; m.tel = 28; }
@@ -2406,7 +2408,7 @@ function update() {
         m.tele = 36;
       }
       m.vy += 0.6; if (m.vy > 14) m.vy = 14;
-      m.x += m.vx * slowF; m.y += m.vy;
+      m.x += m.vx * moveF; m.y += m.vy;
       if (m.x < 60) m.x = 60;
       if (m.x > worldW - 60) m.x = worldW - 60;
       if (m.y >= 468) {
@@ -2427,16 +2429,16 @@ function update() {
       const dist = Math.hypot(ddx, ddy) || 1;
       if (dist < 360) {
         // 俯衝追擊玩家
-        const sp = Math.min(2.2, 1.1 + floor * 0.06) * slowF;
-        m.x += ddx / dist * sp + Math.sin(m.t * 0.15) * 0.5;
-        m.y += ddy / dist * sp + Math.cos(m.t * 0.13) * 0.5;
+        const sp = Math.min(2.2, 1.1 + floor * 0.06) * moveF;
+        m.x += ddx / dist * sp + Math.sin(m.t * 0.15) * 0.5 * MONSTER_MOVE_MUL;
+        m.y += ddy / dist * sp + Math.cos(m.t * 0.13) * 0.5 * MONSTER_MOVE_MUL;
         m.vx = ddx;
       } else {
         // 緩慢飄回巡邏點
         const bx2 = m.ax + Math.sin(m.t * 0.02) * 90;
         const by2 = m.ay + Math.sin(m.t * 0.055) * 34;
-        m.x += (bx2 - m.x) * 0.03;
-        m.y += (by2 - m.y) * 0.03;
+        m.x += (bx2 - m.x) * 0.03 * MONSTER_MOVE_MUL;
+        m.y += (by2 - m.y) * 0.03 * MONSTER_MOVE_MUL;
       }
       if (m.y > 448) m.y = 448;
     }
