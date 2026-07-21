@@ -1,0 +1,11 @@
+- crusader_great_helmet: https://openclipart.org/detail/169351
+- knight_helmet_[01-02]: https://openclipart.org/detail/4338
+- armet: https://openclipart.org/detail/289194
+- norman_helmet_01: https://openclipart.org/detail/169354
+- norman_helmet_02: https://openclipart.org/detail/169353
+- kettle_hat: https://openclipart.org/detail/169352
+- fedora: https://openclipart.org/detail/14848
+- mining_helmet: https://openclipart.org/detail/149017
+- american_football_helmet: https://openclipart.org/detail/212653
+- motorcycle_helmet: https://openclipart.org/detail/202023
+- pith_helmet_01: https://openclipart.org/detail/171173
