@@ -79,7 +79,7 @@ for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
-const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;P 能力';
+const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Shift 衝刺&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;P 能力';
 const HINT_MENU = '[1]/[2] 選職業&nbsp;|&nbsp;點擊購買永久強化&nbsp;|&nbsp;Enter 開始冒險';
 const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;|&nbsp;Space 與 NPC 互動&nbsp;|&nbsp;Enter 聊天&nbsp;|&nbsp;P 能力';
 
@@ -869,6 +869,7 @@ function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 
 const player = {
   x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
+  dashT: 0, dashCd: 0, dashDir: 1,
   slashT: 0, spinT: 0, potCd: 0, rageT: 0, rageAtk: 0, rageSpd: 0, rageLifesteal: 0, rageExtend: 0, rageBlood: false, rageUltimate: false,
   shieldHp: 0, shieldT: 0, shieldReflect: 0, shieldBreakMp: 0, shieldBurst: false, chillT: 0, cls: 'warrior', skillCasts: {},
   perk: {}, revives: 0, affixDeathUsed: false, eventAtk: 0, aegisCd: 0, airJumped: false,
@@ -974,7 +975,7 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def);
 }
-function moveSpd() { return (1.6 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
@@ -1657,6 +1658,7 @@ function resetRun() {
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
   p.x = 80; p.y = 468; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
+  p.dashT = 0; p.dashCd = 0; p.dashDir = 1;
   p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
   p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0;
   p.skillCasts = {};
@@ -1856,8 +1858,12 @@ function usePot(t) {
 // ---------- input ----------
 const keys = {};
 const pressedKeys = {};
-const inputBuffer = { jump:0, skills:[0, 0, 0] };
+const DASH_COOLDOWN = 150;
+const DASH_DURATION = 10;
+const DASH_SPEED = 8;
+const inputBuffer = { jump:0, dash:0, skills:[0, 0, 0] };
 const skillPulseT = [0, 0, 0];
+let dashPulseT = 0;
 let coyoteT = 0;
 function normalizeGameKey(key) { return key === ' ' ? 'space' : key.toLowerCase(); }
 function setGameKey(key, down) {
@@ -1868,11 +1874,15 @@ function setGameKey(key, down) {
 function clearGameInputs() {
   for (const k of Object.keys(keys)) keys[k] = false;
   for (const k of Object.keys(pressedKeys)) delete pressedKeys[k];
-  inputBuffer.jump = 0; inputBuffer.skills.fill(0);
+  inputBuffer.jump = 0; inputBuffer.dash = 0; inputBuffer.skills.fill(0);
   for (const id of Object.keys(touchMap || {})) delete touchMap[id];
 }
 function captureBufferedInputs() {
   if (pressedKeys.space) inputBuffer.jump = 6;
+  if (pressedKeys.shift && !player.itemWin) {
+    if (player.dashCd <= 6) inputBuffer.dash = 6;
+    else dashPulseT = Math.max(dashPulseT, 6);
+  }
   const skillKeys = ['z', 'x', 'c'];
   for (let i = 0; i < 3; i++) {
     if (!pressedKeys[skillKeys[i]]) continue;
@@ -1883,6 +1893,8 @@ function captureBufferedInputs() {
 }
 function tickInputBuffers() {
   if (inputBuffer.jump > 0) inputBuffer.jump--;
+  if (inputBuffer.dash > 0) inputBuffer.dash--;
+  if (dashPulseT > 0) dashPulseT--;
   for (let i = 0; i < 3; i++) {
     if (inputBuffer.skills[i] > 0) inputBuffer.skills[i]--;
     if (skillPulseT[i] > 0) skillPulseT[i]--;
@@ -2218,6 +2230,7 @@ const vbtns = [
   { x: 786, y: 396, w: 74, h: 74, label: 'Z', press: 'z' },
   { x: 702, y: 396, w: 74, h: 74, label: 'X', press: 'x' },
   { x: 618, y: 396, w: 74, h: 74, label: 'C', press: 'c' },
+  { x: 550, y: 396, w: 56, h: 74, label: '衝', press: 'shift' },
   { x: 702, y: 330, w: 52, h: 52, label: 'A', tap: () => usePot('hp') },
   { x: 768, y: 330, w: 52, h: 52, label: 'S', tap: () => usePot('mp') },
   { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
@@ -2305,6 +2318,8 @@ function update() {
   if (p.inv > 0) p.inv--;
   if (p.potCd > 0) p.potCd--;
   for (let i = 0; i < 3; i++) if (p.slotCd[i] > 0) p.slotCd[i]--;
+  if (p.dashCd > 0) p.dashCd--;
+  if (p.dashT > 0) p.dashT--;
   if (p.rageT > 0) {
     p.rageT--;
     if (p.rageBlood) {
@@ -2340,8 +2355,20 @@ function update() {
   let mv = 0;
   if (keys['arrowleft']) mv = -1;
   if (keys['arrowright']) mv = 1;
-  if (mv !== 0) { p.face = mv; p.walk++; } else p.walk = 0;
-  p.vx = mv * moveSpd();
+  if (inputBuffer.dash > 0 && p.dashCd <= 0) {
+    const dir = mv || p.face || 1;
+    p.dashDir = dir; p.face = dir; p.dashT = DASH_DURATION; p.dashCd = DASH_COOLDOWN;
+    p.inv = Math.max(p.inv, 8); p.vy *= 0.25; inputBuffer.dash = 0;
+    burst(p.x - dir * 8, p.y - p.h / 2, '#bdefff', 8);
+    playSkillAnim('smoke', p.x - dir * 10, p.y - 28, { scale:0.9, flip:dir < 0, layer:'back', alpha:0.65, life:18 });
+    playSfx('swordSwing', 0.45, 1.35);
+  }
+  if (p.dashT <= 0 && mv !== 0) { p.face = mv; p.walk++; }
+  else if (p.dashT <= 0) p.walk = 0;
+  if (p.dashT > 0) {
+    p.vx = p.dashDir * DASH_SPEED;
+    if (p.dashT % 2 === 0) parts.push({ x:p.x - p.dashDir * 10, y:p.y - 22, vx:-p.dashDir * 0.8, vy:-0.25, t:12, color:'#bdefff' });
+  } else p.vx = mv * moveSpd();
   if (p.onGround) coyoteT = 6;
   else if (coyoteT > 0) coyoteT--;
   if (inputBuffer.jump > 0) {
@@ -2909,6 +2936,12 @@ function render() {
   }
   // player
   drawEquippedAura(p.x, p.y - p.h / 2, p.w, p.h);
+  if (p.dashT > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.12 + p.dashT / DASH_DURATION * 0.18;
+    drawSprite(p.cls === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0);
+    ctx.restore();
+  }
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
     const s = 3;
     const bob = (p.onGround && p.walk > 0) ? (Math.floor(p.walk / 6) % 2) : 0;
@@ -3054,6 +3087,20 @@ function render() {
   ctx.fillText('[S]藍水x' + p.bag.mp, 500, H - 4);
   if (p.shieldHp > 0) { ctx.fillStyle = '#7dcfff'; ctx.fillRect(170, H - 40, 200 * Math.min(1, p.shieldHp / p.mhp), 3); }
   if (p.rageT > 0) { ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('狂暴' + Math.ceil(p.rageT / 60), 110, H - 8); }
+  const dashX = 612, dashY = H - 43;
+  ctx.fillStyle = 'rgba(8,7,9,0.94)'; ctx.fillRect(dashX, dashY, 55, 38);
+  ctx.strokeStyle = p.dashCd <= 0 ? '#8ec9df' : '#3d5260'; ctx.lineWidth = 1; ctx.strokeRect(dashX, dashY, 55, 38);
+  if (dashPulseT > 0) {
+    ctx.globalAlpha = 0.25 + 0.35 * dashPulseT / 6;
+    ctx.fillStyle = '#8ec9df'; ctx.fillRect(dashX + 1, dashY + 1, 53, 36);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = p.dashCd <= 0 ? '#bdefff' : '#617b89'; ctx.font = 'bold 16px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('≫', dashX + 20, dashY + 24);
+  ctx.fillStyle = '#fff1d0'; ctx.font = 'bold 8px ' + STAT_FONT; ctx.fillText('SHIFT', dashX + 39, dashY + 12);
+  if (p.dashCd > 0) {
+    ctx.fillStyle = 'rgba(5,5,7,0.68)'; ctx.fillRect(dashX + 2, dashY + 2, 34, 34);
+    ctx.fillStyle = '#ddd6ca'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText((p.dashCd / 60).toFixed(1), dashX + 19, dashY + 23);
+  }
   const loH = loadouts[p.cls], keyN = ['Z', 'X', 'C'];
   for (let i = 0; i < 3; i++) {
     const sid = loH[i], sx = 672 + i * 57, sy = H - 43;
@@ -3266,7 +3313,7 @@ function drawStatsPanel() {
     ['固定減傷', armorDef(), '裝備 ' + Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def')) + ' + 鋼鐵皮膚 ' + p.cd.def + ' + 附魔 ' + Math.round(affixV('def'))],
     ['HP回復', (0.48 * recoveryMul).toFixed(2) + ' /秒', '營火調息 Lv' + meta.up.recovery],
     ['MP回復', (3 * (1 + 0.5 * p.cd.mp) * recoveryMul).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp + '；營火調息 Lv' + meta.up.recovery],
-    ['移動速度', moveSpd().toFixed(1), '基礎1.6 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
+    ['移動速度', moveSpd().toFixed(1), '基礎2.0 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
     ['受傷無敵', ((60 + 6 * p.cd.ifr) / 60).toFixed(1) + ' 秒', '閃避本能 Lv' + p.cd.ifr],
     ['護盾', Math.round(p.shieldHp || 0), perkV('aegis') ? '守護結界 Lv' + perkV('aegis') : '目前沒有護盾來源']
   ];
