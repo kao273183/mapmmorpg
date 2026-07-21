@@ -10,6 +10,29 @@ function drawTile(idx, dx, dy, scale) {
   if (!tsheetReady) return;
   ctx.drawImage(tsheet, (idx % 27) * 16, ((idx / 27) | 0) * 16, 16, 16, Math.round(dx), Math.round(dy), 16 * scale, 16 * scale);
 }
+// 裝備圖示表(CC0):0劍 1杖 2防具 3頭盔 4鞋子 5紅水 6藍水,每格 32px
+const itemsheet = new Image();
+let itemsheetReady = false;
+if (window.ITEMSHEET_URI) { itemsheet.onload = () => { itemsheetReady = true; }; itemsheet.src = window.ITEMSHEET_URI; }
+function itemIconIdx(it) {
+  if (it.kind === 'weapon') return it.wpn === 'stave' ? 1 : 0;
+  if (it.kind === 'armor') return 2;
+  if (it.kind === 'helmet') return 3;
+  if (it.kind === 'boots') return 4;
+  return -1; // 飾品:程式畫
+}
+function drawItemIcon(it, x, y, s) { // 在 (x,y) 畫 s×s 圖示
+  const idx = itemIconIdx(it);
+  if (idx >= 0 && itemsheetReady) { ctx.drawImage(itemsheet, idx * 32, 0, 32, 32, Math.round(x), Math.round(y), s, s); return; }
+  // 飾品:金環 + 品質色寶石(明顯是戒指,不像藥水)
+  const cx = x + s / 2, cy = y + s / 2;
+  ctx.strokeStyle = '#d8b365'; ctx.lineWidth = Math.max(2, s * 0.11);
+  ctx.beginPath(); ctx.arc(cx, cy + s * 0.14, s * 0.26, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = RARITY_COL[it.r];
+  ctx.beginPath(); ctx.arc(cx, cy - s * 0.18, s * 0.17, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(cx - s * 0.05, cy - s * 0.23, s * 0.05, 0, Math.PI * 2); ctx.fill();
+}
+function drawPotionIcon(type, x, y, s) { if (itemsheetReady) ctx.drawImage(itemsheet, (type === 'hp' ? 5 : 6) * 32, 0, 32, 32, Math.round(x), Math.round(y), s, s); }
 const W = 960, H = 540;
 let worldW = 2000;
 
@@ -675,6 +698,7 @@ function genGear(n, forceR) {
   const it = { kind: slot, r: r, id: 'g' + (gearSeq++) };
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
+    it.wpn = player.cls === 'mage' ? 'stave' : 'sword';
     it.desc = '攻擊+' + it.atk;
   } else if (slot === 'armor') {
     it.hp = Math.round((16 + n * 6) * m); it.def = Math.max(1, Math.round((1 + n * 0.4) * m));
@@ -1011,7 +1035,66 @@ function usePot(t) {
 // ---------- input ----------
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
-let expBtn = null, impBtn = null, backTownBtn = null;
+let expBtn = null, impBtn = null, backTownBtn = null, gearBtn = null;
+function drawGear(cx, cy, r, col) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.fillStyle = col;
+  for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-2, -r - 2, 4, 5); } // 齒
+  ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, Math.PI * 2); ctx.fill(); // 外圈
+  ctx.fillStyle = '#1a1c2c'; ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2); ctx.fill(); // 內孔
+  ctx.restore();
+}
+// ---------- 設定視窗(不用 prompt,畫面內處理)----------
+let settingsOpen = false, settingsMode = null; // 'import' | 'rename' | null
+const settingsBtns = [];
+let saveInput = null;
+function getSaveInput() {
+  if (saveInput) return saveInput;
+  saveInput = document.createElement('input');
+  saveInput.type = 'text'; saveInput.setAttribute('autocomplete', 'off');
+  saveInput.style.cssText = 'position:fixed;left:50%;top:56%;transform:translate(-50%,-50%);width:70%;max-width:440px;padding:10px 12px;font:14px "Courier New",monospace;z-index:9999;display:none;background:#14162b;color:#fff;border:2px solid #7dffd6;border-radius:4px;text-align:center;';
+  saveInput.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') applySaveInput(); else if (e.key === 'Escape') closeSaveEdit(); });
+  document.body.appendChild(saveInput);
+  return saveInput;
+}
+function startSaveEdit(mode) {
+  settingsMode = mode;
+  const el = getSaveInput();
+  el.value = mode === 'rename' ? (meta.playerName || '') : '';
+  el.placeholder = mode === 'rename' ? '輸入新名字(最多12字)後按 Enter' : '貼上存檔碼後按 Enter';
+  el.style.display = 'block'; el.focus();
+}
+function closeSaveEdit() { settingsMode = null; if (saveInput) { saveInput.style.display = 'none'; saveInput.blur(); } }
+function applySaveInput() {
+  const v = (saveInput.value || '').trim();
+  if (settingsMode === 'rename') { if (v) { meta.playerName = v.slice(0, 12); saveMeta(); menuMsg = { text: '已改名為 ' + meta.playerName, color: '#7dffd6', t: 200 }; } }
+  else if (settingsMode === 'import') {
+    const a = decodeSave(v);
+    if (a) { applyMeta(a[1], a.slice(2, 7), a[7]); if (a[0] >= 2) applySkillNums(a.slice(8, 8 + 46)); saveMeta(); menuMsg = { text: '匯入成功!靈魂 ' + meta.souls, color: '#7dffd6', t: 220 }; }
+    else menuMsg = { text: '存檔碼無效', color: '#ff5a5a', t: 220 };
+  }
+  closeSaveEdit();
+}
+function renderSettings() {
+  settingsBtns.length = 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+  const mw = 540, mh = 250, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
+  ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace'; ctx.fillText('設 定', W / 2, my + 38);
+  ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 70);
+  ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('存檔碼會自動存於瀏覽器;用「複製」可備份到別的裝置', W / 2, my + 92);
+  const bw = 230, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 110;
+  const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
+  mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
+  mk(bx2, byy, '匯入存檔', 'import');
+  mk(bx1, byy + 52, '改名', 'rename');
+  mk(bx2, byy + 52, '關閉', 'close', 'rgba(226,59,59,0.2)');
+  if (settingsMode) { ctx.fillStyle = '#ffe680'; ctx.font = '12px "Courier New",monospace'; ctx.fillText('（下方輸入框輸入後按 Enter,Esc 取消）', W / 2, my + mh - 12); }
+  if (menuMsg) { ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(menuMsg.text, W / 2, my + mh + 22); if (--menuMsg.t <= 0) menuMsg = null; }
+  ctx.textAlign = 'left';
+}
 const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [];
 let gachaBtn = null;
 function dismantleStash(it) {
@@ -1030,6 +1113,7 @@ window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
   keys[e.key === ' ' ? 'space' : e.key.toLowerCase()] = true;
   const k = e.key.toLowerCase();
+  if (settingsOpen) { if (k === 'escape' && !settingsMode) { settingsOpen = false; closeSaveEdit(); } return; }
   if (gameState === 'town') {
     if (chatting) {
       if (k === 'enter') { const t = chatInput.trim(); if (t) sendChat(t); chatInput = ''; chatting = false; }
@@ -1078,6 +1162,20 @@ window.addEventListener('keyup', e => {
 });
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+  if (settingsOpen) {
+    for (const b of settingsBtns) if (inside(b)) {
+      if (b.act === 'copy') {
+        const code = encodeSave();
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(() => { menuMsg = { text: '已複製到剪貼簿', color: '#7dffd6', t: 200 }; }).catch(() => { menuMsg = { text: '複製失敗,請手動備份', color: '#ff5a5a', t: 200 }; });
+        else menuMsg = { text: '此環境不支援自動複製', color: '#ff5a5a', t: 200 };
+        return;
+      }
+      if (b.act === 'import') { startSaveEdit('import'); return; }
+      if (b.act === 'rename') { startSaveEdit('rename'); return; }
+      if (b.act === 'close') { settingsOpen = false; closeSaveEdit(); return; }
+    }
+    return; // 設定視窗吃掉所有點擊
+  }
   if (gameState === 'town') {
     const cw = 360, ih = 24, ch = 108, cy = H - ch - ih - 14;
     if (mx >= 14 && mx <= 14 + cw && my >= cy) { // 點聊天框
@@ -1095,8 +1193,7 @@ function handleTap(mx, my) {
   if (gameState === 'select') {
     if (inside(backTownBtn)) { gameState = 'town'; setHint(HINT_TOWN); return; }
     for (const b of tabBtns) if (inside(b)) { menuTab = b.tab; pendingReset = null; return; }
-    if (inside(expBtn)) { exportSave(); return; }
-    if (inside(impBtn)) { importSave(); return; }
+    if (inside(gearBtn)) { openTownPanel('save'); return; }
     if (menuTab === 'skills') {
       if (inside(gachaBtn)) { drawSkillGacha(); return; }
       for (const b of skillBtns) if (inside(b)) { selSkill = b.id; pendingReset = null; return; }
@@ -1619,12 +1716,11 @@ function render() {
         ctx.fillRect(gd.x - 3 - r, gd.y - 120, 6 + 2 * r, 120);
         ctx.globalAlpha = 1;
       }
-      const pulse = 1 + Math.sin(frame * 0.15) * (0.15 + r * 0.04);
-      ctx.fillStyle = col;
-      ctx.fillRect(gd.x - 6 * pulse, gd.y - 14 - 2 * pulse, 12 * pulse, 12 * pulse);
-      if (r >= 3) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(gd.x - 6 * pulse, gd.y - 14 - 2 * pulse, 12 * pulse, 12 * pulse); }
-      ctx.fillStyle = '#262a40';
-      ctx.fillRect(gd.x - 3, gd.y - 11, 6, 6);
+      const bob = Math.sin(frame * 0.15) * 2;
+      const iy = gd.y - 26 + bob, sz = 20;
+      // 品質色底光
+      ctx.fillStyle = col; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.ellipse(gd.x, gd.y - 2, 10, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      drawItemIcon(gd.it, gd.x - sz / 2, iy, sz);
     }
   }
   // potion drops
@@ -1858,7 +1954,7 @@ function slotBox(sx, sy, slot, label) {
   ctx.strokeStyle = it ? '#d8b365' : '#3a3450';
   ctx.lineWidth = 2;
   ctx.strokeRect(sx, sy, 44, 44);
-  if (it) drawGlyph(it.kind, sx + 22, sy + 22, RARITY_COL[it.r || 0]);
+  if (it) drawItemIcon(it, sx + 6, sy + 6, 32);
   ctx.textAlign = 'center';
   ctx.font = '10px "Courier New",monospace';
   ctx.fillStyle = it ? RARITY_COL[it.r || 0] : '#667';
@@ -1910,12 +2006,13 @@ function drawItemWin() {
       itemBtns.push({ x: bx - 4, y: ry - 13, w: bw - 44, h: 24, it: it });
       delBtns.push({ x: bx + bw - 46, y: ry - 13, w: 42, h: 24, it: it });
     }
+    drawItemIcon(it, bx, ry - 11, 20);
     ctx.font = 'bold 12px "Courier New",monospace';
-    ctx.fillStyle = RARITY_COL[it.r || 0];
-    ctx.fillText('[' + (i + 1) + ']' + it.name, bx, ry + 3);
+    ctx.fillStyle = RARITY_COL[it.r || 0]; ctx.textAlign = 'left';
+    ctx.fillText(it.name, bx + 24, ry + 3);
     ctx.font = '10px "Courier New",monospace';
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(it.desc, bx + 118, ry + 3);
+    ctx.fillText(it.desc, bx + 128, ry + 3);
     if (eqd) {
       ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace';
       ctx.fillText('E', bx + bw - 16, ry + 3);
@@ -2025,18 +2122,7 @@ function sendChat(text) {
   beep(700, 0.05, 'sine', 0.03);
 }
 function openTownPanel(panel) {
-  if (panel === 'save') {
-    const c = window.prompt('存檔碼(可複製備份);或貼上他人存檔碼匯入,或輸入 name:你的名字 改名:', encodeSave());
-    if (c === null) return;
-    const t = c.trim();
-    if (t.startsWith('name:')) {
-      const nm = t.slice(5).trim().slice(0, 12);
-      if (nm) { meta.playerName = nm; saveMeta(); chatMsgs.push({ name: '系統', text: '已改名為 ' + nm }); }
-    } else if (t && t !== encodeSave()) {
-      importSave();
-    }
-    return;
-  }
+  if (panel === 'save') { settingsOpen = true; settingsMode = null; beep(600, 0.08, 'sine', 0.04); return; }
   gameState = 'select'; menuTab = panel; fromTown = true;
   beep(600, 0.08, 'sine', 0.04);
 }
@@ -2271,12 +2357,11 @@ function renderStashTab() {
     ctx.strokeRect(cxx, cyy, cell, cell);
     if (it) {
       stashBtns.push({ x: cxx, y: cyy, w: cell, h: cell, uid: it.uid });
+      drawItemIcon(it, cxx + (cell - 40) / 2, cyy + (cell - 40) / 2 - 2, 40);
       ctx.textAlign = 'center';
-      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 13px "Courier New",monospace';
-      ctx.fillText(PART_NAME[it.kind], cxx + cell / 2, cyy + 26);
       ctx.fillStyle = '#889'; ctx.font = '10px "Courier New",monospace';
-      ctx.fillText(RARITY_ABBR[it.r], cxx + cell / 2, cyy + 44);
-      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.fillText('▲', cxx + cell / 2, cyy + 12); }
+      ctx.fillText(RARITY_ABBR[it.r], cxx + cell / 2, cyy + cell - 4);
+      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('▲', cxx + cell / 2, cyy + 11); }
       ctx.textAlign = 'left';
     }
   }
@@ -2460,15 +2545,10 @@ function renderMenu() {
   ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 18px "Courier New",monospace';
   ctx.fillText('靈魂 ' + meta.souls + (bestFloor > 0 ? '   最深 ' + bestFloor + ' 層' : ''), W / 2, 104);
   // 存檔碼按鈕
-  expBtn = { x: 744, y: 30, w: 96, h: 28 };
-  impBtn = { x: 848, y: 30, w: 96, h: 28 };
-  for (const [b, label] of [[expBtn, '匯出存檔'], [impBtn, '匯入存檔']]) {
-    ctx.fillStyle = 'rgba(255,255,255,0.07)';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-    ctx.fillText(label, b.x + b.w / 2, b.y + 18);
-  }
+  gearBtn = { x: 906, y: 28, w: 38, h: 38 };
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
+  ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
+  drawGear(gearBtn.x + gearBtn.w / 2, gearBtn.y + gearBtn.h / 2, 12, '#c8cdec');
   if (menuMsg) {
     ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace';
     ctx.fillText(menuMsg.text, 844, 78);
@@ -2489,7 +2569,7 @@ function renderMenu() {
   }
   backTownBtn = null;
   if (fromTown) {
-    backTownBtn = { x: 598, y: 30, w: 132, h: 32 }; // 標題右側、匯出存檔左側,避開大標題
+    backTownBtn = { x: 706, y: 30, w: 150, h: 34 }; // 標題與 ⚙ 之間,留足空間
     ctx.fillStyle = 'rgba(125,255,214,0.18)'; ctx.fillRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
     ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 1; ctx.strokeRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
     ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
@@ -2590,6 +2670,7 @@ function loop() {
     if (gameState === 'pick') drawPick();
     if (gameState === 'dead') drawDead();
   }
+  if (settingsOpen) renderSettings();
   requestAnimationFrame(loop);
 }
 calcStats();
