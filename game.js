@@ -227,6 +227,18 @@ function equipItem(it) {
   num(player.x, player.y - player.h - 10, '裝備 ' + it.name, RARITY_COL[it.r]);
   beep(820, 0.06, 'sine', 0.03);
 }
+let pendingDel = null; // {it, f} 兩段式確認:2 秒內再點一次才分解
+function dismantle(it) {
+  const p = player;
+  if (p.eq[it.kind] === it) return; // 裝備中不可分解
+  const i = p.items.indexOf(it);
+  if (i < 0) return;
+  p.items.splice(i, 1);
+  soulsRun += 2;
+  pendingDel = null;
+  num(p.x, p.y - p.h - 10, '分解 → 靈魂+2', '#7dffd6');
+  beep(500, 0.08, 'square', 0.03);
+}
 
 // ---------- floor generation ----------
 function genFloor(n) {
@@ -255,10 +267,10 @@ function genFloor(n) {
     px += pw + 60 + Math.random() * 130;
   }
   mons = [];
-  const count = Math.min(6 + n * 2, 18);
-  const sc = 1 + 0.28 * (n - 1);
+  const count = Math.min(6 + n * 2, 22);
+  const sc = 1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1); // 線性+微幅二次成長,對抗玩家的乘法成長
   const xpSc = 1 + 0.15 * (n - 1);
-  const eliteCh = Math.min(0.06 + 0.02 * n, 0.3);
+  const eliteCh = Math.min(0.08 + 0.025 * n, 0.4);
   for (let i = 0; i < count; i++) {
     if (Math.random() < 0.35) {
       const bx = 350 + Math.random() * (worldW - 550);
@@ -347,7 +359,7 @@ function hitMon(m, d, crit) {
         type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'slime' ? m.y : 500
       });
     }
-    if (m.elite || Math.random() < 0.06 + 0.02 * meta.up.treasure) {
+    if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
       gearDrops.push({
         x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
         it: genGear(floor), t: 900, ground: m.type === 'slime' ? m.y : 500
@@ -393,7 +405,7 @@ function usePot(t) {
 
 // ---------- input ----------
 const keys = {};
-const selBtns = [], metaBtns = [], itemBtns = [];
+const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
 let startBtn = null;
 window.addEventListener('keydown', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
@@ -421,10 +433,12 @@ window.addEventListener('keydown', e => {
   if (k === 'c') usePot('hp');
   if (k === 'v') usePot('mp');
   if (player.itemWin) {
-    const n = parseInt(k, 10);
+    const n = e.code && e.code.startsWith('Digit') ? parseInt(e.code.slice(5), 10) : parseInt(k, 10);
     if (n >= 1 && n <= player.items.length) {
       const it = player.items[n - 1];
-      if (player.eq[it.kind] !== it) equipItem(it);
+      if (player.eq[it.kind] === it) return;
+      if (e.shiftKey) dismantle(it); // Shift+數字 直接分解
+      else equipItem(it);
     }
   }
 });
@@ -445,6 +459,11 @@ function handleTap(mx, my) {
     return;
   }
   if (player.itemWin) {
+    for (const b of delBtns) if (inside(b)) {
+      if (pendingDel && pendingDel.it === b.it) dismantle(b.it);
+      else pendingDel = { it: b.it, f: frame };
+      return;
+    }
     for (const b of itemBtns) if (inside(b)) { equipItem(b.it); return; }
   }
   if (mx >= 840 && my >= H - 16) player.itemWin = !player.itemWin;
@@ -580,7 +599,7 @@ function update() {
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
     floor++;
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.25));
+    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.15));
     genFloor(floor);
     p.x = 80; p.y = 500; p.vy = 0;
     num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層', '#b05ae0');
@@ -1033,25 +1052,40 @@ function drawItemWin() {
   ctx.fillText('減傷 ' + armorDef() + '  移速 ' + moveSpd().toFixed(1) + '  HP ' + p.mhp, dx + 4, dy + dh + 34);
   const bx = x + 232, by = y + 36, bw = w - 244;
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
-  ctx.fillText('背包(點擊/數字鍵換裝)', bx, by + 12);
+  ctx.fillText('背包(點擊換裝/✕分解+2魂)', bx, by + 12);
   if (p.items.length === 0) {
     ctx.fillStyle = '#667'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('(空的,打怪撿裝備吧)', bx + 4, by + 42);
   }
+  if (pendingDel && (frame - pendingDel.f > 120 || p.items.indexOf(pendingDel.it) < 0)) pendingDel = null;
+  delBtns.length = 0;
   for (let i = 0; i < p.items.length; i++) {
     const it = p.items[i];
     const ry = by + 36 + i * 26;
     const eqd = p.eq[it.kind] === it;
-    ctx.fillStyle = eqd ? 'rgba(216,179,101,0.16)' : 'rgba(255,255,255,0.04)';
+    const pend = pendingDel && pendingDel.it === it;
+    ctx.fillStyle = pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : 'rgba(255,255,255,0.04)';
     ctx.fillRect(bx - 4, ry - 13, bw, 24);
-    if (!eqd) itemBtns.push({ x: bx - 4, y: ry - 13, w: bw, h: 24, it: it });
+    if (!eqd) {
+      itemBtns.push({ x: bx - 4, y: ry - 13, w: bw - 44, h: 24, it: it });
+      delBtns.push({ x: bx + bw - 46, y: ry - 13, w: 42, h: 24, it: it });
+    }
     ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillStyle = RARITY_COL[it.r || 0];
     ctx.fillText('[' + (i + 1) + ']' + it.name, bx, ry + 3);
     ctx.font = '10px "Courier New",monospace';
     ctx.fillStyle = '#8890b8';
     ctx.fillText(it.desc, bx + 118, ry + 3);
-    if (eqd) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('E', bx + bw - 16, ry + 3); }
+    if (eqd) {
+      ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 11px "Courier New",monospace';
+      ctx.fillText('E', bx + bw - 16, ry + 3);
+    } else {
+      ctx.font = 'bold 11px "Courier New",monospace';
+      ctx.fillStyle = pend ? '#ff5a5a' : '#8890b8';
+      ctx.textAlign = 'center';
+      ctx.fillText(pend ? '確認?' : '✕', bx + bw - 25, ry + 3);
+      ctx.textAlign = 'left';
+    }
   }
   const py = y + h - 40;
   ctx.fillStyle = '#e23b3b'; ctx.fillRect(bx, py + 2, 8, 10);
