@@ -582,7 +582,7 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit') + affix
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def'));
 }
-function moveSpd() { return (3.2 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
+function moveSpd() { return (2.8 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return 1 + 0.15 * player.cd.xdmg; }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')); }
@@ -2284,7 +2284,7 @@ function drawStatsPanel() {
     ['固定減傷', armorDef(), '防具/頭盔 ' + Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def')) + ' + 附魔 ' + Math.round(affixV('def'))],
     ['HP回復', '0.48 /秒', '戰鬥中自然回復'],
     ['MP回復', (3 * (1 + 0.5 * p.cd.mp)).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp],
-    ['移動速度', moveSpd().toFixed(1), '基礎3.2 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
+    ['移動速度', moveSpd().toFixed(1), '基礎2.8 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝/附魔' + (eqStat('boots', 'spd') + affixV('move')).toFixed(1)],
     ['跳躍力', jumpV().toFixed(1), '基礎11.5 + 鞋子跳躍'],
     ['護盾', Math.round(p.shieldHp || 0), perkV('aegis') ? '守護結界 Lv' + perkV('aegis') : '目前沒有護盾來源']
   ];
