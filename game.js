@@ -32,7 +32,9 @@ const PAL = {
   'e':'#b05ae0', 'f':'#7a2fa8',
   'g':'#9ab55c', 'p':'#e0687f', 'k':'#6a6a7c', 'i':'#7ec8f0'
 };
-const RARITY_COL = ['#e8e8e8', '#6f9dff', '#ffd23e'];
+const RARITY_COL = ['#e8e8e8', '#6f9dff', '#ffd23e', '#c060ff', '#ff8020'];
+const RARITY_ABBR = ['普', '精', '稀', '史', '傳'];
+const RARITY_NAME = ['普通', '精良', '稀有', '史詩', '傳說'];
 const MAGE = [
   "....4444....","...444444...","..44844844..",".4444444444.","...666666...",
   "...676676...","...666666...","..44444444..",".4444444444.",".4444444444.",
@@ -96,7 +98,22 @@ function drawSprite(rows, x, y, s, flip, flash, recolor) {
 }
 
 // ---------- meta progression ----------
-const meta = { souls: 0, up: { atk: 0, vit: 0, pots: 0, treasure: 0, soul: 0 } };
+const meta = {
+  souls: 0, up: { atk: 0, vit: 0, pots: 0, treasure: 0, soul: 0 },
+  stash: [], mats: { enh: 0, ench: 0 }, stashSeq: 1,
+  loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null }
+};
+const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
+const STASH_CAP = 30;
+function matFor(r) { return [{ enh: 1, ench: 0 }, { enh: 3, ench: 1 }, { enh: 6, ench: 3 }, { enh: 10, ench: 6 }, { enh: 16, ench: 10 }][r] || { enh: 1, ench: 0 }; }
+function addMat(r) { const m = matFor(r); meta.mats.enh += m.enh; meta.mats.ench += m.ench; return m; }
+function stashGear(it) { // 存入倉庫;已在庫(開局帶出的)跳過;滿則轉材料
+  if (it.uid && meta.stash.some(s => s.uid === it.uid)) return true;
+  if (meta.stash.length >= STASH_CAP) { addMat(it.r); return false; }
+  it.uid = meta.stashSeq++;
+  meta.stash.push(it);
+  return true;
+}
 const META_DEFS = [
   { id:'atk',      name:'攻擊強化', desc:'攻擊 +4%/級',        max:10, cost:l => 20 + l * 15 },
   { id:'vit',      name:'體魄強化', desc:'HP上限 +8%/級',      max:10, cost:l => 20 + l * 15 },
@@ -135,7 +152,7 @@ const BRANCH_NAMES = {
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
 const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null] };
-let menuTab = 'base', selSkill = null, pendingReset = null;
+let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
 function classSkills(cls) { return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls); }
 // 天賦倍率(第一批:數值分支。A=範圍/持續流,B=傷害流;里程碑特效後續批次)
 function talentOf(id) {
@@ -250,7 +267,8 @@ function applyMeta(souls, ups, best) {
 function saveMeta() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums()
+      s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
+      st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq
     }));
   } catch (e) {}
 }
@@ -259,6 +277,10 @@ function loadMeta() {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (d && typeof d.s === 'number' && Array.isArray(d.u)) applyMeta(d.s, d.u, d.b);
     if (d && Array.isArray(d.k)) applySkillNums(d.k);
+    if (d && Array.isArray(d.st)) meta.stash = d.st.filter(it => it && GEAR_PARTS.indexOf(it.kind) >= 0);
+    if (d && d.mt) meta.mats = { enh: Math.max(0, d.mt.enh | 0), ench: Math.max(0, d.mt.ench | 0) };
+    if (d && d.lo) for (const part of GEAR_PARTS) meta.loadout[part] = d.lo[part] || null;
+    if (d && d.sq) meta.stashSeq = Math.max(1, d.sq | 0);
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
@@ -601,30 +623,56 @@ function trySkill(i) {
 }
 
 // ---------- gear generation ----------
+// 裝備命名:品質越高基名越霸氣 + 隨機詞綴,史詩以上加後綴
+const GEAR_BASE = {
+  weapon: { warrior: ['短劍', '長劍', '闊劍', '斬馬刀', '巨劍'], mage: ['法杖', '魔杖', '咒杖', '秘法杖', '權杖'] },
+  armor:  ['皮甲', '鎖甲', '鎧甲', '板甲', '龍鱗甲'],
+  helmet: ['皮帽', '鐵盔', '全盔', '頭冠', '龍首盔'],
+  boots:  ['布鞋', '皮靴', '戰靴', '疾行靴', '踏空靴'],
+  acc:    ['戒指', '項鍊', '護符', '徽章', '聖物']
+};
+const GEAR_PRE = [
+  ['生鏽的', '破舊的', '粗製的'],
+  ['鋒利的', '堅固的', '精良的'],
+  ['烈焰', '寒霜', '雷鳴', '淬毒'],
+  ['巨龍', '暗影', '血色', '風暴'],
+  ['弒神', '永恆', '混沌', '天啟']
+];
+const GEAR_SUF = ['之王', '・末日', '・不朽', '之怒', '・終焉'];
+function pick(a) { return a[(Math.random() * a.length) | 0]; }
+function gearName(kind, r, cls) {
+  const bases = kind === 'weapon' ? GEAR_BASE.weapon[cls] : GEAR_BASE[kind];
+  const base = bases[Math.min(r, bases.length - 1)];
+  let name = pick(GEAR_PRE[r]) + base;
+  if (r >= 3) name += pick(GEAR_SUF);
+  return name;
+}
+function rollRarity(n) {
+  const roll = Math.random() + Math.min(0.42, n * 0.022); // 深層加成
+  if (roll > 1.36) return 4; // 傳說
+  if (roll > 1.16) return 3; // 史詩
+  if (roll > 0.92) return 2; // 稀有
+  if (roll > 0.62) return 1; // 精良
+  return 0;                  // 普通
+}
 function genGear(n, forceR) {
   const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
   const slot = slots[(Math.random() * 5) | 0];
-  const roll = Math.random() + Math.min(0.3, n * 0.02);
-  const r = forceR != null ? forceR : roll > 1.08 ? 2 : roll > 0.78 ? 1 : 0;
-  const m = [1, 1.6, 2.4][r] * (0.85 + Math.random() * 0.3);
-  const pre = ['破舊的', '精良的', '傳說的'][r];
+  const r = forceR != null ? forceR : rollRarity(n);
+  const m = [1, 1.5, 2.1, 2.8, 3.6][r] * (0.85 + Math.random() * 0.3);
   const it = { kind: slot, r: r, id: 'g' + (gearSeq++) };
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
-    it.name = pre + (player.cls === 'mage' ? '法杖' : '利劍');
     it.desc = '攻擊+' + it.atk;
   } else if (slot === 'armor') {
     it.hp = Math.round((16 + n * 6) * m); it.def = Math.max(1, Math.round((1 + n * 0.4) * m));
-    it.name = pre + (player.cls === 'mage' ? '法袍' : '鎧甲');
     it.desc = 'HP+' + it.hp + ' 減傷' + it.def;
   } else if (slot === 'helmet') {
     it.hp = Math.round((10 + n * 4) * m); it.def = Math.max(1, Math.round((0.5 + n * 0.3) * m));
-    it.name = pre + '頭盔';
     it.desc = 'HP+' + it.hp + ' 減傷' + it.def;
   } else if (slot === 'boots') {
-    it.spd = Math.min(1.2, Math.round((0.2 + n * 0.04) * m * 10) / 10);
-    it.jmp = (r >= 1 && Math.random() < 0.5) ? 1 : 0;
-    it.name = pre + '靴子';
+    it.spd = Math.min(1.5, Math.round((0.2 + n * 0.04) * m * 10) / 10);
+    it.jmp = (r >= 2 && Math.random() < 0.5) ? 1 : 0;
     it.desc = '移速+' + it.spd + (it.jmp ? ' 跳躍+1' : '');
   } else {
     if (Math.random() < 0.5) {
@@ -634,15 +682,16 @@ function genGear(n, forceR) {
       it.atkMul = Math.round(5 * m) / 100;
       it.desc = '攻擊+' + Math.round(it.atkMul * 100) + '%';
     }
-    it.name = pre + '護符';
   }
+  it.name = gearName(slot, r, player.cls);
   return it;
 }
 function addGear(it) {
   const p = player;
   if (p.items.length >= 12) {
-    soulsRun += 2;
-    num(p.x, p.y - p.h - 10, '背包已滿 → 靈魂+2', '#7dffd6');
+    const m = addMat(it.r);
+    saveMeta();
+    num(p.x, p.y - p.h - 10, '背包已滿 → 強化石+' + m.enh, '#7dffd6');
     return;
   }
   p.items.push(it);
@@ -663,9 +712,10 @@ function dismantle(it) {
   const i = p.items.indexOf(it);
   if (i < 0) return;
   p.items.splice(i, 1);
-  soulsRun += 2;
+  const m = addMat(it.r);
   pendingDel = null;
-  num(p.x, p.y - p.h - 10, '分解 → 靈魂+2', '#7dffd6');
+  saveMeta();
+  num(p.x, p.y - p.h - 10, '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : ''), '#7dffd6');
   beep(500, 0.08, 'square', 0.03);
 }
 
@@ -788,6 +838,11 @@ function resetRun() {
   p.lv = 1; p.xp = 0;
   p.cd = { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0 };
   p.items = []; p.eq = { weapon: null, armor: null, helmet: null, boots: null, acc: null };
+  for (const part of GEAR_PARTS) { // 從倉庫穿戴開局裝備(副本帶出,倉庫原件保留)
+    const uid = meta.loadout[part];
+    const src = uid ? meta.stash.find(s => s.uid === uid) : null;
+    if (src) { const cp = Object.assign({}, src); p.items.push(cp); p.eq[part] = cp; }
+  }
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
   p.x = 80; p.y = 500; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
@@ -808,7 +863,9 @@ function resetRun() {
 function endRun() {
   const gained = Math.round(soulsRun * (1 + 0.1 * meta.up.soul) * (1 + 0.2 * perkV('greed')));
   meta.souls += gained;
-  lastRun = { floor: floor, kills: kills, gained: gained };
+  let stashed = 0;
+  for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
+  lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed };
   if (floor > bestFloor) bestFloor = floor;
   saveMeta();
   gameState = 'dead';
@@ -881,8 +938,8 @@ function hitMon(m, d, crit, noChain) {
     }
     if (m.type === 'boss') {
       // 保底傳說裝 + 追加一件隨機裝
-      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, 2), t: 1500, ground: 500 });
-      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor), t: 1500, ground: 500 });
+      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 500 }); // 保底史詩,深層傳說
+      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 500 });
     } else if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
       gearDrops.push({
         x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
@@ -943,8 +1000,18 @@ function usePot(t) {
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
 let expBtn = null, impBtn = null;
-const tabBtns = [], skillBtns = [], skillActBtns = [];
+const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [];
 let gachaBtn = null;
+function dismantleStash(it) {
+  const i = meta.stash.indexOf(it);
+  if (i < 0) return;
+  meta.stash.splice(i, 1);
+  for (const part of GEAR_PARTS) if (meta.loadout[part] === it.uid) meta.loadout[part] = null;
+  const m = addMat(it.r);
+  saveMeta();
+  menuMsg = { text: '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : ''), color: '#7dffd6', t: 180 };
+  beep(500, 0.1, 'square', 0.03);
+}
 let startBtn = null;
 window.addEventListener('keydown', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
@@ -1001,6 +1068,21 @@ function handleTap(mx, my) {
         if (b.act === 'reset') {
           if (pendingReset && pendingReset.id === selSkill && frame - pendingReset.f < 150) { resetTalent(selSkill); pendingReset = null; }
           else pendingReset = { id: selSkill, f: frame };
+          return;
+        }
+      }
+      return;
+    }
+    if (menuTab === 'stash') {
+      for (const b of stashBtns) if (inside(b)) { selStash = b.uid; pendingStashDel = null; return; }
+      for (const b of stashActBtns) {
+        if (!inside(b)) continue;
+        const sel = meta.stash.find(s => s.uid === selStash);
+        if (!sel) return;
+        if (b.act === 'equip') { meta.loadout[sel.kind] = meta.loadout[sel.kind] === sel.uid ? null : sel.uid; saveMeta(); return; }
+        if (b.act === 'dismantle') {
+          if (pendingStashDel === sel.uid) { dismantleStash(sel); selStash = null; }
+          else pendingStashDel = sel.uid;
           return;
         }
       }
@@ -1482,9 +1564,17 @@ function render() {
   for (const gd of gearDrops) {
     const blink = gd.t < 150 && Math.floor(gd.t / 8) % 2 === 0;
     if (!blink) {
-      const pulse = 1 + Math.sin(frame * 0.15) * 0.15;
-      ctx.fillStyle = RARITY_COL[gd.it.r];
+      const r = gd.it.r, col = RARITY_COL[r];
+      if (r >= 2) { // 稀有以上:發光柱,越高越亮
+        const gl = 0.12 + 0.06 * r + Math.sin(frame * 0.12) * 0.05;
+        ctx.fillStyle = col; ctx.globalAlpha = gl;
+        ctx.fillRect(gd.x - 3 - r, gd.y - 120, 6 + 2 * r, 120);
+        ctx.globalAlpha = 1;
+      }
+      const pulse = 1 + Math.sin(frame * 0.15) * (0.15 + r * 0.04);
+      ctx.fillStyle = col;
       ctx.fillRect(gd.x - 6 * pulse, gd.y - 14 - 2 * pulse, 12 * pulse, 12 * pulse);
+      if (r >= 3) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(gd.x - 6 * pulse, gd.y - 14 - 2 * pulse, 12 * pulse, 12 * pulse); }
       ctx.fillStyle = '#262a40';
       ctx.fillRect(gd.x - 3, gd.y - 11, 6, 6);
     }
@@ -1856,6 +1946,92 @@ function drawDead() {
 }
 
 // ---------- menu ----------
+const PART_NAME = { weapon: '武器', armor: '防具', helmet: '頭盔', boots: '鞋子', acc: '飾品' };
+function renderStashTab() {
+  stashBtns.length = 0; stashActBtns.length = 0;
+  if (pendingStashDel && !meta.stash.some(s => s.uid === pendingStashDel)) pendingStashDel = null;
+  ctx.textAlign = 'left';
+  // 材料 + 容量
+  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText('強化石 x' + meta.mats.enh + '    附魔塵 x' + meta.mats.ench + '    倉庫 ' + meta.stash.length + '/' + STASH_CAP, 40, 116);
+  // 開局出戰裝備(左側 5 部位)
+  ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
+  ctx.fillText('開局出戰裝備:', 40, 148);
+  for (let i = 0; i < 5; i++) {
+    const part = GEAR_PARTS[i], y = 158 + i * 50;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(40, y, 285, 44);
+    ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(40, y, 285, 44);
+    ctx.fillStyle = '#889'; ctx.font = 'bold 12px "Courier New",monospace';
+    ctx.fillText(PART_NAME[part], 50, y + 26);
+    const uid = meta.loadout[part];
+    const it = uid ? meta.stash.find(s => s.uid === uid) : null;
+    if (it) {
+      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 13px "Courier New",monospace';
+      ctx.fillText(it.name, 100, y + 19);
+      ctx.fillStyle = '#8890b8'; ctx.font = '10px "Courier New",monospace';
+      ctx.fillText(it.desc, 100, y + 35);
+    } else {
+      ctx.fillStyle = '#556'; ctx.font = '12px "Courier New",monospace';
+      ctx.fillText('(空 — 從右側倉庫設定)', 100, y + 27);
+    }
+  }
+  // 倉庫網格(右側)
+  ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace';
+  ctx.fillText('倉庫(點擊選擇):', 360, 148);
+  const gx = 360, gy = 158, cell = 58, cols = 9;
+  for (let i = 0; i < STASH_CAP; i++) {
+    const it = meta.stash[i];
+    const cxx = gx + (i % cols) * (cell + 4), cyy = gy + Math.floor(i / cols) * (cell + 4);
+    const on = it && selStash === it.uid;
+    ctx.fillStyle = it ? (on ? 'rgba(125,255,214,0.2)' : 'rgba(255,255,255,0.06)') : 'rgba(0,0,0,0.2)';
+    ctx.fillRect(cxx, cyy, cell, cell);
+    ctx.strokeStyle = it ? (on ? '#7dffd6' : RARITY_COL[it.r]) : '#2a2a3a'; ctx.lineWidth = on ? 2 : 1;
+    ctx.strokeRect(cxx, cyy, cell, cell);
+    if (it) {
+      stashBtns.push({ x: cxx, y: cyy, w: cell, h: cell, uid: it.uid });
+      ctx.textAlign = 'center';
+      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 13px "Courier New",monospace';
+      ctx.fillText(PART_NAME[it.kind], cxx + cell / 2, cyy + 26);
+      ctx.fillStyle = '#889'; ctx.font = '10px "Courier New",monospace';
+      ctx.fillText(RARITY_ABBR[it.r], cxx + cell / 2, cyy + 44);
+      if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.fillText('▲', cxx + cell / 2, cyy + 12); }
+      ctx.textAlign = 'left';
+    }
+  }
+  // 選中詳情 + 操作
+  const sel = selStash ? meta.stash.find(s => s.uid === selStash) : null;
+  const dyy = 452;
+  if (sel) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = RARITY_COL[sel.r]; ctx.font = 'bold 15px "Courier New",monospace';
+    ctx.fillText(sel.name, 40, dyy + 16);
+    ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
+    ctx.fillText('[' + PART_NAME[sel.kind] + '] ' + sel.desc, 220, dyy + 16);
+    const equipped = meta.loadout[sel.kind] === sel.uid;
+    const b1 = { x: 560, y: dyy, w: 150, h: 28, act: 'equip' };
+    stashActBtns.push(b1);
+    ctx.fillStyle = equipped ? 'rgba(125,255,214,0.25)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b1.x, b1.y, b1.w, b1.h);
+    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b1.x, b1.y, b1.w, b1.h);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(equipped ? '✓ 出戰中(點擊卸下)' : '設為開局出戰', b1.x + b1.w / 2, b1.y + 18);
+    const pend = pendingStashDel === sel.uid;
+    const b2 = { x: 724, y: dyy, w: 120, h: 28, act: 'dismantle' };
+    stashActBtns.push(b2);
+    ctx.fillStyle = pend ? 'rgba(226,59,59,0.35)' : 'rgba(255,255,255,0.08)'; ctx.fillRect(b2.x, b2.y, b2.w, b2.h);
+    ctx.strokeStyle = '#44485f'; ctx.strokeRect(b2.x, b2.y, b2.w, b2.h);
+    ctx.fillStyle = '#fff'; ctx.fillText(pend ? '確認分解?' : '分解成材料', b2.x + b2.w / 2, b2.y + 18);
+    ctx.textAlign = 'left';
+  } else {
+    ctx.fillStyle = '#667'; ctx.font = '12px "Courier New",monospace'; ctx.textAlign = 'left';
+    ctx.fillText('點擊倉庫格子選擇裝備 → 可設為開局出戰或分解成材料。開局出戰的裝備會在下次冒險穿戴。', 40, dyy + 12);
+  }
+  if (menuMsg) {
+    ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(menuMsg.text, W / 2, dyy + 40);
+    if (--menuMsg.t <= 0) menuMsg = null;
+    ctx.textAlign = 'left';
+  }
+}
 function renderSkillTab() {
   skillBtns.length = 0; skillActBtns.length = 0;
   if (pendingReset && (frame - pendingReset.f > 150 || pendingReset.id !== selSkill)) pendingReset = null;
@@ -2016,11 +2192,11 @@ function renderMenu() {
     ctx.fillText(menuMsg.text, 844, 78);
     if (--menuMsg.t <= 0) menuMsg = null;
   }
-  // 分頁:基地 / 技能
+  // 分頁:基地 / 技能 / 倉庫
   tabBtns.length = 0;
-  const tabs = [['base', '基 地'], ['skills', '技 能']];
-  for (let i = 0; i < 2; i++) {
-    const b = { x: 20 + i * 112, y: 30, w: 102, h: 32, tab: tabs[i][0] };
+  const tabs = [['base', '基 地'], ['skills', '技 能'], ['stash', '倉 庫']];
+  for (let i = 0; i < tabs.length; i++) {
+    const b = { x: 20 + i * 108, y: 30, w: 98, h: 32, tab: tabs[i][0] };
     tabBtns.push(b);
     const on = menuTab === b.tab;
     ctx.fillStyle = on ? 'rgba(176,90,224,0.35)' : 'rgba(255,255,255,0.07)';
@@ -2030,11 +2206,16 @@ function renderMenu() {
     ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 21);
   }
   if (menuTab === 'skills') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
     renderSkillTab();
     return;
   }
-  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null;
+  if (menuTab === 'stash') {
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null;
+    renderStashTab();
+    return;
+  }
+  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
   if (lastRun) {
     ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('上次:第' + lastRun.floor + '層 / 擊殺' + lastRun.kills + ' / 靈魂+' + lastRun.gained, W / 2, 126);
