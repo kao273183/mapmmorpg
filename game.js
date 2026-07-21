@@ -1532,11 +1532,12 @@ function genBossFloor(n) {
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const hp = Math.round(800 * sc * 1.35); // Boss 小幅加厚，避免戰鬥過短
+  const introBoss = n === 5;
+  const hp = Math.round(800 * sc * (introBoss ? 1.08 : 1.35)); // 首領教學關較短，後續 Boss 維持原耐久
   mons = [{
-    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
+    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: introBoss ? 150 : 120, tele: 0, phase: 1, intro: introBoss,
     hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
-    dmg: Math.round(15 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
+    dmg: Math.round(15 * sc * (introBoss ? 0.82 : 1)), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
   floorEvent = null; eventPanel = null;
@@ -2376,7 +2377,7 @@ function update() {
     } else if (m.type === 'boss') {
       m.t++;
       const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
-      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(ph); } // 進階段召喚援軍
+      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(m.intro ? Math.max(1, ph - 1) : ph); } // 第一隻 Boss 減少援軍，後續維持原數量
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 468 && m.vy >= 0;
       if (m.atkT > 0) {
@@ -2391,7 +2392,7 @@ function update() {
             const bb = biomeOf(floor);
             const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
             const chill = bb.name === '冰霜凍原';
-            const nsp = (ph === 1 ? 1 : ph === 2 ? 3 : 5) + (hot ? 2 : 0);
+            const nsp = Math.max(1, (ph === 1 ? 1 : ph === 2 ? 3 : 5) - (m.intro ? 1 : 0)) + (hot ? 2 : 0);
             const vsc = hot ? 1.25 : 1; // 熔岩彈更快
             for (let i = 0; i < nsp; i++) {
               espits.push({
@@ -2402,10 +2403,11 @@ function update() {
             }
             beep(320, 0.12, 'square', 0.04);
           }
-          m.atkT = ph === 1 ? 100 : ph === 2 ? 74 : 54;
+          const recovery = ph === 1 ? 100 : ph === 2 ? 74 : 54;
+          m.atkT = Math.round(recovery * (m.intro ? 1.2 : 1));
         }
       } else if (grounded) {
-        m.tele = 36;
+        m.tele = m.intro ? 48 : 36;
       }
       m.vy += 0.6; if (m.vy > 14) m.vy = 14;
       m.x += m.vx * moveF; m.y += m.vy;
@@ -2415,7 +2417,7 @@ function update() {
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
           burst(m.x, 468, '#b05ae0', 26);
           beep(90, 0.2, 'sawtooth', 0.06);
-          if (p.onGround && Math.abs(p.x - m.x) < 150 && p.inv === 0) {
+          if (p.onGround && Math.abs(p.x - m.x) < (m.intro ? 130 : 150) && p.inv === 0) {
             const d = Math.max(1, Math.round(m.dmg * 0.9) - armorDef());
             p.vx = (p.x < m.x ? -1 : 1) * 6; p.vy = -6; p.onGround = false;
             if (dmgPlayer(d)) return;
