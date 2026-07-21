@@ -158,7 +158,7 @@ let portal = null;
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
 let plats = [], mons = [];
-const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [];
+const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [];
 const clouds = [];
 for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + (i * 53) % 120, w: 70 + (i * 31) % 60 });
 
@@ -232,11 +232,11 @@ function playerDmg() {
 }
 
 // ---------- gear generation ----------
-function genGear(n) {
+function genGear(n, forceR) {
   const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
   const slot = slots[(Math.random() * 5) | 0];
   const roll = Math.random() + Math.min(0.3, n * 0.02);
-  const r = roll > 1.08 ? 2 : roll > 0.78 ? 1 : 0;
+  const r = forceR != null ? forceR : roll > 1.08 ? 2 : roll > 0.78 ? 1 : 0;
   const m = [1, 1.6, 2.4][r] * (0.85 + Math.random() * 0.3);
   const pre = ['破舊的', '精良的', '傳說的'][r];
   const it = { kind: slot, r: r, id: 'g' + (gearSeq++) };
@@ -302,6 +302,7 @@ function dismantle(it) {
 
 // ---------- floor generation ----------
 function genFloor(n) {
+  if (n % 5 === 0) { genBossFloor(n); return; }
   worldW = Math.min(1600 + n * 120, 2600);
   plats = [{ x: 0, y: 500, w: worldW, ground: true }];
   const rowsY = [405, 325, 250];
@@ -356,8 +357,25 @@ function genFloor(n) {
     }
   }
   portal = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0;
   floorT = 90;
+}
+function genBossFloor(n) {
+  worldW = 1300;
+  plats = [{ x: 0, y: 500, w: worldW, ground: true }];
+  plats.push({ x: 170, y: 405, w: 150 });
+  plats.push({ x: worldW - 320, y: 405, w: 150 });
+  plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
+  const sc = 1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1);
+  const hp = Math.round(300 * sc);
+  mons = [{
+    type: 'boss', x: worldW - 240, y: 500, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
+    hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
+    dmg: Math.round(11 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
+  }];
+  portal = null;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0;
+  floorT = 150;
 }
 function resetRun() {
   const p = player;
@@ -411,7 +429,7 @@ function hitMon(m, d, crit) {
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
     if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
-    const orbN = m.elite ? 3 : 1;
+    const orbN = m.type === 'boss' ? 15 : m.elite ? 3 : 1;
     for (let i = 0; i < orbN; i++) {
       orbs.push({ x: m.x + (Math.random() - 0.5) * 16, y: m.y - m.h, vx: (Math.random() - 0.5) * 3, vy: -3 - Math.random() * 2, t: 0 });
     }
@@ -421,7 +439,11 @@ function hitMon(m, d, crit) {
         type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'slime' ? m.y : 500
       });
     }
-    if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
+    if (m.type === 'boss') {
+      // 保底傳說裝 + 追加一件隨機裝
+      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, 2), t: 1500, ground: 500 });
+      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor), t: 1500, ground: 500 });
+    } else if (m.elite || Math.random() < Math.min(0.08 + 0.01 * floor + 0.02 * meta.up.treasure, 0.25)) {
       gearDrops.push({
         x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
         it: genGear(floor), t: 900, ground: m.type === 'slime' ? m.y : 500
@@ -753,6 +775,55 @@ function update() {
       m.x += m.vx;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
       if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
+    } else if (m.type === 'boss') {
+      m.t++;
+      const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
+      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); }
+      const dir = p.x < m.x ? -1 : 1;
+      const grounded = m.y >= 500 && m.vy >= 0;
+      if (m.atkT > 0) {
+        m.atkT--;
+        if (grounded) m.vx = dir * (ph === 1 ? 0.8 : ph === 2 ? 1.2 : 1.7); // 追著玩家走
+      } else if (m.tele > 0) {
+        m.tele--; m.vx = 0; // 蓄力預告(頭上會顯示 !)
+        if (m.tele === 0 && grounded) {
+          m.vy = ph === 3 ? -11.5 : -9; // 跳撲
+          m.vx = dir * (2.6 + ph * 0.8);
+          if (ph >= 2) { // 二階段起加吐毒彈(扇形)
+            const nsp = ph === 3 ? 5 : 3;
+            for (let i = 0; i < nsp; i++) {
+              espits.push({
+                x: m.x, y: m.y - m.h + 6,
+                vx: (p.x - m.x) / 55 + (i - (nsp - 1) / 2) * 1.1,
+                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7)
+              });
+            }
+            beep(320, 0.12, 'square', 0.04);
+          }
+          m.atkT = ph === 1 ? 140 : ph === 2 ? 105 : 80;
+        }
+      } else if (grounded) {
+        m.tele = 36;
+      }
+      m.vy += 0.6; if (m.vy > 14) m.vy = 14;
+      m.x += m.vx; m.y += m.vy;
+      if (m.x < 60) m.x = 60;
+      if (m.x > worldW - 60) m.x = worldW - 60;
+      if (m.y >= 500) {
+        if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
+          burst(m.x, 500, '#b05ae0', 26);
+          beep(90, 0.2, 'sawtooth', 0.06);
+          if (p.onGround && Math.abs(p.x - m.x) < 150 && p.inv === 0) {
+            const d = Math.max(1, Math.round(m.dmg * 0.9) - armorDef());
+            p.hp -= d; p.inv = 60;
+            p.vx = (p.x < m.x ? -1 : 1) * 6; p.vy = -6; p.onGround = false;
+            num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
+            beep(180, 0.12, 'square', 0.05);
+            if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+          }
+        }
+        m.y = 500; m.vy = 0;
+      }
     } else {
       m.t++;
       const ddx = p.x - m.x, ddy = (p.y - 26) - m.y;
@@ -781,6 +852,24 @@ function update() {
       num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
       beep(180, 0.12, 'square', 0.05);
       if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+    }
+  }
+
+  // boss 毒彈
+  for (const s of espits.slice()) {
+    s.vy += 0.25; s.x += s.vx; s.y += s.vy;
+    if (p.inv === 0 && Math.abs(s.x - p.x) < 15 && Math.abs(s.y - (p.y - p.h / 2)) < p.h / 2 + 8) {
+      const d = Math.max(1, s.dmg - armorDef());
+      p.hp -= d; p.inv = 60;
+      num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b');
+      beep(180, 0.12, 'square', 0.05);
+      espits.splice(espits.indexOf(s), 1);
+      if (p.hp <= 0) { p.hp = 0; burst(p.x, p.y - p.h / 2, '#ff6b6b', 24); endRun(); return; }
+      continue;
+    }
+    if (s.y > 505 || s.x < -20 || s.x > worldW + 20) {
+      burst(s.x, Math.min(s.y, 500), '#8a5adf', 5);
+      espits.splice(espits.indexOf(s), 1);
     }
   }
 
@@ -907,14 +996,24 @@ function render() {
   }
   // monsters
   for (const m of mons) {
-    const rows = m.type === 'slime' ? (m.elite ? ESLIME : SLIME) : BAT;
+    const rows = m.type === 'slime' || m.type === 'boss' ? (m.elite ? ESLIME : SLIME) : BAT;
     drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0);
-    if (m.hp < m.mhp) {
+    if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
+      ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText('!', m.x, m.y - m.h - 18);
+      ctx.textAlign = 'left';
+    }
+    if (m.hp < m.mhp && m.type !== 'boss') {
       const bw = m.elite ? 44 : 34;
       ctx.fillStyle = '#222'; ctx.fillRect(m.x - bw / 2, m.y - m.h - 12, bw, 5);
       ctx.fillStyle = m.elite ? '#b05ae0' : '#e23b3b';
       ctx.fillRect(m.x - bw / 2 + 1, m.y - m.h - 11, (bw - 2) * Math.max(0, m.hp / m.mhp), 3);
     }
+  }
+  // boss 毒彈
+  for (const s of espits) {
+    ctx.fillStyle = '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
+    ctx.fillStyle = '#c99aff'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
   }
   // player
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
@@ -1000,6 +1099,11 @@ function render() {
   ctx.fillText('第 ' + floor + ' 層', 12, 20);
   ctx.fillStyle = '#c8cdec';
   ctx.fillText(portal ? '前往傳送門 →' : '殘存怪物 ' + mons.length, 100, 20);
+  const bossM = mons.find(m => m.type === 'boss');
+  if (bossM) {
+    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, '#b05ae0', '地城領主  第' + bossM.phase + '階段');
+    ctx.textAlign = 'left';
+  }
 
   ctx.fillStyle = 'rgba(20,22,43,0.92)';
   ctx.fillRect(0, H - 46, W, 46);
@@ -1031,7 +1135,7 @@ function render() {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 40px "Courier New",monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('第 ' + floor + ' 層', W / 2, 180);
+    ctx.fillText('第 ' + floor + ' 層' + (floor % 5 === 0 ? '  ⚠ BOSS' : ''), W / 2, 180);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
   }
