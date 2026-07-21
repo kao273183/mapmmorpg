@@ -1,7 +1,18 @@
 "use strict";
 const cv = document.getElementById('cv');
+const W = 960, H = 540;
 const ctx = cv.getContext('2d');
-ctx.imageSmoothingEnabled = false;
+function configureCanvasResolution() {
+  const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+  const bw = Math.round(W * dpr), bh = Math.round(H * dpr);
+  if (cv.width !== bw || cv.height !== bh) {
+    cv.width = bw; cv.height = bh;
+  }
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+}
+configureCanvasResolution();
+window.addEventListener('resize', configureCanvasResolution);
 // Kenney RPG Urban Pack (CC0) tilesheet — 16x16, 27 欄
 const tsheet = new Image();
 let tsheetReady = false;
@@ -33,13 +44,12 @@ function drawItemIcon(it, x, y, s) { // 在 (x,y) 畫 s×s 圖示
   ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(cx - s * 0.05, cy - s * 0.23, s * 0.05, 0, Math.PI * 2); ctx.fill();
 }
 function drawPotionIcon(type, x, y, s) { if (itemsheetReady) ctx.drawImage(itemsheet, (type === 'hp' ? 5 : 6) * 32, 0, 32, 32, Math.round(x), Math.round(y), s, s); }
-const W = 960, H = 540;
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
-const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;Esc 關閉';
+const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;P 能力';
 const HINT_MENU = '[1]/[2] 選職業&nbsp;|&nbsp;點擊購買永久強化&nbsp;|&nbsp;Enter 開始冒險';
-const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;|&nbsp;Space 與 NPC 互動&nbsp;|&nbsp;Enter 或點聊天框 聊天';
+const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;|&nbsp;Space 與 NPC 互動&nbsp;|&nbsp;Enter 聊天&nbsp;|&nbsp;P 能力';
 
 // ---------- audio ----------
 let audioCtx = null;
@@ -403,7 +413,7 @@ const CARDS = [
   { id:'hp',   r:0, stat:1, name:'巨人體魄', desc:'最大HP +20 並回滿' },
   { id:'crit', r:0, stat:1, name:'致命精準', desc:'爆擊率 +6%' },
   { id:'spd',  r:0, stat:1, name:'疾風步伐', desc:'移動速度 +0.4' },
-  { id:'aspd', r:0, stat:1, name:'迅捷出手', desc:'攻擊冷卻 -12%' },
+  { id:'aspd', r:0, stat:1, name:'迅捷出手', desc:'技能冷卻 -10%' },
   { id:'xdmg', r:0, stat:1, name:'絕技精通', desc:'技能傷害 +15%' },
   { id:'ls',   r:0, stat:1, name:'嗜血',     desc:'擊殺回復 3 HP' },
   { id:'mp',   r:0, stat:1, name:'心靈之泉', desc:'MP上限+15 回魔+50%' },
@@ -464,20 +474,33 @@ function applyCard(c) {
 function enhMul(it) { return it ? 1 + 0.05 * (it.enh || 0) : 1; } // 強化 +5%/級
 function eqStat(slot, key) { const it = player.eq[slot]; return it && it[key] ? it[key] * enhMul(it) : 0; }
 function accV(f) { return eqStat('acc', f); }
-function atkPow() {
+function atkBase() {
   const p = player;
-  const base = 8 + p.lv * 2.5 + eqStat('weapon', 'atk') + (p.cls === 'warrior' ? 4 : 0);
+  return 8 + p.lv * 2.5 + eqStat('weapon', 'atk') + (p.cls === 'warrior' ? 4 : 0);
+}
+function atkMultiplier() {
+  const p = player;
   let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (p.rageT > 0 ? 1.3 : 1);
   m *= (1 + 0.30 * perkV('bloodpact')) * (1 + 0.40 * perkV('brute')) * (1 + 0.45 * perkV('glass'));
   if (p.hp < p.mhp * 0.35) m *= (1 + 0.50 * perkV('berserk')); // 絕地反擊:低血加成
-  return base * m;
+  return m;
 }
+function atkPow() { return atkBase() * atkMultiplier(); }
 function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit'); }
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def'));
 }
 function moveSpd() { return (3.2 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
+function skillDamageMul() { return 1 + 0.15 * player.cd.xdmg; }
+function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')); }
+function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
+function gearDropChance(elite, atFloor = floor) {
+  const base = Math.min(0.025 + 0.0025 * atFloor + 0.01 * meta.up.treasure, 0.10);
+  return Math.min(base + (elite ? 0.15 : 0), 0.25);
+}
+function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')); }
+const SOUL_DROP_CHANCE = 0.25;
 function calcStats() {
   const p = player;
   const gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
@@ -495,7 +518,7 @@ function playerDmg() {
 }
 function skillDmg(mult) { // 絕技精通卡:全部出戰技能傷害+15%/層
   const r = playerDmg();
-  return { d: Math.max(1, Math.round(r.d * mult * (1 + 0.15 * player.cd.xdmg))), crit: r.crit };
+  return { d: Math.max(1, Math.round(r.d * mult * skillDamageMul())), crit: r.crit };
 }
 function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死亡)
   const p = player;
@@ -657,7 +680,7 @@ function trySkill(i) {
   const t = talentOf(id);
   if (SKILL_FX[id](t) === false) { p.slotCd[i] = 20; return; }
   p.mp -= def.mp;
-  p.slotCd[i] = Math.max(6, Math.round(def.cd * t.cd * Math.pow(0.9, p.cd.aspd) * (1 + 0.18 * perkV('brute'))));
+  p.slotCd[i] = Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
 }
 
 // ---------- gear generation ----------
@@ -902,7 +925,7 @@ function resetRun() {
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.rageT = 0; p.shieldHp = 0; p.shieldT = 0; p.chillT = 0;
   p.perk = {}; p.revives = 0; p.aegisCd = 0; p.airJumped = false;
-  p.itemWin = false;
+  p.itemWin = false; statsOpen = false;
   calcStats();
   p.hp = p.mhp; p.mp = p.mmp;
   floor = 1; kills = 0; soulsRun = 0; gearSeq = 1;
@@ -915,7 +938,7 @@ function resetRun() {
   setTimeout(() => beep(880, 0.15, 'sine', 0.04), 100);
 }
 function endRun() {
-  const gained = Math.round(soulsRun * (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')));
+  const gained = Math.round(soulsRun * soulGainMul());
   meta.souls += gained;
   let stashed = 0;
   for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
@@ -980,11 +1003,11 @@ function hitMon(m, d, crit, noChain) {
         if (o !== m && Math.abs(o.x - m.x) < 95 && Math.abs((o.y - o.h / 2) - (m.y - m.h / 2)) < 75) hitMon(o, cd, false, true);
       }
     }
-    const orbN = m.type === 'boss' ? 8 : m.elite ? 2 : (Math.random() < 0.25 ? 1 : 0);
+    const orbN = m.type === 'boss' ? 8 : m.elite ? 2 : (Math.random() < SOUL_DROP_CHANCE ? 1 : 0);
     for (let i = 0; i < orbN; i++) {
       orbs.push({ x: m.x + (Math.random() - 0.5) * 16, y: m.y - m.h, vx: (Math.random() - 0.5) * 3, vy: -3 - Math.random() * 2, t: 0 });
     }
-    if (Math.random() < 0.07 + 0.04 * player.cd.pot) {
+    if (Math.random() < potionDropChance()) {
       drops.push({
         x: m.x + 10, y: m.y - m.h, vy: -3.5, vx: (Math.random() - 0.5) * 2,
         type: Math.random() < 0.6 ? 'hp' : 'mp', t: 700, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
@@ -995,9 +1018,7 @@ function hitMon(m, d, crit, noChain) {
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 468 });
     } else {
-      const baseGearChance = Math.min(0.025 + 0.0025 * floor + 0.01 * meta.up.treasure, 0.10);
-      const gearChance = Math.min(baseGearChance + (m.elite ? 0.15 : 0), 0.25);
-      if (Math.random() < gearChance) {
+      if (Math.random() < gearDropChance(m.elite)) {
         gearDrops.push({
           x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
           it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
@@ -1058,6 +1079,8 @@ function usePot(t) {
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
 let expBtn = null, impBtn = null, backTownBtn = null, gearBtn = null;
+let statsOpen = false, statsBtn = null, statsCloseBtn = null;
+function openStats() { statsOpen = true; player.itemWin = false; }
 function drawGear(cx, cy, r, col) {
   ctx.save(); ctx.translate(cx, cy);
   ctx.fillStyle = col;
@@ -1178,6 +1201,7 @@ window.addEventListener('keydown', e => {
   keys[e.key === ' ' ? 'space' : e.key.toLowerCase()] = true;
   const k = e.key.toLowerCase();
   if (settingsOpen) { if (k === 'escape' && !settingsMode) { settingsOpen = false; closeSaveEdit(); } return; }
+  if (statsOpen) { if (k === 'p' || k === 'escape') statsOpen = false; return; }
   if (gameState === 'town') {
     if (chatting) {
       if (k === 'enter') { const t = chatInput.trim(); if (t) sendChat(t); chatInput = ''; chatting = false; }
@@ -1187,6 +1211,7 @@ window.addEventListener('keydown', e => {
       e.preventDefault();
       return;
     }
+    if (k === 'p') { openStats(); return; }
     if (k === 'enter') { chatting = true; e.preventDefault(); return; }
     return; // 走動/互動由 keys[] + updateTown 處理
   }
@@ -1207,6 +1232,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   // play
+  if (k === 'p') { openStats(); return; }
   if (k === 'i') player.itemWin = !player.itemWin;
   if (k === 'escape') player.itemWin = false;
   if (k === 'a') usePot('hp');
@@ -1240,6 +1266,8 @@ function handleTap(mx, my) {
     }
     return; // 設定視窗吃掉所有點擊
   }
+  if (statsOpen) { if (inside(statsCloseBtn)) statsOpen = false; return; }
+  if ((gameState === 'town' || gameState === 'play') && inside(statsBtn)) { openStats(); return; }
   if (gameState === 'town') {
     const cw = 360, ih = 24, ch = 108, cy = H - ch - ih - 14;
     if (mx >= 14 && mx <= 14 + cw && my >= cy) { // 點聊天框
@@ -1328,6 +1356,7 @@ const vbtns = [
   { x: 702, y: 330, w: 52, h: 52, label: 'A', tap: () => usePot('hp') },
   { x: 768, y: 330, w: 52, h: 52, label: 'S', tap: () => usePot('mp') },
   { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
+  { x: 890, y: 330, w: 52, h: 52, label: 'P', tap: openStats },
 ];
 const touchMap = {}; // touch identifier -> vbtn
 function touchPos(t) {
@@ -1958,6 +1987,9 @@ function render() {
   ctx.font = 'bold 12px "Courier New",monospace';
   ctx.fillStyle = '#c8cdec';
   ctx.fillText('[I]裝備', 845, H - 8);
+  statsBtn = { x: 894, y: H - 30, w: 66, h: 30 };
+  ctx.fillStyle = '#7dffd6';
+  ctx.fillText('[P]能力', 900, H - 8);
 
   if (floorT > 0) {
     ctx.globalAlpha = Math.min(1, floorT / 40);
@@ -2098,6 +2130,86 @@ function drawItemWin() {
   ctx.fillText('x' + p.bag.mp + '[S]', bx + 82, py + 11);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('靈魂 +' + soulsRun, bx + 140, py + 11);
+}
+
+// ---------- full character stats ----------
+const STAT_FONT = '"Microsoft JhengHei UI","Microsoft JhengHei","Noto Sans TC",sans-serif';
+function drawFitText(text, x, y, maxW) {
+  let out = String(text);
+  while (out.length > 2 && ctx.measureText(out).width > maxW) out = out.slice(0, -2) + '…';
+  ctx.fillText(out, x, y);
+}
+function drawStatColumn(x, y, w, title, color, rows) {
+  ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(x, y, w, 365);
+  ctx.strokeStyle = '#414661'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, 365);
+  ctx.fillStyle = color; ctx.font = 'bold 16px ' + STAT_FONT;
+  ctx.fillText(title, x + 12, y + 25);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], ry = y + 52 + i * 39;
+    ctx.fillStyle = '#dce0f2'; ctx.font = '13px ' + STAT_FONT;
+    ctx.fillText(row[0], x + 12, ry);
+    ctx.fillStyle = row[3] || '#fff'; ctx.font = 'bold 14px ' + STAT_FONT; ctx.textAlign = 'right';
+    ctx.fillText(row[1], x + w - 12, ry);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#9ba3c7'; ctx.font = '11px ' + STAT_FONT;
+    drawFitText(row[2], x + 12, ry + 16, w - 24);
+  }
+}
+function drawStatsPanel() {
+  const p = player;
+  const atk = atkPow(), crit = critRate(), gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
+  const hpBase = 60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp;
+  const recvMul = 1 + 0.25 * perkV('glass');
+  const combatRows = [
+    ['攻擊力', Math.round(atk), '基礎 ' + atkBase().toFixed(1) + ' × 倍率 ' + atkMultiplier().toFixed(2), '#ffe680'],
+    ['傷害範圍', Math.round(atk * 0.85) + '～' + Math.round(atk * 1.15), '每次攻擊隨機 85%～115%'],
+    ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 卡' + (p.cd.crit * 6) + '% + 裝' + (accV('crit') * 100).toFixed(1) + '%'],
+    ['爆擊傷害', '160%', '固定倍率 ×1.6'],
+    ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg],
+    ['冷卻倍率', '×' + cooldownMul().toFixed(2), '迅捷出手 Lv' + p.cd.aspd + '；數值越低越快'],
+    ['承受傷害', '×' + recvMul.toFixed(2), perkV('glass') ? '玻璃大砲 Lv' + perkV('glass') : '無額外受傷倍率'],
+    ['吸血／擊殺回血', (perkV('vamp') * 6) + '% / ' + (p.cd.ls * 3), '吸血鬼／嗜血卡片效果']
+  ];
+  const survivalRows = [
+    ['HP', Math.ceil(p.hp) + ' / ' + p.mhp, '公式基礎 ' + Math.round(hpBase) + '；裝備HP ' + Math.round(gearHp), '#ff8a8a'],
+    ['MP', Math.ceil(p.mp) + ' / ' + p.mmp, '等級、職業與心靈之泉'],
+    ['固定減傷', armorDef(), '防具 ' + Math.round(eqStat('armor', 'def')) + ' + 頭盔 ' + Math.round(eqStat('helmet', 'def'))],
+    ['HP回復', '0.48 /秒', '戰鬥中自然回復'],
+    ['MP回復', (3 * (1 + 0.5 * p.cd.mp)).toFixed(1) + ' /秒', '心靈之泉 Lv' + p.cd.mp],
+    ['移動速度', moveSpd().toFixed(1), '基礎3.2 + 卡' + (p.cd.spd * 0.4).toFixed(1) + ' + 裝' + eqStat('boots', 'spd').toFixed(1)],
+    ['跳躍力', jumpV().toFixed(1), '基礎11.5 + 鞋子跳躍'],
+    ['護盾', Math.round(p.shieldHp || 0), perkV('aegis') ? '守護結界 Lv' + perkV('aegis') : '目前沒有護盾來源']
+  ];
+  const economyRows = [
+    ['升級進度', Math.round(p.xp) + ' / ' + xpNeed(p.lv), 'Lv' + p.lv + ' → Lv' + (p.lv + 1), '#9ecbff'],
+    ['裝備掉率', (gearDropChance(false) * 100).toFixed(1) + '%', '第' + floor + '層一般怪；上限10%'],
+    ['菁英裝備率', (gearDropChance(true) * 100).toFixed(1) + '%', '一般怪機率 +15%；上限25%'],
+    ['藥水掉率', (potionDropChance() * 100).toFixed(1) + '%', '基礎7% + 藥劑師 Lv' + p.cd.pot + '×4%'],
+    ['靈魂掉率', (SOUL_DROP_CHANCE * 100) + '%', '一般怪；菁英2顆／Boss 8顆'],
+    ['靈魂結算', '×' + soulGainMul().toFixed(2), '共鳴 Lv' + meta.up.soul + '／貪婪 Lv' + perkV('greed')],
+    ['永久攻擊／HP', '+' + (meta.up.atk * 4) + '% / +' + (meta.up.vit * 8) + '%', '攻擊強化／體魄強化'],
+    ['目前樓層', String(floor), biomeOf(floor).name + (floor % 5 === 0 ? '・Boss層' : '')]
+  ];
+
+  ctx.fillStyle = 'rgba(0,0,0,0.78)'; ctx.fillRect(0, 0, W, H);
+  const x = 45, y = 24, w = W - 90, h = H - 48;
+  ctx.fillStyle = 'rgba(20,22,43,0.985)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 22px ' + STAT_FONT;
+  ctx.fillText('角 色 能 力', x + 20, y + 32);
+  ctx.fillStyle = '#dce0f2'; ctx.font = '13px ' + STAT_FONT;
+  ctx.fillText((meta.playerName || '勇者') + '　Lv.' + p.lv + ' ' + CLASSES[p.cls].name + (gameState === 'play' ? '　即時數值' : '　最近角色數值'), x + 180, y + 31);
+  statsCloseBtn = { x: x + w - 92, y: y + 10, w: 76, h: 28 };
+  ctx.fillStyle = 'rgba(226,59,59,0.18)'; ctx.fillRect(statsCloseBtn.x, statsCloseBtn.y, statsCloseBtn.w, statsCloseBtn.h);
+  ctx.strokeStyle = '#a05060'; ctx.lineWidth = 1; ctx.strokeRect(statsCloseBtn.x, statsCloseBtn.y, statsCloseBtn.w, statsCloseBtn.h);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.textAlign = 'center';
+  ctx.fillText('P / Esc 關閉', statsCloseBtn.x + statsCloseBtn.w / 2, statsCloseBtn.y + 19);
+  ctx.textAlign = 'left';
+  const gap = 12, colW = (w - 40 - gap * 2) / 3, colY = y + 52;
+  drawStatColumn(x + 14, colY, colW, '戰 鬥', '#ffe680', combatRows);
+  drawStatColumn(x + 14 + colW + gap, colY, colW, '生 存', '#ff8a8a', survivalRows);
+  drawStatColumn(x + 14 + (colW + gap) * 2, colY, colW, '成 長／經 濟', '#9ecbff', economyRows);
+  ctx.fillStyle = '#939bbd'; ctx.font = '11px ' + STAT_FONT;
+  ctx.fillText('顯示值直接取自實際戰鬥公式；裝備強化與卡片效果已計入。', x + 18, y + h - 12);
 }
 
 // ---------- overlays ----------
@@ -2356,6 +2468,12 @@ function renderTown() {
   ctx.fillStyle = '#7dffd6'; ctx.fillText('靈魂 ' + meta.souls, 80, 20);
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 12px "Courier New",monospace';
   ctx.fillText('石' + meta.mats.enh + ' 塵' + meta.mats.ench, 200, 20);
+  statsBtn = { x: W - 102, y: 5, w: 92, h: 25 };
+  ctx.fillStyle = 'rgba(125,255,214,0.14)'; ctx.fillRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
+  ctx.strokeStyle = '#547f80'; ctx.lineWidth = 1; ctx.strokeRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
+  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText('[P] 角色能力', statsBtn.x + statsBtn.w / 2, statsBtn.y + 17);
+  ctx.textAlign = 'left';
   drawChat();
 }
 function drawChat() {
@@ -2777,11 +2895,12 @@ function loop() {
   } else if (gameState === 'select') {
     renderMenu();
   } else {
-    if (gameState === 'play') update();
+    if (gameState === 'play' && !statsOpen) update();
     if (gameState !== 'select') render();
     if (gameState === 'pick') drawPick();
     if (gameState === 'dead') drawDead();
   }
+  if (statsOpen) drawStatsPanel();
   if (settingsOpen) renderSettings();
   requestAnimationFrame(loop);
 }
