@@ -357,20 +357,30 @@ const BRANCH_NAMES = {
   slash:['重擊','連擊'], spin:['龍捲','利刃'], dash:['疾影','破陣'], quake:['餘震','崩裂'], rage:['血怒','戰意'],
   fire:['爆裂','連鎖'], bolt:['雷暴','聚雷'], ice:['霜寒','冰刺'], meteor:['天火','隕擊'], shield:['壁壘','荊棘']
 };
+const TALENT_EFFECTS = {
+  slash:[{ lv3:'擊退目標', lv5:'必定爆擊' }, { lv3:'目標上限+2', lv5:'第3擊強化且免費' }],
+  spin:[{ lv3:'將敵人拉向中心', lv5:'追加龍捲餘波' }, { lv3:'縮圈但傷害+35%', lv5:'擊殺重置冷卻' }],
+  dash:[{ lv3:'距離與無敵時間提升', lv5:'留下疾風劍軌' }, { lv3:'命中使受傷+20%', lv5:'低血目標傷害+50%' }],
+  quake:[{ lv3:'0.3秒後再次餘震', lv5:'餘震擊飛並擴大' }, { lv3:'對低血目標加傷', lv5:'擊殺引發崩裂爆破' }],
+  rage:[{ lv3:'低血時攻擊加成提升', lv5:'低血狂怒並附帶吸血' }, { lv3:'持續延長2秒', lv5:'擊殺延長狂暴' }],
+  fire:[{ lv3:'命中產生範圍爆炸', lv5:'爆炸留下燃燒地面' }, { lv3:'彈射額外2個目標', lv5:'彈射3次且逐次加傷' }],
+  bolt:[{ lv3:'目標上限+2', lv5:'雷暴追加第二次落雷' }, { lv3:'集中單體傷害+60%', lv5:'必定爆擊並麻痺' }],
+  ice:[{ lv3:'緩速延長為5秒', lv5:'命中凍結1.5秒' }, { lv3:'每穿透一體傷害提升', lv5:'命中噴發冰刺碎片' }],
+  meteor:[{ lv3:'落地留下燃燒區', lv5:'天火區域擴大且延長' }, { lv3:'改為單顆巨型隕石', lv5:'落地0.4秒後二次衝擊' }],
+  shield:[{ lv3:'護盾量45%且延長5秒', lv5:'破盾時回復12 MP' }, { lv3:'吸收時反彈20%攻擊', lv5:'破盾引發奧術爆破' }]
+};
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
 const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null] };
 let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
 function classSkills(cls) { return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls); }
-// 天賦倍率(第一批:數值分支。A=範圍/持續流,B=傷害流;里程碑特效後續批次)
+// Lv1 基礎數值、Lv2 流派、Lv3 機制、Lv4 冷卻、Lv5 終極效果。
 function talentOf(id) {
   const s = skillState[id];
-  const t = { dmg: 1, area: 1, cd: 1 };
+  const t = { id, level:s.spent, branch:s.branch, dmg:1, area:1, cd:1, mechanic:s.spent >= 3, ultimate:s.spent >= 5 };
   if (s.spent >= 1) t.dmg *= 1.12;
   if (s.spent >= 2) { if (s.branch === 0) t.area *= 1.25; else t.dmg *= 1.2; }
-  if (s.spent >= 3) { if (s.branch === 0) t.area *= 1.2; else t.dmg *= 1.15; }
   if (s.spent >= 4) t.cd *= 0.85;
-  if (s.spent >= 5) { if (s.branch === 0) { t.area *= 1.15; t.dmg *= 1.1; } else t.dmg *= 1.18; }
   return t;
 }
 function drawSkillGacha() {
@@ -559,7 +569,7 @@ const eventChoiceBtns = [];
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
 let plats = [], mons = [];
-const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [];
+const projs = [], dmgNums = [], parts = [], orbs = [], drops = [], gearDrops = [], bolts = [], espits = [], meteors = [], skillZones = [];
 const clouds = [];
 for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + (i * 53) % 120, w: 70 + (i * 31) % 60 });
 
@@ -576,7 +586,8 @@ function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 
 const player = {
   x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
-  slashT: 0, spinT: 0, potCd: 0, rageT: 0, shieldHp: 0, shieldT: 0, chillT: 0, cls: 'warrior',
+  slashT: 0, spinT: 0, potCd: 0, rageT: 0, rageAtk: 0, rageSpd: 0, rageLifesteal: 0, rageExtend: 0, rageBlood: false, rageUltimate: false,
+  shieldHp: 0, shieldT: 0, shieldReflect: 0, shieldBreakMp: 0, shieldBurst: false, chillT: 0, cls: 'warrior', skillCasts: {},
   perk: {}, revives: 0, affixDeathUsed: false, eventAtk: 0, aegisCd: 0, airJumped: false,
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
@@ -660,7 +671,7 @@ function atkBase() {
 }
 function atkMultiplier() {
   const p = player;
-  let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (1 + affixV('atkPct')) * (1 + (p.eventAtk || 0)) * (p.rageT > 0 ? 1.3 : 1);
+  let m = (1 + 0.12 * p.cd.atk) * (1 + 0.04 * meta.up.atk) * (1 + accV('atkMul')) * (1 + affixV('atkPct')) * (1 + (p.eventAtk || 0)) * (p.rageT > 0 ? 1 + (p.rageAtk || 0.3) : 1);
   m *= (1 + 0.30 * perkV('bloodpact')) * (1 + 0.40 * perkV('brute')) * (1 + 0.45 * perkV('glass'));
   if (p.hp < p.mhp * 0.35) m *= (1 + 0.50 * perkV('berserk')) * (1 + affixV('lowHpAtk')); // 絕地反擊/嗜血狂
   return m;
@@ -670,7 +681,7 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + accV('crit') + affix
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def'));
 }
-function moveSpd() { return (2.8 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
+function moveSpd() { return (2.8 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return 1 + 0.15 * player.cd.xdmg; }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')); }
@@ -713,7 +724,19 @@ function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死�
   if (p.shieldHp > 0) {
     const ab = Math.min(p.shieldHp, d);
     p.shieldHp -= ab; d -= ab;
-    if (p.shieldHp <= 0) num(p.x, p.y - p.h - 24, '護盾破碎', '#7dcfff');
+    if (p.shieldReflect > 0 && ab > 0) {
+      const rd = Math.max(1, Math.round(atkPow() * p.shieldReflect));
+      for (const m of mons.slice()) if (Math.abs(m.x - p.x) < 100 && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 85) hitMon(m, rd, false, true);
+    }
+    if (p.shieldHp <= 0) {
+      num(p.x, p.y - p.h - 24, '護盾破碎', '#7dcfff');
+      if (p.shieldBreakMp > 0) { p.mp = Math.min(p.mmp, p.mp + p.shieldBreakMp); num(p.x, p.y - p.h - 40, '+' + p.shieldBreakMp + ' MP', '#9ecbff'); }
+      if (p.shieldBurst) {
+        burst(p.x, p.y - p.h / 2, '#d9a8ff', 28);
+        skillAreaDamage(p.x, p.y - p.h / 2, 120, 100, 1.25, '#d9a8ff');
+      }
+      p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false;
+    }
     if (d <= 0) { p.inv = 30; num(p.x, p.y - p.h - 10, '吸收', '#7dcfff'); beep(500, 0.06, 'sine', 0.03); return false; }
   }
   p.hp -= d; p.inv = 60;
@@ -738,51 +761,103 @@ function dmgPlayer(d) { // 玩家受傷統一入口(護盾吸收→扣血→死�
   }
   return false;
 }
+function skillAreaDamage(x, y, rx, ry, mult, color, opts) {
+  opts = opts || {};
+  let hit = 0, killed = 0;
+  for (const m of mons.slice()) {
+    if (opts.exclude && opts.exclude.has(m)) continue;
+    if (Math.abs(m.x - x) > rx + m.w / 2 || Math.abs((m.y - m.h / 2) - y) > ry + m.h / 2) continue;
+    const before = m.hp;
+    let bonus = mult;
+    if (opts.lowHp && m.hp / m.mhp < opts.lowHp) bonus *= opts.lowMul || 1.35;
+    const r = skillDmg(bonus);
+    hitMon(m, r.d, opts.forceCrit || r.crit);
+    hit++;
+    if (before > 0 && m.hp <= 0) killed++;
+    if (opts.knock && mons.includes(m) && m.type !== 'boss') m.x = Math.max(18, Math.min(worldW - 18, m.x + Math.sign(m.x - x || player.face) * opts.knock));
+    burst(m.x, m.y - m.h / 2, color || '#ffd23e', opts.particles || 6);
+  }
+  return { hit, killed };
+}
+function chainSkillTargets(start, seen, hops, mult, grow) {
+  let cur = start, count = 0, power = mult;
+  while (count < hops) {
+    let next = null, best = 220;
+    for (const m of mons) {
+      if (seen.has(m)) continue;
+      const dist = Math.hypot(m.x - cur.x, (m.y - m.h / 2) - (cur.y - cur.h / 2));
+      if (dist < best) { best = dist; next = m; }
+    }
+    if (!next) break;
+    seen.add(next); count++; power *= grow;
+    bolts.push({ x:next.x, y:next.y - next.h / 2, x0:cur.x, y0:cur.y - cur.h / 2, t:12, chain:true });
+    const r = skillDmg(power); hitMon(next, r.d, r.crit);
+    cur = next;
+  }
+  return count;
+}
+function addSkillZone(kind, x, y, rx, ry, delay, duration, interval, mult, color, opts) {
+  skillZones.push({ kind, x, y, rx, ry, delay:delay || 0, t:duration, maxT:duration, interval:interval || duration, mult, color, opts:opts || {}, fired:false });
+}
 // 技能效果:回傳 false = 施放失敗(不扣MP不進CD)
 const SKILL_FX = {
   slash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
     playSfx('swordSwing');
+    p.skillCasts.slash = (p.skillCasts.slash || 0) + 1;
+    const combo = t.ultimate && t.branch === 1 && p.skillCasts.slash % 3 === 0;
+    const maxTargets = t.mechanic && t.branch === 1 ? 5 : 3;
     let hit = 0;
     for (const m of mons.slice()) {
       const dx = (m.x - p.x) * p.face;
       const dy = Math.abs((m.y - m.h / 2) - (p.y - p.h / 2));
-      if (dx > -12 && dx < 85 * t.area && dy < 55 && hit < 3) {
+      if (dx > -12 && dx < 85 * t.area && dy < 55 && hit < maxTargets) {
         hit++;
-        const r = skillDmg(t.dmg);
-        hitMon(m, r.d, r.crit);
+        const r = skillDmg(t.dmg * (combo ? 1.5 : 1));
+        hitMon(m, r.d, (t.ultimate && t.branch === 0) || r.crit);
+        if (t.mechanic && t.branch === 0 && mons.includes(m) && m.type !== 'boss') m.x = Math.max(18, Math.min(worldW - 18, m.x + p.face * 34));
       }
     }
+    if (combo) { num(p.x, p.y - p.h - 25, '連擊·無消耗!', '#ffe680'); burst(p.x, p.y - 24, '#ffe680', 16); return { free:true }; }
   },
   spin(t) {
     const p = player;
+    const tight = t.mechanic && t.branch === 1;
+    const radius = 100 * t.area * (tight ? 0.82 : 1), beforeKills = kills;
     let hit = 0;
     for (const m of mons.slice()) {
-      if (Math.abs(m.x - p.x) < 100 * t.area && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 70 * t.area && hit < 6) {
+      if (Math.abs(m.x - p.x) < radius && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 70 * t.area && hit < 6) {
         hit++;
-        const r = skillDmg(1.5 * t.dmg);
+        const r = skillDmg(1.5 * t.dmg * (tight ? 1.35 : 1));
         hitMon(m, r.d, r.crit);
+        if (t.mechanic && t.branch === 0 && mons.includes(m) && m.type !== 'boss') m.x += (p.x - m.x) * 0.32;
       }
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12; p.spinT = 14;
     playSfx('swordSwing', 0.85, 0.82);
+    if (t.ultimate && t.branch === 0) addSkillZone('whirlwind', p.x, p.y - 28, radius * 1.1, 85, 18, 1, 1, 1.2 * t.dmg, '#e8a84c', { knock:18 });
+    if (t.ultimate && t.branch === 1 && kills > beforeKills) { num(p.x, p.y - p.h - 22, '利刃重置!', '#ffe680'); return { resetCd:true }; }
   },
   dash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
     const x0 = p.x;
-    const nx = Math.max(14, Math.min(worldW - 14, p.x + p.face * 130 * t.area));
+    const dashMul = t.mechanic && t.branch === 0 ? 1.35 : 1;
+    const nx = Math.max(14, Math.min(worldW - 14, p.x + p.face * 130 * t.area * dashMul));
     const lo2 = Math.min(x0, nx) - 20, hi = Math.max(x0, nx) + 20;
     for (const m of mons.slice()) {
       if (m.x > lo2 && m.x < hi && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 60) {
-        const r = skillDmg(1.3 * t.dmg);
+        const lowBonus = t.ultimate && t.branch === 1 && m.hp / m.mhp < 0.3 ? 1.5 : 1;
+        const r = skillDmg(1.3 * t.dmg * lowBonus);
         hitMon(m, r.d, r.crit);
+        if (t.mechanic && t.branch === 1 && mons.includes(m)) { m.vulnT = 180; m.vulnMul = 1.2; num(m.x, m.y - m.h - 20, '破陣', '#ffb080'); }
       }
     }
     for (let i = 0; i < 8; i++) parts.push({ x: x0 + (nx - x0) * i / 8, y: p.y - 20, vx: 0, vy: -0.5, t: 14, color: '#c8cdec' });
-    p.x = nx; p.inv = Math.max(p.inv, 10); // 衝刺短暫無敵
+    p.x = nx; p.inv = Math.max(p.inv, t.mechanic && t.branch === 0 ? 25 : 10);
+    if (t.ultimate && t.branch === 0) addSkillZone('wind', (x0 + nx) / 2, p.y - 24, Math.abs(nx - x0) / 2 + 20, 52, 8, 1, 1, 1.1 * t.dmg, '#8ec9df');
     playSfx('swordSwing', 0.9, 1.16);
   },
   quake(t) {
@@ -795,19 +870,29 @@ const SKILL_FX = {
       const grounded = m.type !== 'bat' || m.y > 440;
       if (dx > -10 && dx < range && grounded && Math.abs(m.y - p.y) < 90) {
         hit++;
-        const r = skillDmg(1.6 * t.dmg);
+        const lowBonus = t.mechanic && t.branch === 1 && m.hp / m.mhp < 0.5 ? 1.35 : 1;
+        const mx = m.x, my = m.y - m.h / 2, before = m.hp;
+        const r = skillDmg(1.6 * t.dmg * lowBonus);
         hitMon(m, r.d, r.crit);
-        burst(m.x, m.y - m.h / 2, '#d8b365', 8);
+        burst(mx, my, '#d8b365', 8);
+        if (t.ultimate && t.branch === 1 && before > 0 && m.hp <= 0) addSkillZone('rupture', mx, my, 78, 70, 1, 1, 1, 1.15 * t.dmg, '#d8b365');
       }
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12;
     for (let i = 1; i < 6; i++) parts.push({ x: p.x + p.face * i * range / 6, y: p.y - 2, vx: 0, vy: -2 - Math.random(), t: 18, color: '#d8b365' });
+    if (t.mechanic && t.branch === 0) addSkillZone('aftershock', p.x + p.face * range / 2, p.y - 25, range / 2, 80, 18, 1, 1, 1.15 * t.dmg, '#d8b365', t.ultimate ? { knock:55 } : {});
     beep(120, 0.2, 'sawtooth', 0.05);
   },
   rage(t) {
     const p = player;
-    p.rageT = Math.round(360 * t.area);
+    const blood = t.branch === 0, low = p.hp / p.mhp < 0.5;
+    p.rageT = Math.round((t.mechanic && t.branch === 1 ? 480 : 360) * t.area);
+    p.rageAtk = blood && low ? (t.ultimate ? 0.65 : 0.45) : 0.3;
+    p.rageSpd = blood && low ? 1.1 : 0.8;
+    p.rageLifesteal = blood && low && t.ultimate ? 0.08 : 0;
+    p.rageExtend = t.ultimate && t.branch === 1 ? 90 : 0;
+    p.rageBlood = blood; p.rageUltimate = t.ultimate;
     p.cast = 8;
     burst(p.x, p.y - p.h / 2, '#ff5a5a', 20);
     beep(200, 0.2, 'square', 0.05);
@@ -815,18 +900,21 @@ const SKILL_FX = {
   fire(t) {
     const p = player;
     p.cast = 12;
-    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70, mult: t.dmg, kind: 'fire' });
+    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 7.5, t: 70, mult: t.dmg, kind: 'fire', talent:t });
     playSfx('fire');
   },
   bolt(t) {
     const p = player;
+    const focused = t.mechanic && t.branch === 1, cap = focused ? 1 : t.mechanic && t.branch === 0 ? 6 : 4;
     let hit = 0;
     for (const m of mons.slice()) {
-      if (Math.abs(m.x - p.x) < 240 * t.area && hit < 4) {
+      if (Math.abs(m.x - p.x) < 240 * t.area && hit < cap) {
         hit++;
         bolts.push({ x: m.x, y: m.y - m.h / 2, t: 14 });
-        const r = skillDmg(1.8 * t.dmg);
-        hitMon(m, r.d, r.crit);
+        const r = skillDmg(1.8 * t.dmg * (focused ? 1.6 : 1));
+        hitMon(m, r.d, (t.ultimate && t.branch === 1) || r.crit);
+        if (t.ultimate && t.branch === 1 && mons.includes(m)) { m.freezeT = Math.max(m.freezeT || 0, 60); num(m.x, m.y - m.h - 20, '麻痺', '#ffe680'); }
+        if (t.ultimate && t.branch === 0 && mons.includes(m)) addSkillZone('thunder', m.x, m.y - m.h / 2, 52, 58, 18, 1, 1, 1.1 * t.dmg, '#ffe680');
       }
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
@@ -836,24 +924,29 @@ const SKILL_FX = {
   ice(t) {
     const p = player;
     p.cast = 12;
-    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 6.5, t: 90, mult: t.dmg, kind: 'ice', pierce: true, hits: [] });
+    projs.push({ x: p.x + p.face * 20, y: p.y - 30, vx: p.face * 6.5, t: 90, mult: t.dmg, kind: 'ice', pierce: true, hits: [], pierceN:0, talent:t });
     playSfx('ice');
   },
   meteor(t) {
     const p = player;
     p.cast = 14;
-    for (let i = 0; i < 3; i++) {
+    const giant = t.mechanic && t.branch === 1, count = giant ? 1 : 3;
+    for (let i = 0; i < count; i++) {
       meteors.push({
-        x: p.x + p.face * (70 + i * 90) + (Math.random() - 0.5) * 30,
-        y: 40 - i * 50, vy: 7, r: 55 * t.area, mult: 2.2 * t.dmg
+        x: p.x + p.face * (giant ? 150 : 70 + i * 90) + (Math.random() - 0.5) * 30,
+        y: 40 - i * 50, vy: giant ? 6 : 7, r: 55 * t.area * (giant ? 1.65 : 1), mult:2.2 * t.dmg * (giant ? 2.1 : 1), talent:t
       });
     }
     playSfx('meteor');
   },
   shield(t) {
     const p = player;
-    p.shieldHp = Math.round(p.mhp * 0.3 * t.dmg); // 傷害天賦→盾量
-    p.shieldT = 600;
+    const wall = t.mechanic && t.branch === 0;
+    p.shieldHp = Math.round(p.mhp * (wall ? 0.45 : 0.3) * t.dmg);
+    p.shieldT = wall ? 900 : 600;
+    p.shieldBreakMp = t.ultimate && t.branch === 0 ? 12 : 0;
+    p.shieldReflect = t.mechanic && t.branch === 1 ? 0.2 : 0;
+    p.shieldBurst = t.ultimate && t.branch === 1;
     p.cast = 10;
     burst(p.x, p.y - p.h / 2, '#7dcfff', 18);
     beep(700, 0.15, 'sine', 0.04);
@@ -866,9 +959,10 @@ function trySkill(i) {
   const def = SKILL_DEFS[id];
   if (p.mp < def.mp) { num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff'); p.slotCd[i] = 30; return; }
   const t = talentOf(id);
-  if (SKILL_FX[id](t) === false) { p.slotCd[i] = 20; return; }
-  p.mp -= def.mp;
-  p.slotCd[i] = Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
+  const result = SKILL_FX[id](t);
+  if (result === false) { p.slotCd[i] = 20; return; }
+  if (!result || !result.free) p.mp -= def.mp;
+  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
 }
 
 // ---------- gear generation ----------
@@ -1142,7 +1236,7 @@ function genFloor(n) {
     spawnMon(pool[(Math.random() * pool.length) | 0], n, sc, xpSc, eliteCh);
   }
   portal = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0;
   spawnFloorEvent(n);
   floorT = 90;
 }
@@ -1161,7 +1255,7 @@ function genBossFloor(n) {
   }];
   portal = null;
   floorEvent = null; eventPanel = null;
-  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
+  projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0;
   floorT = 150;
 }
 function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增加混亂壓力)
@@ -1191,7 +1285,9 @@ function resetRun() {
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
   p.x = 80; p.y = 468; p.vx = 0; p.vy = 0; p.face = 1;
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
-  p.rageT = 0; p.shieldHp = 0; p.shieldT = 0; p.chillT = 0;
+  p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
+  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0;
+  p.skillCasts = {};
   p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.eventAtk = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;
   calcStats();
@@ -1252,8 +1348,9 @@ function explodeBomber(m) {
   return dead;
 }
 function hitMon(m, d, crit, noChain) {
+  if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
   m.hp -= d; m.hitT = 8;
-  const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal');
+  const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
   if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + d * lifesteal); // 吸血鬼/吸血詞綴
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff');
   burst(m.x, m.y - m.h / 2, '#ffd23e', 6);
@@ -1263,6 +1360,10 @@ function hitMon(m, d, crit, noChain) {
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
     if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
+    if (player.rageT > 0 && player.rageExtend > 0) {
+      player.rageT = Math.min(720, player.rageT + player.rageExtend);
+      num(player.x, player.y - player.h - 28, '戰意延長', '#ff8a6a');
+    }
     const killMp = 5 * perkV('mana') + affixV('mpKill');
     if (killMp > 0) player.mp = Math.min(player.mmp, player.mp + killMp); // 法力循環/靈泉
     if (!noChain && perkV('chain') > 0) { // 連鎖爆炸
@@ -1727,9 +1828,21 @@ function update() {
   if (p.inv > 0) p.inv--;
   if (p.potCd > 0) p.potCd--;
   for (let i = 0; i < 3; i++) if (p.slotCd[i] > 0) p.slotCd[i]--;
-  if (p.rageT > 0) p.rageT--;
+  if (p.rageT > 0) {
+    p.rageT--;
+    if (p.rageBlood) {
+      const low = p.hp / p.mhp < 0.5;
+      p.rageAtk = low ? (p.rageUltimate ? 0.65 : 0.45) : 0.3;
+      p.rageSpd = low ? 1.1 : 0.8;
+      p.rageLifesteal = low && p.rageUltimate ? 0.08 : 0;
+    }
+    if (p.rageT === 0) { p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false; }
+  }
   if (p.chillT > 0) p.chillT--;
-  if (p.shieldT > 0) { p.shieldT--; if (p.shieldT === 0) p.shieldHp = 0; }
+  if (p.shieldT > 0) {
+    p.shieldT--;
+    if (p.shieldT === 0) { p.shieldHp = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; }
+  }
   if (perkV('aegis') > 0) { // 守護結界:每12秒補護盾
     if (p.aegisCd > 0) p.aegisCd--;
     if (p.aegisCd <= 0) {
@@ -1808,14 +1921,25 @@ function update() {
     for (const m of mons) {
       if (pr.pierce && pr.hits.indexOf(m) >= 0) continue;
       if (Math.abs(pr.x - m.x) < m.w / 2 + 8 && Math.abs(pr.y - (m.y - m.h / 2)) < m.h / 2 + 10) {
-        const r = skillDmg(pr.mult || 1);
+        const tt = pr.talent || { mechanic:false, ultimate:false, branch:-1 };
+        const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
+        const r = skillDmg((pr.mult || 1) * pierceBonus);
         hitMon(m, r.d, r.crit);
         if (pr.kind === 'ice') {
-          m.slowT = 180;
+          pr.pierceN = (pr.pierceN || 0) + 1;
+          m.slowT = tt.mechanic && tt.branch === 0 ? 300 : 180;
+          if (tt.ultimate && tt.branch === 0) { m.freezeT = Math.max(m.freezeT || 0, 90); num(m.x, m.y - m.h - 18, '凍結', '#d8f4ff'); }
+          if (tt.ultimate && tt.branch === 1) skillAreaDamage(m.x, m.y - m.h / 2, 58, 55, 0.65 * pr.mult, '#d8f4ff', { exclude:new Set([m]), particles:5 });
           burst(pr.x, pr.y, '#7dcfff', 8);
           pr.hits.push(m);
         } else {
           burst(pr.x, pr.y, '#ff8c2e', 10);
+          if (tt.mechanic && tt.branch === 0) {
+            skillAreaDamage(m.x, m.y - m.h / 2, 72 * tt.area, 62 * tt.area, 0.7 * pr.mult, '#ff8c2e', { exclude:new Set([m]), particles:8 });
+            if (tt.ultimate) addSkillZone('burn', m.x, m.y, 78 * tt.area, 45, 0, 240, 30, 0.28 * pr.mult, '#ff6b2e');
+          } else if (tt.mechanic && tt.branch === 1) {
+            chainSkillTargets(m, new Set([m]), tt.ultimate ? 3 : 2, pr.mult, tt.ultimate ? 1.15 : 0.78);
+          }
           gone = true; break;
         }
       }
@@ -1844,15 +1968,38 @@ function update() {
           const r = skillDmg(mt.mult); hitMon(m, r.d, r.crit);
         }
       }
+      const tt = mt.talent || { mechanic:false, ultimate:false, branch:-1 };
+      if (tt.mechanic && tt.branch === 0) {
+        const zr = mt.r * (tt.ultimate ? 1.25 : 0.95), dur = tt.ultimate ? 360 : 210;
+        addSkillZone('sunfire', mt.x, 468, zr, 48, 0, dur, 30, (tt.ultimate ? 0.38 : 0.28) * tt.dmg, '#ff7a36');
+      }
+      if (tt.ultimate && tt.branch === 1) addSkillZone('impact', mt.x, 445, mt.r * 1.15, 105, 24, 1, 1, 1.45 * tt.dmg, '#ffb04a', { knock:48 });
       meteors.splice(meteors.indexOf(mt), 1);
     }
+  }
+
+  // 技能持續區域與延遲餘波
+  for (const z of skillZones.slice()) {
+    if (z.delay > 0) { z.delay--; continue; }
+    z.t--;
+    const pulse = !z.fired && z.maxT <= 1;
+    const tick = z.maxT > 1 && z.t % z.interval === 0;
+    if (pulse || tick) {
+      z.fired = true;
+      skillAreaDamage(z.x, z.y, z.rx, z.ry, z.mult, z.color, z.opts);
+      burst(z.x, z.y, z.color, z.maxT > 1 ? 5 : 18);
+      if (z.kind === 'thunder') bolts.push({ x:z.x, y:z.y, t:12 });
+    }
+    if (z.t <= 0) skillZones.splice(skillZones.indexOf(z), 1);
   }
 
   // monsters
   for (const m of mons) {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
-    const slowF = m.slowT > 0 ? 0.5 : 1;
+    if (m.freezeT > 0) m.freezeT--;
+    if (m.vulnT > 0) m.vulnT--; else m.vulnMul = 1;
+    const slowF = m.freezeT > 0 ? 0 : m.slowT > 0 ? 0.5 : 1;
     if (m.type === 'slime' || m.type === 'icer' || m.type === 'splitter') {
       m.x += m.vx * slowF;
       if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
@@ -2141,6 +2288,24 @@ function render() {
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
   drawFloorEventWorld();
+  // Lv3/Lv5 技能區域特效（燃燒地面、餘震、龍捲與二次衝擊）
+  for (const z of skillZones) {
+    const waiting = z.delay > 0, life = z.maxT > 1 ? Math.max(0.18, z.t / z.maxT) : 1;
+    ctx.globalAlpha = waiting ? 0.16 + Math.sin(frame * 0.18) * 0.06 : 0.18 + life * 0.18;
+    ctx.fillStyle = z.color;
+    ctx.beginPath(); ctx.ellipse(z.x, z.y, Math.max(8, z.rx), Math.max(5, z.ry * 0.32), 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = waiting ? 0.45 : 0.65;
+    ctx.strokeStyle = z.color; ctx.lineWidth = z.kind === 'burn' || z.kind === 'sunfire' ? 2 : 3;
+    ctx.beginPath(); ctx.ellipse(z.x, z.y, Math.max(8, z.rx * (0.88 + Math.sin(frame * 0.1) * 0.06)), Math.max(5, z.ry * 0.28), 0, 0, Math.PI * 2); ctx.stroke();
+    if (!waiting && (z.kind === 'burn' || z.kind === 'sunfire')) {
+      for (let i = 0; i < 4; i++) {
+        const fx = z.x + Math.sin(frame * 0.11 + i * 2.1) * z.rx * 0.7;
+        const fh = 8 + (i * 7 + frame) % 15;
+        ctx.globalAlpha = 0.5; ctx.fillRect(fx - 2, z.y - fh, 4, fh);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
   // portal
   if (portal) {
     const ph = 64, pw = 40;
@@ -2281,9 +2446,14 @@ function render() {
     ctx.strokeStyle = b.t % 4 < 2 ? '#fff' : '#ffe680';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    let by = -10;
-    ctx.moveTo(b.x + 6, by);
-    while (by < b.y) { by += 40; ctx.lineTo(b.x + (by % 80 < 40 ? -8 : 8), Math.min(by, b.y)); }
+    if (b.chain) {
+      ctx.moveTo(b.x0, b.y0);
+      for (let i = 1; i <= 5; i++) ctx.lineTo(b.x0 + (b.x - b.x0) * i / 5 + (i < 5 ? (i % 2 ? 7 : -7) : 0), b.y0 + (b.y - b.y0) * i / 5);
+    } else {
+      let by = -10;
+      ctx.moveTo(b.x + 6, by);
+      while (by < b.y) { by += 40; ctx.lineTo(b.x + (by % 80 < 40 ? -8 : 8), Math.min(by, b.y)); }
+    }
     ctx.stroke();
   }
   for (const q of parts) { ctx.fillStyle = q.color; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); }
@@ -3147,8 +3317,9 @@ function renderSkillTab() {
   ctx.fillStyle = s.unl ? '#c7beb3' : '#6e6863'; ctx.font = '12px ' + STAT_FONT; drawFitText(s.unl ? d.desc : '透過技能秘典解鎖這項能力。', dx + 18, dy + 103, dw - 36);
   ctx.strokeStyle = '#3b342d'; ctx.beginPath(); ctx.moveTo(dx + 16, dy + 118); ctx.lineTo(dx + dw - 16, dy + 118); ctx.stroke();
   if (s.unl) {
-    const labels = ['傷害+12%', s.branch < 0 ? '流派選擇' : BRANCH_NAMES[id][s.branch], s.branch === 1 ? '傷害+15%' : '範圍+20%', '冷卻-15%', s.branch === 1 ? '傷害+18%' : '範圍+傷害'];
-    ctx.fillStyle = '#9d8c74'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText('天賦階級', dx + 18, dy + 139);
+    const avail = s.pts - s.spent, effect = TALENT_EFFECTS[id][s.branch >= 0 ? s.branch : 0];
+    const labels = ['傷害+12%', s.branch < 0 ? '流派選擇' : BRANCH_NAMES[id][s.branch], s.branch < 0 ? '機制強化' : effect.lv3, '冷卻-15%', s.branch < 0 ? '終極特效' : effect.lv5];
+    ctx.fillStyle = '#9d8c74'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText('天賦階級   可用點數 ' + avail, dx + 18, dy + 139);
     for (let k = 0; k < 5; k++) {
       const nx = dx + 42 + k * 74, ny = dy + 166, invested = s.spent > k, available = k === s.spent && s.pts > s.spent;
       if (k < 4) { ctx.strokeStyle = s.spent > k + 1 ? col : '#403a34'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(nx + 15, ny); ctx.lineTo(nx + 59, ny); ctx.stroke(); }
@@ -3157,9 +3328,8 @@ function renderSkillTab() {
       ctx.textAlign = 'center'; ctx.fillStyle = invested ? '#201912' : '#887f75'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(String(k + 1), nx, ny + 4);
       ctx.fillStyle = invested ? '#d9c9b3' : '#716a63'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(labels[k].slice(0, 7), nx, ny + 29);
     }
-    const avail = s.pts - s.spent;
-    ctx.textAlign = 'left'; ctx.fillStyle = avail > 0 ? '#f0c76b' : '#7e766e'; ctx.font = 'bold 11px ' + STAT_FONT;
-    ctx.fillText('可用天賦點  ' + avail + (s.branch >= 0 ? '   流派：' + BRANCH_NAMES[id][s.branch] : ''), dx + 18, dy + 215);
+    ctx.textAlign = 'left'; ctx.fillStyle = s.branch >= 0 ? '#bca88c' : '#7e766e'; ctx.font = '9px ' + STAT_FONT;
+    drawFitText(s.branch >= 0 ? ('Lv3 ' + effect.lv3 + '  •  Lv5 ' + effect.lv5) : 'Lv2 選擇流派後將解鎖專屬機制', dx + 18, dy + 215, dw - 36);
     let ax = dx + 18;
     const actionBtn = (label, act, extra, color, width) => {
       const b = Object.assign({ x:ax, y:dy + 226, w:width || Math.max(74, label.length * 13 + 18), h:32, act }, extra || {}); skillActBtns.push(b);
