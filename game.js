@@ -860,15 +860,25 @@ function genBossFloor(n) {
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const hp = Math.round(300 * sc);
+  const hp = Math.round(800 * sc); // 大幅提高:原本比一整層還少
   mons = [{
     type: 'boss', x: worldW - 240, y: 500, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
     hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
-    dmg: Math.round(11 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
+    dmg: Math.round(15 * sc), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0;
   floorT = 150;
+}
+function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增加混亂壓力)
+  const sc = (1 + 0.3 * (floor - 1) + 0.02 * (floor - 1) * (floor - 1)) * 0.7;
+  for (let i = 0; i < count; i++) {
+    const bx = 220 + Math.random() * (worldW - 440), by = 150 + Math.random() * 120;
+    const hp = Math.round(22 * sc);
+    mons.push({ type: 'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 100, hp: hp, mhp: hp, xpv: 10, dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+  }
+  num(player.x, player.y - player.h - 30, '召喚援軍!', '#ff5a5a');
+  beep(180, 0.2, 'sawtooth', 0.05);
 }
 function resetRun() {
   const p = player;
@@ -1558,22 +1568,22 @@ function update() {
     } else if (m.type === 'boss') {
       m.t++;
       const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
-      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); }
+      if (ph > m.phase) { m.phase = ph; burst(m.x, m.y - m.h / 2, '#ff5a5a', 30); beep(200, 0.3, 'sawtooth', 0.06); spawnBossAdds(ph); } // 進階段召喚援軍
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 500 && m.vy >= 0;
       if (m.atkT > 0) {
         m.atkT--;
-        if (grounded) m.vx = dir * (ph === 1 ? 0.8 : ph === 2 ? 1.2 : 1.7); // 追著玩家走
+        if (grounded) m.vx = dir * (ph === 1 ? 1.1 : ph === 2 ? 1.6 : 2.2); // 追著玩家走
       } else if (m.tele > 0) {
         m.tele--; m.vx = 0; // 蓄力預告(頭上會顯示 !)
         if (m.tele === 0 && grounded) {
           m.vy = ph === 3 ? -11.5 : -9; // 跳撲
           m.vx = dir * (2.6 + ph * 0.8);
-          if (ph >= 2) { // 二階段起加吐毒彈(扇形,按群系微調)
+          { // 吐毒彈(扇形,一階段起就有,按群系微調)
             const bb = biomeOf(floor);
             const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
             const chill = bb.name === '冰霜凍原';
-            const nsp = (ph === 3 ? 5 : 3) + (hot ? 2 : 0);
+            const nsp = (ph === 1 ? 1 : ph === 2 ? 3 : 5) + (hot ? 2 : 0);
             const vsc = hot ? 1.25 : 1; // 熔岩彈更快
             for (let i = 0; i < nsp; i++) {
               espits.push({
@@ -1584,7 +1594,7 @@ function update() {
             }
             beep(320, 0.12, 'square', 0.04);
           }
-          m.atkT = ph === 1 ? 140 : ph === 2 ? 105 : 80;
+          m.atkT = ph === 1 ? 100 : ph === 2 ? 74 : 54;
         }
       } else if (grounded) {
         m.tele = 36;
