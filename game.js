@@ -85,8 +85,68 @@ function buyMeta(d) {
   const c = d.cost(lv);
   if (meta.souls < c) { beep(150, 0.1, 'square', 0.04); return; }
   meta.souls -= c; meta.up[d.id]++;
+  saveMeta();
   beep(900, 0.08, 'sine', 0.04);
 }
+
+// ---------- save ----------
+const SAVE_KEY = 'pixelrogue_save';
+const UP_IDS = ['atk', 'vit', 'pots', 'treasure', 'soul'];
+let bestFloor = 0;
+let menuMsg = null; // {text, color, t} 基地畫面的提示訊息
+function applyMeta(souls, ups, best) {
+  meta.souls = Math.max(0, souls | 0);
+  UP_IDS.forEach((id, i) => {
+    const def = META_DEFS.find(d => d.id === id);
+    meta.up[id] = Math.max(0, Math.min(def.max, ups[i] | 0));
+  });
+  bestFloor = Math.max(0, best | 0);
+}
+function saveMeta() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor })); } catch (e) {}
+}
+function loadMeta() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (d && typeof d.s === 'number' && Array.isArray(d.u)) applyMeta(d.s, d.u, d.b);
+  } catch (e) {}
+}
+function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
+function encodeSave() {
+  const a = [1, meta.souls, ...UP_IDS.map(id => meta.up[id]), bestFloor];
+  a.push(saveChk(a));
+  return btoa(a.join(','));
+}
+function decodeSave(str) {
+  try {
+    const a = atob(String(str).trim()).split(',').map(Number);
+    if (a.length !== 9 || a[0] !== 1 || a.some(v => !Number.isFinite(v))) return null;
+    const chk = a.pop();
+    if (saveChk(a) !== chk) return null;
+    return a;
+  } catch (e) { return null; }
+}
+function exportSave() {
+  const code = encodeSave();
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).catch(() => {});
+  window.prompt('你的存檔碼(已嘗試複製到剪貼簿):', code);
+  menuMsg = { text: '已產生存檔碼', color: '#7dffd6', t: 240 };
+}
+function importSave() {
+  const str = window.prompt('貼上存檔碼:', '');
+  if (!str) return;
+  const a = decodeSave(str);
+  if (!a) {
+    menuMsg = { text: '存檔碼無效', color: '#ff5a5a', t: 240 };
+    beep(150, 0.15, 'square', 0.04);
+    return;
+  }
+  applyMeta(a[1], a.slice(2, 7), a[7]);
+  saveMeta();
+  menuMsg = { text: '匯入成功!靈魂 ' + meta.souls, color: '#7dffd6', t: 240 };
+  beep(900, 0.1, 'sine', 0.04);
+}
+loadMeta();
 
 // ---------- state ----------
 let gameState = 'select';
@@ -324,6 +384,8 @@ function endRun() {
   const gained = Math.round(soulsRun * (1 + 0.1 * meta.up.soul));
   meta.souls += gained;
   lastRun = { floor: floor, kills: kills, gained: gained };
+  if (floor > bestFloor) bestFloor = floor;
+  saveMeta();
   gameState = 'dead';
   setHint('Enter 返回基地');
   beep(120, 0.4, 'sawtooth', 0.05);
@@ -406,6 +468,7 @@ function usePot(t) {
 // ---------- input ----------
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
+let expBtn = null, impBtn = null;
 let startBtn = null;
 window.addEventListener('keydown', e => {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) {} }
@@ -450,6 +513,8 @@ function handleTap(mx, my) {
   if (gameState === 'select') {
     for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
     for (const b of metaBtns) if (inside(b)) { buyMeta(b.d); return; }
+    if (inside(expBtn)) { exportSave(); return; }
+    if (inside(impBtn)) { importSave(); return; }
     if (inside(startBtn)) resetRun();
     return;
   }
@@ -1151,7 +1216,22 @@ function renderMenu() {
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 40px "Courier New",monospace';
   ctx.fillText('像 素 地 城', W / 2, 70);
   ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 18px "Courier New",monospace';
-  ctx.fillText('靈魂 ' + meta.souls, W / 2, 104);
+  ctx.fillText('靈魂 ' + meta.souls + (bestFloor > 0 ? '   最深 ' + bestFloor + ' 層' : ''), W / 2, 104);
+  // 存檔碼按鈕
+  expBtn = { x: 744, y: 30, w: 96, h: 28 };
+  impBtn = { x: 848, y: 30, w: 96, h: 28 };
+  for (const [b, label] of [[expBtn, '匯出存檔'], [impBtn, '匯入存檔']]) {
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#8890b8'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(label, b.x + b.w / 2, b.y + 18);
+  }
+  if (menuMsg) {
+    ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace';
+    ctx.fillText(menuMsg.text, 844, 78);
+    if (--menuMsg.t <= 0) menuMsg = null;
+  }
   if (lastRun) {
     ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('上次:第' + lastRun.floor + '層 / 擊殺' + lastRun.kills + ' / 靈魂+' + lastRun.gained, W / 2, 126);
