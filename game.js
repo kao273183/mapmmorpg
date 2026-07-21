@@ -1,12 +1,22 @@
 "use strict";
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+// Kenney RPG Urban Pack (CC0) tilesheet — 16x16, 27 欄
+const tsheet = new Image();
+let tsheetReady = false;
+if (window.TSHEET_URI) { tsheet.onload = () => { tsheetReady = true; }; tsheet.src = window.TSHEET_URI; }
+function drawTile(idx, dx, dy, scale) {
+  if (!tsheetReady) return;
+  ctx.drawImage(tsheet, (idx % 27) * 16, ((idx / 27) | 0) * 16, 16, 16, Math.round(dx), Math.round(dy), 16 * scale, 16 * scale);
+}
 const W = 960, H = 540;
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
 const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;Esc 關閉';
 const HINT_MENU = '[1]/[2] 選職業&nbsp;|&nbsp;點擊購買永久強化&nbsp;|&nbsp;Enter 開始冒險';
+const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;|&nbsp;Space 與 NPC 互動&nbsp;|&nbsp;Enter 或點聊天框 聊天';
 
 // ---------- audio ----------
 let audioCtx = null;
@@ -101,7 +111,8 @@ function drawSprite(rows, x, y, s, flip, flash, recolor) {
 const meta = {
   souls: 0, up: { atk: 0, vit: 0, pots: 0, treasure: 0, soul: 0 },
   stash: [], mats: { enh: 0, ench: 0 }, stashSeq: 1,
-  loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null }
+  loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
+  playerName: '勇者'
 };
 const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
 const STASH_CAP = 30;
@@ -268,7 +279,7 @@ function saveMeta() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
-      st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq
+      st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName
     }));
   } catch (e) {}
 }
@@ -281,6 +292,7 @@ function loadMeta() {
     if (d && d.mt) meta.mats = { enh: Math.max(0, d.mt.enh | 0), ench: Math.max(0, d.mt.ench | 0) };
     if (d && d.lo) for (const part of GEAR_PARTS) meta.loadout[part] = d.lo[part] || null;
     if (d && d.sq) meta.stashSeq = Math.max(1, d.sq | 0);
+    if (d && typeof d.pn === 'string' && d.pn.trim()) meta.playerName = d.pn.slice(0, 12);
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
@@ -327,7 +339,7 @@ loadMeta();
 // ---------- state ----------
 let gameState = 'select';
 let chosenCls = 'warrior';
-const CLASSES = { warrior: { name: '劍士' }, mage: { name: '法師' } };
+const CLASSES = { warrior: { name: '劍士', col: '#c84a4a' }, mage: { name: '法師', col: '#5a4ad0' } };
 let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
 let portal = null;
@@ -999,7 +1011,7 @@ function usePot(t) {
 // ---------- input ----------
 const keys = {};
 const selBtns = [], metaBtns = [], itemBtns = [], delBtns = [];
-let expBtn = null, impBtn = null;
+let expBtn = null, impBtn = null, backTownBtn = null;
 const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [];
 let gachaBtn = null;
 function dismantleStash(it) {
@@ -1018,14 +1030,27 @@ window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
   keys[e.key === ' ' ? 'space' : e.key.toLowerCase()] = true;
   const k = e.key.toLowerCase();
+  if (gameState === 'town') {
+    if (chatting) {
+      if (k === 'enter') { const t = chatInput.trim(); if (t) sendChat(t); chatInput = ''; chatting = false; }
+      else if (k === 'escape') { chatInput = ''; chatting = false; }
+      else if (k === 'backspace') chatInput = chatInput.slice(0, -1);
+      else if (e.key.length === 1 && chatInput.length < 50) chatInput += e.key;
+      e.preventDefault();
+      return;
+    }
+    if (k === 'enter') { chatting = true; e.preventDefault(); return; }
+    return; // 走動/互動由 keys[] + updateTown 處理
+  }
   if (gameState === 'select') {
     if (k === '1') chosenCls = 'warrior';
     if (k === '2') chosenCls = 'mage';
-    if (k === 'enter') resetRun();
+    if (k === 'escape' && fromTown) { gameState = 'town'; setHint(HINT_TOWN); return; }
+    if (k === 'enter' && menuTab === 'base') resetRun();
     return;
   }
   if (gameState === 'dead') {
-    if (k === 'enter' || k === ' ' || k === 'space') { gameState = 'select'; setHint(HINT_MENU); }
+    if (k === 'enter' || k === ' ' || k === 'space') { gameState = 'town'; setHint(HINT_TOWN); fromTown = false; }
     return;
   }
   if (gameState === 'pick') {
@@ -1053,7 +1078,22 @@ window.addEventListener('keyup', e => {
 });
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+  if (gameState === 'town') {
+    const cw = 360, ih = 24, ch = 108, cy = H - ch - ih - 14;
+    if (mx >= 14 && mx <= 14 + cw && my >= cy) { // 點聊天框
+      if (isTouch) { const t = window.prompt('聊天:'); if (t && t.trim()) sendChat(t.trim()); }
+      else chatting = true;
+      return;
+    }
+    const wx = mx + townCamX, wy = my + townCamY; // 點擊走向該世界座標
+    townTargetX = Math.max(30, Math.min(TOWN_W - 30, wx));
+    townTargetY = Math.max(150, Math.min(TOWN_H - 40, wy));
+    townTargetNpc = null;
+    for (const n of NPCS) if (Math.hypot(n.x - wx, n.y - wy) < 60) { townTargetNpc = n; townTargetX = n.x; townTargetY = n.y; break; }
+    return;
+  }
   if (gameState === 'select') {
+    if (inside(backTownBtn)) { gameState = 'town'; setHint(HINT_TOWN); return; }
     for (const b of tabBtns) if (inside(b)) { menuTab = b.tab; pendingReset = null; return; }
     if (inside(expBtn)) { exportSave(); return; }
     if (inside(impBtn)) { importSave(); return; }
@@ -1093,7 +1133,7 @@ function handleTap(mx, my) {
     if (inside(startBtn)) resetRun();
     return;
   }
-  if (gameState === 'dead') { gameState = 'select'; setHint(HINT_MENU); return; }
+  if (gameState === 'dead') { gameState = 'town'; setHint(HINT_TOWN); fromTown = false; return; }
   if (gameState === 'pick') {
     for (const b of pickBtns) if (inside(b)) { applyCard(b.c); return; }
     return;
@@ -1296,14 +1336,22 @@ function update() {
   // 隕石
   for (const mt of meteors.slice()) {
     mt.y += mt.vy;
+    if (!mt.hits) mt.hits = [];
     parts.push({ x: mt.x + (Math.random() - 0.5) * 10, y: mt.y - 10, vx: 0, vy: -1, t: 10, color: '#ff8c2e' });
+    // 下墜途中撞到怪就打(涵蓋平台上/空中的怪),每顆隕石對同隻只打一次
+    for (const m of mons) {
+      if (mt.hits.indexOf(m) >= 0) continue;
+      if (Math.abs(m.x - mt.x) < mt.r * 0.5 + m.w / 2 && Math.abs(mt.y - (m.y - m.h / 2)) < m.h / 2 + 24) {
+        const r = skillDmg(mt.mult); hitMon(m, r.d, r.crit); mt.hits.push(m);
+      }
+    }
     if (mt.y >= 495) {
       burst(mt.x, 495, '#ff8c2e', 20);
       beep(100, 0.2, 'sawtooth', 0.05);
-      for (const m of mons.slice()) {
-        if (Math.abs(m.x - mt.x) < mt.r + m.w / 2 && m.y > 380) {
-          const r = skillDmg(mt.mult);
-          hitMon(m, r.d, r.crit);
+      for (const m of mons.slice()) { // 落地範圍爆炸,補打附近地面怪
+        if (mt.hits.indexOf(m) >= 0) continue;
+        if (Math.abs(m.x - mt.x) < mt.r + m.w / 2 && Math.abs(m.y - 500) < 130) {
+          const r = skillDmg(mt.mult); hitMon(m, r.d, r.crit);
         }
       }
       meteors.splice(meteors.indexOf(mt), 1);
@@ -1939,10 +1987,244 @@ function drawDead() {
   ctx.fillText('擊殺 ' + lastRun.kills + ' 隻怪物', W / 2, 270);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('獲得靈魂 +' + lastRun.gained, W / 2, 300);
+  if (lastRun.stashed) { ctx.fillStyle = '#d8b365'; ctx.fillText('裝備存入倉庫 ' + lastRun.stashed + ' 件', W / 2, 326); }
   ctx.fillStyle = Math.floor(frame / 30) % 2 === 0 ? '#ffe680' : '#8890b8';
   ctx.font = '15px "Courier New",monospace';
-  ctx.fillText('按 Enter 或點擊 返回基地', W / 2, 360);
+  ctx.fillText('按 Enter 或點擊 返回城鎮', W / 2, 366);
   ctx.textAlign = 'left';
+}
+
+// ---------- 城鎮(俯視角 top-down) ----------
+const TOWN_W = 1400, TOWN_H = 920;
+const PLAYER_CHAR = 105; // Kenney 角色(col24=正面朝下,index=row*27+24)
+const NPCS = [
+  { x: 380,  y: 300, name: '傳送門',     sub: '選職業・出發冒險', panel: 'base',   col: '#b05ae0', build: 'portal', char: 186 },
+  { x: 780,  y: 240, name: '技能訓練師', sub: '抽取技能・天賦樹', panel: 'skills', col: '#7dffd6', build: 'shop',   char: 24 },
+  { x: 1060, y: 430, name: '倉庫管理員', sub: '裝備倉庫',         panel: 'stash',  col: '#d8b365', build: 'shop',   char: 267 },
+  { x: 470,  y: 620, name: '公告欄',     sub: '存檔・改名',       panel: 'save',   col: '#8aa8ff', build: 'board',  char: 348 }
+];
+const townP = { x: 700, y: 760, face: 1, walk: 0 };
+// 裝飾物(參與深度排序)
+const TOWN_DECOR = [
+  { x: 700, y: 490, type: 'fountain' },
+  { x: 170, y: 250, type: 'tree' }, { x: 1250, y: 300, type: 'tree' }, { x: 250, y: 800, type: 'tree' },
+  { x: 1200, y: 780, type: 'tree' }, { x: 940, y: 700, type: 'tree' }, { x: 560, y: 330, type: 'tree' },
+  { x: 470, y: 410, type: 'lamp' }, { x: 930, y: 410, type: 'lamp' }, { x: 470, y: 660, type: 'lamp' }, { x: 930, y: 660, type: 'lamp' },
+  { x: 340, y: 520, type: 'bush' }, { x: 1080, y: 560, type: 'bush' }, { x: 1010, y: 720, type: 'bush' },
+  { x: 620, y: 730, type: 'flower' }, { x: 820, y: 320, type: 'flower' }, { x: 400, y: 380, type: 'flower' }, { x: 880, y: 620, type: 'flower' },
+  { x: 1140, y: 480, type: 'barrel' }, { x: 830, y: 250, type: 'barrel' }, { x: 700, y: 300, type: 'crate' }
+];
+let townCamX = 0, townCamY = 0, nearNpc = null, fromTown = false;
+let townTargetX = null, townTargetY = null, townTargetNpc = null; // 點擊走動目標
+let chatMsgs = [{ name: '系統', text: '歡迎來到城鎮!走到 NPC 按 ↑ 互動,按 Enter 聊天。' }];
+let chatInput = '', chatting = false;
+function sendChat(text) {
+  chatMsgs.push({ name: meta.playerName || '勇者', text: text.slice(0, 60) });
+  if (chatMsgs.length > 40) chatMsgs.shift();
+  // 多人預留:此處未來改為 townNet.send(text),其他玩家訊息由 townNet.onMessage 推入 chatMsgs
+  beep(700, 0.05, 'sine', 0.03);
+}
+function openTownPanel(panel) {
+  if (panel === 'save') {
+    const c = window.prompt('存檔碼(可複製備份);或貼上他人存檔碼匯入,或輸入 name:你的名字 改名:', encodeSave());
+    if (c === null) return;
+    const t = c.trim();
+    if (t.startsWith('name:')) {
+      const nm = t.slice(5).trim().slice(0, 12);
+      if (nm) { meta.playerName = nm; saveMeta(); chatMsgs.push({ name: '系統', text: '已改名為 ' + nm }); }
+    } else if (t && t !== encodeSave()) {
+      importSave();
+    }
+    return;
+  }
+  gameState = 'select'; menuTab = panel; fromTown = true;
+  beep(600, 0.08, 'sine', 0.04);
+}
+function updateTown() {
+  const tp = townP;
+  if (chatting) { tp.walk = 0; return; }
+  let mx = 0, my = 0;
+  if (keys['arrowleft'] || keys['a']) mx = -1;
+  if (keys['arrowright'] || keys['d']) mx = 1;
+  if (keys['arrowup'] || keys['w']) my = -1;
+  if (keys['arrowdown'] || keys['s']) my = 1;
+  if (mx !== 0 || my !== 0) { townTargetX = null; townTargetNpc = null; } // 鍵盤取消點擊走動
+  else if (townTargetX !== null) { // 點擊:走向目標
+    const dx = townTargetX - tp.x, dy = townTargetY - tp.y, dist = Math.hypot(dx, dy);
+    if (dist < 6) {
+      townTargetX = null;
+      if (townTargetNpc && Math.hypot(townTargetNpc.x - tp.x, townTargetNpc.y - tp.y) < 78) { const n = townTargetNpc; townTargetNpc = null; openTownPanel(n.panel); }
+    } else { mx = dx / dist; my = dy / dist; }
+  }
+  if (mx !== 0 || my !== 0) {
+    const l = Math.hypot(mx, my) || 1, sp = 3.4;
+    tp.x += mx / l * sp; tp.y += my / l * sp; tp.walk++;
+    if (Math.abs(mx) > 0.3) tp.face = mx > 0 ? 1 : -1;
+  } else tp.walk = 0;
+  tp.x = Math.max(30, Math.min(TOWN_W - 30, tp.x));
+  tp.y = Math.max(150, Math.min(TOWN_H - 40, tp.y));
+  townCamX += ((Math.max(0, Math.min(TOWN_W - W, tp.x - W / 2))) - townCamX) * 0.12;
+  townCamY += ((Math.max(0, Math.min(TOWN_H - H, tp.y - H / 2))) - townCamY) * 0.12;
+  nearNpc = null;
+  for (const n of NPCS) if (Math.hypot(n.x - tp.x, n.y - tp.y) < 78) { nearNpc = n; break; }
+  if (nearNpc && (keys['e'] || keys['space'])) { keys['e'] = false; keys['space'] = false; openTownPanel(nearNpc.panel); }
+}
+function drawBuildingTop(n) { // 俯視建築(程式繪製:屋頂+牆+門窗,比 Kenney 屋頂平鋪更像房子)
+  const bx = n.x, by = n.y - 26;
+  if (n.build === 'portal') {
+    ctx.fillStyle = 'rgba(176,90,224,0.22)'; ctx.beginPath(); ctx.ellipse(bx, by + 20, 48, 22, 0, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = (Math.floor(frame / 8) + i) % 2 === 0 ? '#b05ae0' : '#7dffd6'; ctx.fillRect(bx - 28 + i * 7, by - 56 + i * 10, 56 - i * 14, 76 - i * 16); }
+  } else if (n.build === 'board') {
+    ctx.fillStyle = '#6a4a2a'; ctx.fillRect(bx - 4, by - 4, 8, 28);
+    ctx.fillStyle = '#c8b088'; ctx.fillRect(bx - 34, by - 42, 68, 40);
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 2; ctx.strokeRect(bx - 34, by - 42, 68, 40);
+  } else {
+    ctx.fillStyle = '#4a3a52'; ctx.fillRect(bx - 56, by - 60, 112, 70);
+    ctx.fillStyle = n.col; ctx.beginPath(); ctx.moveTo(bx - 64, by - 60); ctx.lineTo(bx + 64, by - 60); ctx.lineTo(bx + 44, by - 92); ctx.lineTo(bx - 44, by - 92); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2a2030'; ctx.fillRect(bx - 14, by - 22, 28, 32);
+    ctx.fillStyle = 'rgba(255,220,120,0.4)'; ctx.fillRect(bx - 44, by - 48, 20, 18); ctx.fillRect(bx + 24, by - 48, 20, 18);
+  }
+}
+function drawFigureTop(x, y, col, face) { // 俯視小人,腳底在 (x,y)
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.ellipse(x, y, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = col; ctx.fillRect(x - 8, y - 22, 16, 20);
+  ctx.fillStyle = '#f0c090'; ctx.fillRect(x - 6, y - 33, 12, 12);
+  ctx.fillStyle = '#2a2030'; ctx.fillRect(x - 6, y - 33, 12, 4);
+  ctx.fillStyle = '#000'; ctx.fillRect(x + face * 2 - 1, y - 27, 2, 2);
+}
+function drawCharTile(idx, x, y) { // Kenney 角色(腳底在 x,y)
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+  if (tsheetReady) drawTile(idx, x - 20, y - 44, 2.5); else drawFigureTop(x, y, '#c84a4a', 1);
+}
+function drawDecor(d) {
+  const x = d.x, y = d.y;
+  if (tsheetReady && (d.type === 'tree' || d.type === 'lamp' || d.type === 'barrel' || d.type === 'crate')) {
+    if (d.type === 'lamp') {
+      const gl = 0.4 + Math.sin(frame * 0.1) * 0.12;
+      ctx.fillStyle = 'rgba(255,220,120,' + gl.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(x, y - 52, 32, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x, y, d.type === 'tree' ? 22 : 10, d.type === 'tree' ? 8 : 4, 0, 0, Math.PI * 2); ctx.fill();
+    if (d.type === 'tree') { const t = (d.x & 64) ? [313, 340] : [232, 259]; drawTile(t[0], x - 24, y - 96, 3); drawTile(t[1], x - 24, y - 48, 3); }
+    else if (d.type === 'lamp') { drawTile(164, x - 16, y - 64, 2); drawTile(191, x - 16, y - 32, 2); }
+    else if (d.type === 'barrel') drawTile(327, x - 16, y - 32, 2);
+    else if (d.type === 'crate') drawTile(273, x - 16, y - 32, 2);
+    return;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  if (d.type === 'tree') {
+    ctx.beginPath(); ctx.ellipse(x, y, 22, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3a22'; ctx.fillRect(x - 5, y - 32, 10, 32);
+    ctx.fillStyle = '#2f6b2a'; ctx.beginPath(); ctx.arc(x, y - 48, 27, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3f8a34'; ctx.beginPath(); ctx.arc(x - 12, y - 54, 17, 0, Math.PI * 2); ctx.arc(x + 13, y - 50, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,180,0.16)'; ctx.beginPath(); ctx.arc(x - 9, y - 58, 9, 0, Math.PI * 2); ctx.fill();
+  } else if (d.type === 'lamp') {
+    ctx.beginPath(); ctx.ellipse(x, y, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3a3450'; ctx.fillRect(x - 3, y - 50, 6, 50);
+    ctx.fillStyle = '#2a2438'; ctx.fillRect(x - 8, y - 60, 16, 12);
+    const gl = 0.55 + Math.sin(frame * 0.1) * 0.14;
+    ctx.fillStyle = 'rgba(255,220,120,0.14)'; ctx.beginPath(); ctx.arc(x, y - 54, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,224,128,' + gl.toFixed(2) + ')'; ctx.fillRect(x - 5, y - 58, 10, 8);
+  } else if (d.type === 'fountain') {
+    ctx.beginPath(); ctx.ellipse(x, y + 6, 58, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7a7a8a'; ctx.beginPath(); ctx.ellipse(x, y, 56, 24, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a5a6a'; ctx.beginPath(); ctx.ellipse(x, y, 48, 19, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a7ac0'; ctx.beginPath(); ctx.ellipse(x, y, 42, 16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6a9ad8'; ctx.beginPath(); ctx.ellipse(x, y - 2, 38, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7a7a8a'; ctx.fillRect(x - 8, y - 36, 16, 34);
+    for (let i = 0; i < 8; i++) { const a = frame * 0.09 + i * 0.8; ctx.fillStyle = 'rgba(150,200,255,0.6)'; ctx.fillRect(x + Math.cos(a) * 14 - 1, y - 40 + Math.abs(Math.sin(a * 1.5)) * 8, 2, 3); }
+    ctx.fillStyle = '#9ad0ff'; ctx.fillRect(x - 3, y - 50, 6, 14);
+  } else if (d.type === 'bush') {
+    ctx.beginPath(); ctx.ellipse(x, y, 17, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2f6b2a'; ctx.beginPath(); ctx.arc(x - 9, y - 8, 12, 0, Math.PI * 2); ctx.arc(x + 9, y - 8, 12, 0, Math.PI * 2); ctx.arc(x, y - 15, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3f8a34'; ctx.beginPath(); ctx.arc(x - 4, y - 15, 6, 0, Math.PI * 2); ctx.fill();
+  } else if (d.type === 'flower') {
+    ctx.fillStyle = '#3f8a34'; ctx.fillRect(x - 12, y - 2, 24, 4);
+    const cols = ['#ff6b8a', '#ffd23e', '#c060ff', '#6f9dff'];
+    for (let i = 0; i < 5; i++) { const fy = y - 8 - ((i * 7 + d.x) % 6); ctx.fillStyle = cols[(i + (d.x >> 5)) % 4]; ctx.fillRect(x - 11 + i * 5, fy, 4, 4); ctx.fillStyle = '#ffe680'; ctx.fillRect(x - 10 + i * 5, fy + 1, 2, 2); }
+  } else if (d.type === 'barrel') {
+    ctx.beginPath(); ctx.ellipse(x, y, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - 9, y - 26, 18, 26);
+    ctx.fillStyle = '#8a6a3a'; ctx.fillRect(x - 9, y - 21, 18, 3); ctx.fillRect(x - 9, y - 9, 18, 3);
+    ctx.fillStyle = '#5a3a1a'; ctx.fillRect(x - 9, y - 26, 18, 3);
+  } else if (d.type === 'crate') {
+    ctx.fillRect(x - 12, y - 2, 24, 4);
+    ctx.fillStyle = '#8a6a3a'; ctx.fillRect(x - 12, y - 24, 24, 24);
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 2; ctx.strokeRect(x - 12, y - 24, 24, 24);
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 24); ctx.lineTo(x + 12, y); ctx.moveTo(x + 12, y - 24); ctx.lineTo(x - 12, y); ctx.stroke();
+  }
+}
+function renderTown() {
+  ctx.fillStyle = '#2f3a26'; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.translate(-Math.round(townCamX), -Math.round(townCamY));
+  if (tsheetReady) { // Kenney 草地 + 中央石板廣場
+    const gs = 32, gx0 = Math.floor(townCamX / gs) * gs, gy0 = Math.floor(townCamY / gs) * gs;
+    for (let gx = gx0; gx < gx0 + W + gs; gx += gs) for (let gy = gy0; gy < gy0 + H + gs; gy += gs) {
+      const dxp = (gx + 16 - 700) / 250, dyp = (gy + 16 - 490) / 210;
+      drawTile(dxp * dxp + dyp * dyp < 1 ? 36 : 28, gx, gy, 2);
+    }
+  } else {
+    const gx0 = Math.floor(townCamX / 48) * 48, gy0 = Math.floor(townCamY / 48) * 48;
+    for (let gx = gx0; gx < gx0 + W + 48; gx += 48) for (let gy = gy0; gy < gy0 + H + 48; gy += 48) { ctx.fillStyle = (((gx / 48) + (gy / 48)) & 1) ? '#3a4a2e' : '#41522f'; ctx.fillRect(gx, gy, 48, 48); }
+    ctx.fillStyle = '#6a5a46'; ctx.beginPath(); ctx.ellipse(700, 490, 234, 192, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // 深度排序:裝飾 / NPC(含建築) / 玩家 依腳底 y 前後遮擋
+  const ents = [];
+  for (const d of TOWN_DECOR) ents.push({ y: d.y, decor: d });
+  for (const n of NPCS) ents.push({ y: n.y, n: n });
+  ents.push({ y: townP.y, self: true });
+  ents.sort((a, b) => a.y - b.y);
+  ctx.textAlign = 'center';
+  for (const e of ents) {
+    if (e.self) {
+      drawCharTile(PLAYER_CHAR, townP.x, townP.y);
+      ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace';
+      ctx.fillText(meta.playerName || '勇者', townP.x, townP.y - 46);
+    } else if (e.decor) {
+      drawDecor(e.decor);
+    } else {
+      const n = e.n;
+      drawBuildingTop(n);
+      drawCharTile(n.char, n.x, n.y);
+      ctx.fillStyle = n.col; ctx.font = 'bold 12px "Courier New",monospace';
+      ctx.fillText(n.name, n.x, n.y - 42);
+      ctx.fillStyle = '#c8cdec'; ctx.font = '9px "Courier New",monospace';
+      ctx.fillText(n.sub, n.x, n.y - 30);
+      if (nearNpc === n) { ctx.fillStyle = Math.floor(frame / 20) % 2 === 0 ? '#ffe680' : '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('Space 互動', n.x, n.y - 56); }
+    }
+  }
+  ctx.restore();
+  // 氛圍:黃昏暖調 + 暗角
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.5, W / 2, H / 2, H * 0.92);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(15,10,30,0.22)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  // HUD
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(20,22,43,0.7)'; ctx.fillRect(0, 0, 300, 30);
+  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 15px "Courier New",monospace';
+  ctx.fillText('城鎮', 12, 20);
+  ctx.fillStyle = '#7dffd6'; ctx.fillText('靈魂 ' + meta.souls, 80, 20);
+  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 12px "Courier New",monospace';
+  ctx.fillText('石' + meta.mats.enh + ' 塵' + meta.mats.ench, 200, 20);
+  drawChat();
+}
+function drawChat() {
+  const cx = 14, cw = 360, ih = 24, ch = 108, cy = H - ch - ih - 14;
+  ctx.fillStyle = 'rgba(0,0,0,0.42)'; ctx.fillRect(cx, cy, cw, ch);
+  ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(cx, cy, cw, ch);
+  ctx.textAlign = 'left'; ctx.font = '12px "Courier New",monospace';
+  const show = chatMsgs.slice(-6);
+  for (let i = 0; i < show.length; i++) {
+    const m = show[i];
+    ctx.fillStyle = m.name === '系統' ? '#8aa8ff' : (m.name === (meta.playerName || '勇者') ? '#7dffd6' : '#c8cdec');
+    let line = '[' + m.name + '] ' + m.text;
+    if (line.length > 34) line = line.slice(0, 34);
+    ctx.fillText(line, cx + 8, cy + 18 + i * 16);
+  }
+  const iy = cy + ch + 4;
+  ctx.fillStyle = chatting ? 'rgba(125,255,214,0.15)' : 'rgba(0,0,0,0.42)'; ctx.fillRect(cx, iy, cw, ih);
+  ctx.strokeStyle = chatting ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(cx, iy, cw, ih);
+  ctx.fillStyle = chatting ? '#fff' : '#667';
+  ctx.fillText(chatting ? (chatInput + (Math.floor(frame / 15) % 2 ? '_' : '')) : '按 Enter 開始聊天', cx + 8, iy + 16);
 }
 
 // ---------- menu ----------
@@ -2205,6 +2487,14 @@ function renderMenu() {
     ctx.fillStyle = on ? '#fff' : '#8890b8'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
     ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 21);
   }
+  backTownBtn = null;
+  if (fromTown) {
+    backTownBtn = { x: 598, y: 30, w: 132, h: 32 }; // 標題右側、匯出存檔左側,避開大標題
+    ctx.fillStyle = 'rgba(125,255,214,0.18)'; ctx.fillRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
+    ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 1; ctx.strokeRect(backTownBtn.x, backTownBtn.y, backTownBtn.w, backTownBtn.h);
+    ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText('← 返回城鎮', backTownBtn.x + backTownBtn.w / 2, backTownBtn.y + 21);
+  }
   if (menuTab === 'skills') {
     selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
     renderSkillTab();
@@ -2289,7 +2579,10 @@ function renderMenu() {
 // ---------- main loop ----------
 function loop() {
   frame++;
-  if (gameState === 'select') {
+  if (gameState === 'town') {
+    updateTown();
+    renderTown();
+  } else if (gameState === 'select') {
     renderMenu();
   } else {
     if (gameState === 'play') update();
@@ -2300,4 +2593,5 @@ function loop() {
   requestAnimationFrame(loop);
 }
 calcStats();
+gameState = 'town'; setHint(HINT_TOWN);
 loop();
