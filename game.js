@@ -243,6 +243,24 @@ function drawSprite(rows, x, y, s, flip, flash, recolor) {
     }
   }
 }
+function drawEquippedAura(x, y, w, h) {
+  const id = activityState && activityState.aura;
+  if (!id || id === 'none' || !AURA_DEFS[id]) return;
+  const col = AURA_DEFS[id].color, pulse = 0.72 + Math.sin(frame * 0.09) * 0.12;
+  ctx.save();
+  ctx.globalAlpha = 0.24 * pulse; ctx.fillStyle = col;
+  ctx.beginPath(); ctx.ellipse(x, y + h * 0.42, w * 1.25, h * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 0.82; ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(x, y + h * 0.42, w * (1.05 + Math.sin(frame * 0.07) * 0.08), h * 0.18, 0, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 5; i++) {
+    const phase = (frame * (id === 'ember' ? 1.5 : 1) + i * 17) % 58;
+    const px = x + Math.sin(i * 2.3 + frame * 0.045) * w * 0.82;
+    const py = y + h * 0.45 - phase * 0.72;
+    ctx.globalAlpha = Math.max(0, 0.82 - phase / 90); ctx.fillStyle = col;
+    ctx.fillRect(Math.round(px) - 2, Math.round(py) - 2, id === 'ember' ? 4 : 3, id === 'ember' ? 4 : 3);
+  }
+  ctx.restore();
+}
 
 // ---------- meta progression ----------
 const meta = {
@@ -588,6 +606,124 @@ function importSave() {
   beep(900, 0.1, 'sine', 0.04);
 }
 loadMeta();
+
+// ---------- adventure contracts / weekly activity ----------
+const ACTIVITY_KEY = 'pixelrogue_activity_v1';
+const DAILY_TASKS = [
+  { id:'daily_kills', stat:'kills', title:'清剿魔物', desc:'擊敗 25 隻怪物', target:25, points:10 },
+  { id:'daily_floors', stat:'floors', title:'深入地城', desc:'通過 3 個樓層', target:3, points:10 },
+  { id:'daily_skills', stat:'skills', title:'磨練技藝', desc:'成功施放 18 次技能', target:18, points:10 }
+];
+const WEEKLY_TASKS = [
+  { id:'weekly_kills', stat:'kills', title:'本週討伐', desc:'擊敗 180 隻怪物', target:180, points:30 },
+  { id:'weekly_floors', stat:'floors', title:'地城遠征', desc:'累計通過 20 個樓層', target:20, points:30 },
+  { id:'weekly_bosses', stat:'bosses', title:'首領獵人', desc:'擊敗 3 隻地城首領', target:3, points:30 }
+];
+const ACTIVITY_MILESTONES = [
+  { points:50, label:'強化石 x2', enh:2, ench:0 },
+  { points:120, label:'餘燼光環＋附魔塵 x2', enh:0, ench:2, aura:'ember' },
+  { points:220, label:'虛空光環＋石 x4／塵 x3', enh:4, ench:3, aura:'void' }
+];
+const AURA_DEFS = {
+  none:{ name:'無光環', color:'#8890b8' },
+  ember:{ name:'餘燼光環', color:'#ff8c2e' },
+  void:{ name:'虛空光環', color:'#b05ae0' }
+};
+const activityState = {
+  day:'', week:'', activity:0,
+  daily:{ kills:0, floors:0, skills:0, bosses:0 }, weekly:{ kills:0, floors:0, skills:0, bosses:0 },
+  claimedDaily:{}, claimedWeekly:{}, milestones:{}, cosmetics:['none'], aura:'none'
+};
+function localDayKey(date) {
+  const d = date || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function localWeekKey(date) {
+  const d = new Date((date || new Date()).getTime()); d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localDayKey(d);
+}
+function saveActivity() {
+  try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(activityState)); } catch (err) {}
+}
+function refreshActivityPeriods(now) {
+  const day = localDayKey(now), week = localWeekKey(now);
+  let changed = false;
+  if (activityState.week !== week) {
+    activityState.week = week; activityState.activity = 0;
+    activityState.weekly = { kills:0, floors:0, skills:0, bosses:0 };
+    activityState.claimedWeekly = {}; activityState.milestones = {};
+    changed = true;
+  }
+  if (activityState.day !== day) {
+    activityState.day = day;
+    activityState.daily = { kills:0, floors:0, skills:0, bosses:0 };
+    activityState.claimedDaily = {};
+    changed = true;
+  }
+  if (changed) saveActivity();
+}
+function loadActivity() {
+  try {
+    const d = JSON.parse(localStorage.getItem(ACTIVITY_KEY));
+    if (d && typeof d === 'object') {
+      activityState.day = typeof d.day === 'string' ? d.day : '';
+      activityState.week = typeof d.week === 'string' ? d.week : '';
+      activityState.activity = Math.max(0, Math.min(300, d.activity | 0));
+      for (const scope of ['daily','weekly']) for (const stat of ['kills','floors','skills','bosses']) activityState[scope][stat] = Math.max(0, (d[scope] && d[scope][stat]) | 0);
+      activityState.claimedDaily = d.claimedDaily && typeof d.claimedDaily === 'object' ? d.claimedDaily : {};
+      activityState.claimedWeekly = d.claimedWeekly && typeof d.claimedWeekly === 'object' ? d.claimedWeekly : {};
+      activityState.milestones = d.milestones && typeof d.milestones === 'object' ? d.milestones : {};
+      activityState.cosmetics = Array.isArray(d.cosmetics) ? d.cosmetics.filter(id => AURA_DEFS[id]) : ['none'];
+      if (!activityState.cosmetics.includes('none')) activityState.cosmetics.unshift('none');
+      activityState.aura = activityState.cosmetics.includes(d.aura) ? d.aura : 'none';
+    }
+  } catch (err) {}
+  refreshActivityPeriods();
+}
+function activityProgress(stat, amount) {
+  refreshActivityPeriods();
+  const n = Math.max(0, amount == null ? 1 : amount | 0);
+  activityState.daily[stat] = Math.max(0, (activityState.daily[stat] || 0) + n);
+  activityState.weekly[stat] = Math.max(0, (activityState.weekly[stat] || 0) + n);
+  saveActivity();
+}
+function claimActivityTask(scope, id) {
+  refreshActivityPeriods();
+  const daily = scope === 'daily', defs = daily ? DAILY_TASKS : WEEKLY_TASKS;
+  const task = defs.find(t => t.id === id), claims = daily ? activityState.claimedDaily : activityState.claimedWeekly;
+  const progress = daily ? activityState.daily : activityState.weekly;
+  if (!task || claims[id] || (progress[task.stat] || 0) < task.target) return;
+  claims[id] = true; activityState.activity = Math.min(300, activityState.activity + task.points);
+  saveActivity();
+  menuMsg = { text: task.title + ' 完成：活躍 +' + task.points, color:'#7dffd6', t:240 };
+  playSfx('uiConfirm');
+}
+function claimActivityMilestone(points) {
+  refreshActivityPeriods();
+  const reward = ACTIVITY_MILESTONES.find(r => r.points === points);
+  if (!reward || activityState.milestones[points] || activityState.activity < points) return;
+  activityState.milestones[points] = true;
+  meta.mats.enh += reward.enh || 0; meta.mats.ench += reward.ench || 0;
+  if (reward.aura && !activityState.cosmetics.includes(reward.aura)) {
+    activityState.cosmetics.push(reward.aura); activityState.aura = reward.aura;
+  }
+  saveMeta(); saveActivity();
+  menuMsg = { text:'活躍 ' + points + ' 獎勵：' + reward.label, color:'#ffe680', t:300 };
+  playSfx('enhanceSuccess');
+}
+function equipAura(id) {
+  if (!activityState.cosmetics.includes(id) || !AURA_DEFS[id]) return;
+  activityState.aura = id; saveActivity(); playSfx('uiSelect', 0.7);
+}
+function hasActivityReward() {
+  refreshActivityPeriods();
+  const taskReady = (defs, progress, claims) => defs.some(t => !claims[t.id] && (progress[t.stat] || 0) >= t.target);
+  return taskReady(DAILY_TASKS, activityState.daily, activityState.claimedDaily)
+    || taskReady(WEEKLY_TASKS, activityState.weekly, activityState.claimedWeekly)
+    || ACTIVITY_MILESTONES.some(m => !activityState.milestones[m.points] && activityState.activity >= m.points);
+}
+loadActivity();
 
 // ---------- state ----------
 let gameState = 'select';
@@ -1035,6 +1171,7 @@ function trySkill(i) {
   const t = talentOf(id);
   const result = SKILL_FX[id](t);
   if (result === false) { p.slotCd[i] = 20; return; }
+  activityProgress('skills', 1);
   if (!result || !result.free) p.mp -= def.mp;
   p.slotCd[i] = result && result.resetCd ? 0 : Math.max(6, Math.round(def.cd * t.cd * cooldownMul()));
 }
@@ -1431,6 +1568,8 @@ function hitMon(m, d, crit, noChain) {
   playSfx(crit ? 'critical' : 'hit');
   if (m.hp <= 0) {
     kills++;
+    activityProgress('kills', 1);
+    if (m.type === 'boss') activityProgress('bosses', 1);
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
     if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
@@ -1592,7 +1731,7 @@ function renderSettings() {
   if (menuMsg) { ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(menuMsg.text, W / 2, my + mh + 22); if (--menuMsg.t <= 0) menuMsg = null; }
   ctx.textAlign = 'left';
 }
-const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [];
+const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [], activityBtns = [];
 let gachaBtn = null;
 function dismantleStash(it) {
   const i = meta.stash.indexOf(it);
@@ -1787,6 +1926,16 @@ function handleTap(mx, my) {
       }
       return;
     }
+    if (menuTab === 'activity') {
+      for (const b of activityBtns) {
+        if (!inside(b)) continue;
+        if (b.act === 'task') claimActivityTask(b.scope, b.id);
+        else if (b.act === 'milestone') claimActivityMilestone(b.points);
+        else if (b.act === 'aura') equipAura(b.id);
+        return;
+      }
+      return;
+    }
     for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
     for (const b of metaBtns) if (inside(b)) { buyMeta(b.d); return; }
     if (inside(startBtn)) resetRun();
@@ -1975,6 +2124,7 @@ function update() {
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
     floor++;
+    activityProgress('floors', 1);
     p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.15));
     genFloor(floor);
     p.x = 80; p.y = 468; p.vy = 0;
@@ -2458,6 +2608,7 @@ function render() {
     ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
   }
   // player
+  drawEquippedAura(p.x, p.y - p.h / 2, p.w, p.h);
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
     const s = 3;
     const bob = (p.onGround && p.walk > 0) ? (Math.floor(p.walk / 6) % 2) : 0;
@@ -2897,7 +3048,7 @@ const NPCS = [
   { x: 380,  y: 300, name: '傳送門',     sub: '選職業・出發冒險', panel: 'base',   col: '#b05ae0', build: 'portal', char: 186 },
   { x: 780,  y: 240, name: '技能訓練師', sub: '抽取技能・天賦樹', panel: 'skills', col: '#7dffd6', build: 'shop',   char: 24 },
   { x: 1060, y: 430, name: '倉庫管理員', sub: '裝備倉庫',         panel: 'stash',  col: '#d8b365', build: 'shop',   char: 267 },
-  { x: 470,  y: 620, name: '公告欄',     sub: '存檔・改名',       panel: 'save',   col: '#8aa8ff', build: 'board',  char: 348 }
+  { x: 470,  y: 620, name: '冒險公告欄', sub: '每日任務・每週挑戰', panel: 'activity', col: '#8aa8ff', build: 'board', char: 348 }
 ];
 const townP = { x: 700, y: 760, face: 1, walk: 0 };
 // 裝飾物(參與深度排序)
@@ -3061,6 +3212,7 @@ function renderTown() {
   ctx.textAlign = 'center';
   for (const e of ents) {
     if (e.self) {
+      drawEquippedAura(townP.x, townP.y - 24, 26, 48);
       drawCharTile(PLAYER_CHAR, townP.x, townP.y);
       ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace';
       ctx.fillText(meta.playerName || '勇者', townP.x, townP.y - 46);
@@ -3074,6 +3226,7 @@ function renderTown() {
       ctx.fillText(n.name, n.x, n.y - 42);
       ctx.fillStyle = '#c8cdec'; ctx.font = '9px "Courier New",monospace';
       ctx.fillText(n.sub, n.x, n.y - 30);
+      if (n.panel === 'activity' && hasActivityReward()) { ctx.fillStyle = '#ffe680'; ctx.font = 'bold 18px "Courier New",monospace'; ctx.fillText('!', n.x + 19, n.y - 47); }
       if (nearNpc === n) { ctx.fillStyle = Math.floor(frame / 20) % 2 === 0 ? '#ffe680' : '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('Space 互動', n.x, n.y - 56); }
     }
   }
@@ -3084,12 +3237,13 @@ function renderTown() {
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
   // HUD
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(20,22,43,0.7)'; ctx.fillRect(0, 0, 300, 30);
+  ctx.fillStyle = 'rgba(20,22,43,0.7)'; ctx.fillRect(0, 0, 420, 30);
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 15px "Courier New",monospace';
   ctx.fillText('城鎮', 12, 20);
   ctx.fillStyle = '#7dffd6'; ctx.fillText('靈魂 ' + meta.souls, 80, 20);
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 12px "Courier New",monospace';
   ctx.fillText('石' + meta.mats.enh + ' 塵' + meta.mats.ench, 200, 20);
+  ctx.fillStyle = '#b98cff'; ctx.fillText('活躍 ' + activityState.activity + '/300', 306, 20);
   statsBtn = { x: W - 102, y: 5, w: 92, h: 25 };
   ctx.fillStyle = 'rgba(125,255,214,0.14)'; ctx.fillRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
   ctx.strokeStyle = '#547f80'; ctx.lineWidth = 1; ctx.strokeRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
@@ -3461,28 +3615,94 @@ function renderSkillTab() {
   }
   ctx.fillStyle = '#746d65'; ctx.font = '11px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('Enter 開始冒險', 30, 494);
 }
+function renderActivityTaskPanel(scope, x, y, w, defs, title, resetText) {
+  const daily = scope === 'daily', progress = daily ? activityState.daily : activityState.weekly;
+  const claims = daily ? activityState.claimedDaily : activityState.claimedWeekly;
+  const col = daily ? '#7dffd6' : '#b98cff';
+  drawStonePanel(x, y, w, 232, title);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#6f718c'; ctx.font = '10px ' + STAT_FONT;
+  ctx.fillText(resetText, x + w - 12, y + 18);
+  for (let i = 0; i < defs.length; i++) {
+    const task = defs[i], py = y + 32 + i * 62, value = Math.min(task.target, progress[task.stat] || 0);
+    const done = value >= task.target, claimed = !!claims[task.id];
+    ctx.fillStyle = claimed ? 'rgba(125,255,214,0.055)' : 'rgba(255,255,255,0.035)'; ctx.fillRect(x + 10, py, w - 20, 54);
+    ctx.strokeStyle = claimed ? 'rgba(125,255,214,0.28)' : '#34364d'; ctx.lineWidth = 1; ctx.strokeRect(x + 10, py, w - 20, 54);
+    ctx.textAlign = 'left'; ctx.fillStyle = claimed ? '#788c87' : '#e3e5f5'; ctx.font = 'bold 13px ' + STAT_FONT; ctx.fillText(task.title, x + 20, py + 18);
+    ctx.fillStyle = '#777b9b'; ctx.font = '10px ' + STAT_FONT; ctx.fillText(task.desc, x + 20, py + 34);
+    const bx = x + 20, by = py + 40, bw = w - 144;
+    ctx.fillStyle = '#17192a'; ctx.fillRect(bx, by, bw, 5);
+    ctx.fillStyle = col; ctx.fillRect(bx, by, bw * value / task.target, 5);
+    ctx.textAlign = 'right'; ctx.fillStyle = done ? col : '#8b8eaa'; ctx.font = 'bold 10px ' + STAT_FONT;
+    ctx.fillText(value + '/' + task.target + '  +' + task.points, x + w - 102, py + 20);
+    const b = { x:x + w - 90, y:py + 10, w:68, h:34, act:'task', scope, id:task.id };
+    if (done && !claimed) activityBtns.push(b);
+    ctx.fillStyle = claimed ? 'rgba(125,255,214,0.08)' : done ? 'rgba(125,255,214,0.22)' : 'rgba(255,255,255,0.035)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = claimed ? '#42675f' : done ? col : '#393b50'; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.textAlign = 'center'; ctx.fillStyle = claimed ? '#66847d' : done ? '#fff' : '#646780'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillText(claimed ? '已領取' : done ? '領取' : '進行中', b.x + b.w / 2, b.y + 22);
+  }
+}
+function renderActivityTab() {
+  refreshActivityPeriods(); activityBtns.length = 0;
+  renderActivityTaskPanel('daily', 24, 112, 448, DAILY_TASKS, '每 日 任 務', '每日 00:00 重置');
+  renderActivityTaskPanel('weekly', 488, 112, 448, WEEKLY_TASKS, '每 週 挑 戰', '週一 00:00 重置');
+
+  const x = 24, y = 356, w = 912;
+  drawStonePanel(x, y, w, 158, '本 週 活 躍  •  ' + activityState.activity + ' / 300');
+  const barX = x + 18, barY = y + 31, barW = w - 36;
+  ctx.fillStyle = '#17192a'; ctx.fillRect(barX, barY, barW, 14);
+  const ag = ctx.createLinearGradient(barX, 0, barX + barW, 0); ag.addColorStop(0, '#7dffd6'); ag.addColorStop(1, '#b05ae0');
+  ctx.fillStyle = ag; ctx.fillRect(barX, barY, barW * activityState.activity / 300, 14);
+  ctx.strokeStyle = '#4e526c'; ctx.strokeRect(barX, barY, barW, 14);
+  for (const m of ACTIVITY_MILESTONES) {
+    const mx = barX + barW * m.points / 300;
+    ctx.fillStyle = activityState.activity >= m.points ? '#ffe680' : '#656982'; ctx.fillRect(mx - 1, barY - 3, 2, 20);
+    ctx.textAlign = 'center'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.fillText(String(m.points), mx, barY + 28);
+  }
+  for (let i = 0; i < ACTIVITY_MILESTONES.length; i++) {
+    const m = ACTIVITY_MILESTONES[i], bx = x + 14 + i * 299, by = y + 68, claimed = !!activityState.milestones[m.points], ready = activityState.activity >= m.points;
+    const b = { x:bx, y:by, w:285, h:42, act:'milestone', points:m.points };
+    if (ready && !claimed) activityBtns.push(b);
+    ctx.fillStyle = claimed ? 'rgba(125,255,214,0.06)' : ready ? 'rgba(255,230,128,0.12)' : 'rgba(255,255,255,0.028)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = claimed ? '#42675f' : ready ? '#c8a64f' : '#35374b'; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.textAlign = 'left'; ctx.fillStyle = ready ? '#ffe680' : '#74778e'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(m.points + ' 活躍', bx + 10, by + 16);
+    ctx.fillStyle = claimed ? '#68857d' : ready ? '#e2e3ef' : '#64677b'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(claimed ? '✓ 已領取' : m.label, bx + 10, by + 31);
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = '#9da1bc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('外觀光環', x + 18, y + 137);
+  let ax = x + 105;
+  for (const id of Object.keys(AURA_DEFS)) {
+    const a = AURA_DEFS[id], unlocked = activityState.cosmetics.includes(id), equipped = activityState.aura === id;
+    const b = { x:ax, y:y + 118, w:126, h:27, act:'aura', id };
+    if (unlocked) activityBtns.push(b);
+    ctx.fillStyle = equipped ? a.color : 'rgba(255,255,255,0.035)'; ctx.globalAlpha = equipped ? 0.28 : 1; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1;
+    ctx.strokeStyle = equipped ? a.color : unlocked ? '#565a72' : '#303244'; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.textAlign = 'center'; ctx.fillStyle = equipped ? '#fff' : unlocked ? '#aeb2ca' : '#55586c'; ctx.font = 'bold 10px ' + STAT_FONT;
+    ctx.fillText(unlocked ? (equipped ? '✓ ' + a.name : a.name) : '🔒 ' + a.name, b.x + b.w / 2, b.y + 18);
+    ax += 136;
+  }
+}
 function renderMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, '#1a1c2c'); g.addColorStop(1, '#2c2f4a');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 40px "Courier New",monospace';
-  ctx.fillText('像 素 地 城', W / 2, 70);
+  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 34px "Courier New",monospace';
+  ctx.fillText('像 素 地 城', 600, 68);
   ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 18px "Courier New",monospace';
-  ctx.fillText('靈魂 ' + meta.souls + (bestFloor > 0 ? '   最深 ' + bestFloor + ' 層' : ''), W / 2, 104);
+  ctx.fillText('靈魂 ' + meta.souls + (bestFloor > 0 ? '   最深 ' + bestFloor + ' 層' : ''), 600, 102);
   // 存檔碼按鈕
   gearBtn = { x: 906, y: 28, w: 38, h: 38 };
   ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
   ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(gearBtn.x, gearBtn.y, gearBtn.w, gearBtn.h);
   drawGear(gearBtn.x + gearBtn.w / 2, gearBtn.y + gearBtn.h / 2, 12, '#c8cdec');
   if (menuMsg) {
-    ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace';
-    ctx.fillText(menuMsg.text, 844, 78);
+    ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.textAlign = 'right';
+    ctx.fillText(menuMsg.text, 892, 78); ctx.textAlign = 'center';
     if (--menuMsg.t <= 0) menuMsg = null;
   }
-  // 分頁:基地 / 技能 / 倉庫
+  // 分頁:基地 / 技能 / 倉庫 / 契約
   tabBtns.length = 0;
-  const tabs = [['base', '基 地'], ['skills', '技 能'], ['stash', '倉 庫']];
+  const tabs = [['base', '基 地'], ['skills', '技 能'], ['stash', '倉 庫'], ['activity', '契 約']];
   for (let i = 0; i < tabs.length; i++) {
     const b = { x: 20 + i * 108, y: 30, w: 98, h: 32, tab: tabs[i][0] };
     tabBtns.push(b);
@@ -3492,6 +3712,7 @@ function renderMenu() {
     ctx.strokeStyle = on ? '#b05ae0' : '#44485f'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? '#fff' : '#8890b8'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
     ctx.fillText(tabs[i][1], b.x + b.w / 2, b.y + 21);
+    if (b.tab === 'activity' && hasActivityReward()) { ctx.fillStyle = '#ffe680'; ctx.beginPath(); ctx.arc(b.x + b.w - 7, b.y + 7, 4, 0, Math.PI * 2); ctx.fill(); }
   }
   backTownBtn = null;
   if (fromTown) {
@@ -3502,16 +3723,21 @@ function renderMenu() {
     ctx.fillText('← 返回城鎮', backTownBtn.x + backTownBtn.w / 2, backTownBtn.y + 21);
   }
   if (menuTab === 'skills') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
     renderSkillTab();
     return;
   }
   if (menuTab === 'stash') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; activityBtns.length = 0;
     renderStashTab();
     return;
   }
-  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
+  if (menuTab === 'activity') {
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
+    renderActivityTab();
+    return;
+  }
+  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
   if (lastRun) {
     ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('上次:第' + lastRun.floor + '層 / 擊殺' + lastRun.kills + ' / 靈魂+' + lastRun.gained, W / 2, 126);
