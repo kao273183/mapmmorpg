@@ -82,13 +82,13 @@ const LIZARD = [
   "............",".rrrrrrrrrr.","ryrrrrrrryr.","rrrrrrrrrrrr","r.rr..rr.rr."
 ];
 const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW };
-function drawSprite(rows, x, y, s, flip, flash) {
+function drawSprite(rows, x, y, s, flip, flash, recolor) {
   const w = rows[0].length;
   for (let r = 0; r < rows.length; r++) {
     for (let c = 0; c < w; c++) {
       const ch = rows[r][c];
       if (ch === '.') continue;
-      ctx.fillStyle = flash ? '#ffffff' : (PAL[ch] || '#f0f');
+      ctx.fillStyle = flash ? '#ffffff' : (recolor && recolor[ch]) || PAL[ch] || '#f0f';
       const cx = flip ? (w - 1 - c) : c;
       ctx.fillRect(Math.round(x + cx * s), Math.round(y + r * s), s, s);
     }
@@ -318,11 +318,11 @@ for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + 
 
 // ---------- biomes(群系:每 5 層一個,決定配色與怪物池)----------
 const BIOMES = [
-  { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', pool:['slime','slime','bat','mush'] },
-  { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', pool:['slime','bat','bat','spore'] },
-  { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', pool:['bomber','charger','slime','spore','charger'] },
-  { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', pool:['icer','splitter','icer','spore','bat'] },
-  { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', pool:['bomber','charger','icer','splitter','bat','spore'] }
+  { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', boss:'草原領主', bcol:'#63cf3c', bcol2:'#3f9127', pool:['slime','slime','bat','mush'] },
+  { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', boss:'洞窟領主', bcol:'#8a7aa8', bcol2:'#5a4a78', pool:['slime','bat','bat','spore'] },
+  { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', boss:'熔岩魔王', bcol:'#ff6b2e', bcol2:'#c0301e', pool:['bomber','charger','slime','spore','charger'] },
+  { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', boss:'冰霜領主', bcol:'#9adcf0', bcol2:'#5a9ac0', pool:['icer','splitter','icer','spore','bat'] },
+  { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', boss:'深淵魔王', bcol:'#b05ae0', bcol2:'#7a2fa8', pool:['bomber','charger','icer','splitter','bat','spore'] }
 ];
 function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 1) / 5))]; }
 
@@ -697,7 +697,7 @@ function genFloor(n) {
   }
   mons = [];
   const count = Math.min(6 + n * 2, 22);
-  const sc = 1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1); // 線性+微幅二次成長,對抗玩家的乘法成長
+  const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1); // 線性+二次成長,深淵(21+)再×1.15
   const xpSc = 1 + 0.15 * (n - 1);
   const eliteCh = Math.min(0.08 + 0.025 * n, 0.4);
   const pool = biomeOf(n).pool;
@@ -714,7 +714,7 @@ function genBossFloor(n) {
   plats.push({ x: 170, y: 405, w: 150 });
   plats.push({ x: worldW - 320, y: 405, w: 150 });
   plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
-  const sc = 1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1);
+  const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
   const hp = Math.round(300 * sc);
   mons = [{
     type: 'boss', x: worldW - 240, y: 500, vx: 0, vy: 0, t: 0, atkT: 120, tele: 0, phase: 1,
@@ -1213,13 +1213,17 @@ function update() {
         if (m.tele === 0 && grounded) {
           m.vy = ph === 3 ? -11.5 : -9; // 跳撲
           m.vx = dir * (2.6 + ph * 0.8);
-          if (ph >= 2) { // 二階段起加吐毒彈(扇形)
-            const nsp = ph === 3 ? 5 : 3;
+          if (ph >= 2) { // 二階段起加吐毒彈(扇形,按群系微調)
+            const bb = biomeOf(floor);
+            const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
+            const chill = bb.name === '冰霜凍原';
+            const nsp = (ph === 3 ? 5 : 3) + (hot ? 2 : 0);
+            const vsc = hot ? 1.25 : 1; // 熔岩彈更快
             for (let i = 0; i < nsp; i++) {
               espits.push({
                 x: m.x, y: m.y - m.h + 6,
-                vx: (p.x - m.x) / 55 + (i - (nsp - 1) / 2) * 1.1,
-                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7)
+                vx: ((p.x - m.x) / 55 + (i - (nsp - 1) / 2) * 1.1) * vsc,
+                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7), chill: chill, col: bb.bcol
               });
             }
             beep(320, 0.12, 'square', 0.04);
@@ -1283,6 +1287,7 @@ function update() {
     s.vy += 0.25; s.x += s.vx; s.y += s.vy;
     if (p.inv === 0 && Math.abs(s.x - p.x) < 15 && Math.abs(s.y - (p.y - p.h / 2)) < p.h / 2 + 8) {
       const d = Math.max(1, s.dmg - armorDef());
+      if (s.chill) { p.chillT = 150; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }
       espits.splice(espits.indexOf(s), 1);
       if (dmgPlayer(d)) return;
       continue;
@@ -1418,7 +1423,8 @@ function render() {
   // monsters
   for (const m of mons) {
     const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
-    drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0);
+    const rc = m.type === 'boss' ? { e: bi.bcol, f: bi.bcol2 } : null;
+    drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
       ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
       ctx.fillText('!', m.x, m.y - m.h - 18);
@@ -1431,10 +1437,10 @@ function render() {
       ctx.fillRect(m.x - bw / 2 + 1, m.y - m.h - 11, (bw - 2) * Math.max(0, m.hp / m.mhp), 3);
     }
   }
-  // boss 毒彈
+  // boss/孢子 彈幕(群系色)
   for (const s of espits) {
-    ctx.fillStyle = '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
-    ctx.fillStyle = '#c99aff'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
   }
   // player
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
@@ -1537,7 +1543,7 @@ function render() {
   ctx.fillText(portal ? '前往傳送門 →' : '殘存 ' + mons.length, 244, 20);
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
-    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, '#b05ae0', '地城領主  第' + bossM.phase + '階段');
+    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, biomeOf(floor).bcol, biomeOf(floor).boss + '  第' + bossM.phase + '階段');
     ctx.textAlign = 'left';
   }
 
