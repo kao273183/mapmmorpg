@@ -43,11 +43,31 @@ const GEAR_ART = {
   },
   acc: ['items/amulet 1.png', 'items/ring 2.png', 'items/amulet 3.png', 'items/ring 8.png', 'items/amulet 6.png']
 };
+const GEAR_SET_ART = {
+  blood_oath: {
+    weapon:'special sword - fire.png', armor:'armor - body (bone).png',
+    helmet:'armor - head (bone).png', boots:'armor - foot (bone).png'
+  },
+  sun_guard: {
+    weapon:'sword - gold.png', armor:'armor - body (gold).png',
+    helmet:'armor - head (gold).png', boots:'armor - foot (gold).png'
+  },
+  starfire: {
+    weapon:'magic staff 3 - red gem.png', armor:'mage clothes 1 (red).png',
+    helmet:'mage hat (red).png', boots:'armor - foot (gold).png'
+  },
+  voidweave: {
+    weapon:'magic staff 3 - purple gem.png', armor:'mage clothes 2 (purple).png',
+    helmet:'mage hat (purple).png', boots:'armor - foot (bone).png'
+  }
+};
 const gearArtImages = {};
 function gearArtPath(it) {
   if (!it) return '';
   const rarity = Math.max(0, Math.min(4, it.r | 0));
   if (it.kind === 'acc') return GEAR_ART_ROOT + GEAR_ART.acc[rarity];
+  const setFile = it.setId && GEAR_SET_ART[it.setId] && GEAR_SET_ART[it.setId][it.kind];
+  if (setFile) return GEAR_ART_ROOT + 'weapons and armor/' + setFile;
   const cls = it.cls || (it.wpn === 'stave' ? 'mage' : (typeof player !== 'undefined' && player.cls) || 'warrior');
   const file = GEAR_ART[cls] && GEAR_ART[cls][it.kind] && GEAR_ART[cls][it.kind][rarity];
   return file ? GEAR_ART_ROOT + 'weapons and armor/' + file : '';
@@ -58,6 +78,12 @@ for (const cls of ['warrior', 'mage']) {
       const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
       if (!gearArtImages[path]) { const img = new Image(); img.src = path; gearArtImages[path] = img; }
     }
+  }
+}
+for (const art of Object.values(GEAR_SET_ART)) {
+  for (const file of Object.values(art)) {
+    const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
+    if (!gearArtImages[path]) { const img = new Image(); img.src = path; gearArtImages[path] = img; }
   }
 }
 for (const file of GEAR_ART.acc) {
@@ -83,7 +109,7 @@ function drawItemIcon(it, x, y, s) { // 在 (x,y) 畫 s×s 圖示
   const cx = x + s / 2, cy = y + s / 2;
   ctx.strokeStyle = '#d8b365'; ctx.lineWidth = Math.max(2, s * 0.11);
   ctx.beginPath(); ctx.arc(cx, cy + s * 0.14, s * 0.26, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = RARITY_COL[it.r];
+  ctx.fillStyle = gearColor(it);
   ctx.beginPath(); ctx.arc(cx, cy - s * 0.18, s * 0.17, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(cx - s * 0.05, cy - s * 0.23, s * 0.05, 0, Math.PI * 2); ctx.fill();
 }
@@ -327,11 +353,65 @@ function drawEquippedAura(x, y, w, h) {
 // ---------- meta progression ----------
 const meta = {
   souls: 0, up: { atk: 0, vit: 0, crit: 0, guard: 0, haste: 0, pots: 0, treasure: 0, soul: 0, recovery: 0, alchemy: 0 },
-  stash: [], mats: { enh: 0, ench: 0 }, stashSeq: 1,
+  stash: [], mats: { enh: 0, ench: 0, set: 0 }, stashSeq: 1,
   loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   playerName: '勇者'
 };
 const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
+const SET_PARTS = ['weapon', 'armor', 'helmet', 'boots'];
+const SET_CRAFT_COST = 6;
+const SET_DROP_RATE = { normal:0.02, event:0.05, boss:0.08 };
+const GEAR_SETS = [
+  {
+    id:'blood_oath', cls:'warrior', name:'血誓戰裝', color:'#ff765f',
+    pieces:{ weapon:'血誓焚刃', armor:'血誓骨鎧', helmet:'血誓角盔', boots:'血誓戰靴' },
+    bonuses:[{ pieces:2, stat:'lifesteal', value:0.05, text:'吸血 +5%' }, { pieces:4, stat:'lowHpAtk', value:0.30, text:'低於35% HP時攻擊 +30%' }]
+  },
+  {
+    id:'sun_guard', cls:'warrior', name:'日耀守衛', color:'#ffd36a',
+    pieces:{ weapon:'日耀聖劍', armor:'日耀鎧甲', helmet:'日耀冠盔', boots:'日耀戰靴' },
+    bonuses:[{ pieces:2, stat:'hpPct', value:0.12, text:'HP上限 +12%' }, { pieces:4, stat:'def', value:4, text:'固定減傷 +4' }]
+  },
+  {
+    id:'starfire', cls:'mage', name:'星火秘儀', color:'#ff9b52',
+    pieces:{ weapon:'星火權杖', armor:'星火法袍', helmet:'星火兜帽', boots:'星火步履' },
+    bonuses:[{ pieces:2, stat:'skillDmg', value:0.12, text:'技能傷害 +12%' }, { pieces:4, stat:'cooldown', value:0.10, text:'技能冷卻 -10%' }]
+  },
+  {
+    id:'voidweave', cls:'mage', name:'虛空織法', color:'#c58aff',
+    pieces:{ weapon:'虛空咒杖', armor:'虛空法袍', helmet:'虛空兜帽', boots:'虛空步履' },
+    bonuses:[{ pieces:2, stat:'crit', value:0.06, text:'爆擊率 +6%' }, { pieces:4, stat:'mpKill', value:5, text:'擊殺回復 MP +5' }]
+  }
+];
+const GEAR_SET_BY_ID = Object.fromEntries(GEAR_SETS.map(s => [s.id, s]));
+function gearColor(it) { const set = it && GEAR_SET_BY_ID[it.setId]; return set ? set.color : RARITY_COL[(it && it.r) || 0]; }
+function setIdsForClass(cls) { return GEAR_SETS.filter(s => s.cls === cls).map(s => s.id); }
+function equippedSetCounts(eq) {
+  const counts = {};
+  for (const part of SET_PARTS) {
+    const it = eq && eq[part];
+    if (it && GEAR_SET_BY_ID[it.setId]) counts[it.setId] = (counts[it.setId] || 0) + 1;
+  }
+  return counts;
+}
+function setBonusV(stat) {
+  if (typeof player === 'undefined' || !player.eq) return 0;
+  const counts = equippedSetCounts(player.eq);
+  let total = 0;
+  for (const set of GEAR_SETS) for (const bonus of set.bonuses) {
+    if ((counts[set.id] || 0) >= bonus.pieces && bonus.stat === stat) total += bonus.value;
+  }
+  return total;
+}
+function loadoutSetCount(setId) {
+  let count = 0;
+  for (const part of SET_PARTS) {
+    const uid = meta.loadout[part], it = uid && meta.stash.find(s => s.uid === uid);
+    if (it && it.setId === setId) count++;
+  }
+  return count;
+}
+function gearUsableByClass(it, cls) { return !it || !it.cls || it.cls === cls; }
 const STASH_CAP = 30;
 const AFFIX_REROLL_COST = [5, 8, 12];
 const AFFIX_MAX_REROLLS = 3;
@@ -357,6 +437,9 @@ const AFFIX_BY_ID = Object.fromEntries(AFFIX_DEFS.map(d => [d.id, d]));
 function affixSlots(r) { return [1, 1, 2, 2, 3][r] || 1; }
 function normalizeGear(it) {
   if (!it) return it;
+  const set = GEAR_SET_BY_ID[it.setId];
+  if (set && SET_PARTS.includes(it.kind)) it.cls = set.cls;
+  else if (it.setId) delete it.setId;
   const slots = affixSlots(it.r);
   const src = Array.isArray(it.affixes) ? it.affixes.slice(0, slots) : [];
   it.affixes = Array.from({ length: slots }, (_, i) => {
@@ -394,7 +477,7 @@ function affixV(stat) {
       if (d && d.stat === stat) total += Number(a.val) || 0;
     }
   }
-  return total;
+  return total + setBonusV(stat);
 }
 function affixText(a) {
   const d = a && AFFIX_BY_ID[a.id];
@@ -424,11 +507,18 @@ function enchantGearSlot(it, slot) {
   saveMeta();
   playSfx('enhanceSuccess', 0.8, AFFIX_BY_ID[rolled.id].rare ? 1.12 : 1);
 }
-function matFor(r) { return [{ enh: 1, ench: 0 }, { enh: 3, ench: 1 }, { enh: 6, ench: 3 }, { enh: 10, ench: 6 }, { enh: 16, ench: 10 }][r] || { enh: 1, ench: 0 }; }
-function addMat(r) { const m = matFor(r); meta.mats.enh += m.enh; meta.mats.ench += m.ench; return m; }
+function matFor(r, it) {
+  const base = [{ enh: 1, ench: 0 }, { enh: 3, ench: 1 }, { enh: 6, ench: 3 }, { enh: 10, ench: 6 }, { enh: 16, ench: 10 }][r] || { enh: 1, ench: 0 };
+  return { enh:base.enh, ench:base.ench, set:it && it.setId ? (r >= 4 ? 3 : 2) : 0 };
+}
+function addMat(r, it) {
+  const m = matFor(r, it);
+  meta.mats.enh += m.enh; meta.mats.ench += m.ench; meta.mats.set += m.set;
+  return m;
+}
 function stashGear(it) { // 存入倉庫;已在庫(開局帶出的)跳過;滿則轉材料
   if (it.uid && meta.stash.some(s => s.uid === it.uid)) return true;
-  if (meta.stash.length >= STASH_CAP) { addMat(it.r); return false; }
+  if (meta.stash.length >= STASH_CAP) { addMat(it.r, it); return false; }
   normalizeGear(it);
   it.uid = meta.stashSeq++;
   meta.stash.push(it);
@@ -628,7 +718,7 @@ function loadMeta() {
     if (d && typeof d.s === 'number' && Array.isArray(d.u)) applyMeta(d.s, d.u, d.b);
     if (d && Array.isArray(d.k)) applySkillNums(d.k);
     if (d && Array.isArray(d.st)) meta.stash = d.st.filter(it => it && GEAR_PARTS.indexOf(it.kind) >= 0).map(normalizeGear);
-    if (d && d.mt) meta.mats = { enh: Math.max(0, d.mt.enh | 0), ench: Math.max(0, d.mt.ench | 0) };
+    if (d && d.mt) meta.mats = { enh: Math.max(0, d.mt.enh | 0), ench: Math.max(0, d.mt.ench | 0), set: Math.max(0, d.mt.set | 0) };
     if (d && d.lo) for (const part of GEAR_PARTS) meta.loadout[part] = d.lo[part] || null;
     if (d && d.sq) meta.stashSeq = Math.max(1, d.sq | 0);
     if (d && typeof d.pn === 'string' && d.pn.trim()) meta.playerName = d.pn.slice(0, 12);
@@ -725,7 +815,7 @@ const ACTIVITY_STATS = ['kills','floors','skills','bosses','elites','potions'];
 const ACTIVITY_MILESTONES = [
   { points:50, label:'強化石 x2', enh:2, ench:0 },
   { points:120, label:'餘燼光環＋附魔塵 x2', enh:0, ench:2, aura:'ember' },
-  { points:220, label:'虛空光環＋石 x4／塵 x3', enh:4, ench:3, aura:'void' }
+  { points:220, label:'虛空光環＋套裝核心 x1', enh:4, ench:3, set:1, aura:'void' }
 ];
 const AURA_DEFS = {
   none:{ name:'無光環', color:'#8890b8' },
@@ -825,7 +915,7 @@ function claimActivityMilestone(points) {
   const reward = ACTIVITY_MILESTONES.find(r => r.points === points);
   if (!reward || activityState.milestones[points] || activityState.activity < points) return;
   activityState.milestones[points] = true;
-  meta.mats.enh += reward.enh || 0; meta.mats.ench += reward.ench || 0;
+  meta.mats.enh += reward.enh || 0; meta.mats.ench += reward.ench || 0; meta.mats.set += reward.set || 0;
   if (reward.aura && !activityState.cosmetics.includes(reward.aura)) {
     activityState.cosmetics.push(reward.aura); activityState.aura = reward.aura;
   }
@@ -1021,7 +1111,7 @@ function armorDef() {
 }
 function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
-function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
+function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
 function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
 function gearDropChance(elite, atFloor = floor) {
@@ -1431,15 +1521,15 @@ function rollRarity(n) {
   if (roll > 0.62) return 1; // 精良
   return 0;                  // 普通
 }
-function genGear(n, forceR) {
-  const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
-  const slot = slots[(Math.random() * 5) | 0];
-  const r = forceR != null ? forceR : rollRarity(n);
+function createGear(n, slot, cls, rarity, setId) {
+  const set = GEAR_SET_BY_ID[setId];
+  const r = set ? Math.max(3, rarity) : rarity;
   const m = [1, 1.5, 2.1, 2.8, 3.6][r] * (0.85 + Math.random() * 0.3);
-  const it = { kind: slot, r: r, id: 'g' + (gearSeq++), cls: player.cls, affixes: Array(affixSlots(r)).fill(null) };
+  const it = { kind: slot, r: r, id: 'g' + (gearSeq++), cls: cls, affixes: Array(affixSlots(r)).fill(null) };
+  if (set) it.setId = set.id;
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
-    it.wpn = player.cls === 'mage' ? 'stave' : 'sword';
+    it.wpn = cls === 'mage' ? 'stave' : 'sword';
     it.desc = '攻擊+' + it.atk;
   } else if (slot === 'armor') {
     it.hp = Math.round((16 + n * 6) * m); it.def = Math.max(1, Math.round((1 + n * 0.4) * m));
@@ -1460,26 +1550,49 @@ function genGear(n, forceR) {
       it.desc = '攻擊+' + Math.round(it.atkMul * 100) + '%';
     }
   }
-  it.name = gearName(slot, r, player.cls);
+  it.name = set ? set.pieces[slot] : gearName(slot, r, cls);
   return it;
+}
+function genGear(n, forceR, source) {
+  const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
+  const slot = pick(slots);
+  const baseR = forceR != null ? forceR : rollRarity(n);
+  const rate = n >= 5 && SET_PARTS.includes(slot) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
+  const setIds = setIdsForClass(player.cls);
+  const setId = setIds.length && Math.random() < rate ? pick(setIds) : null;
+  return createGear(n, slot, player.cls, baseR, setId);
+}
+function forgeSetPiece(setId) {
+  const set = GEAR_SET_BY_ID[setId];
+  if (!set || set.cls !== chosenCls) { menuMsg = { text:'請切換到套裝對應職業', color:'#ff8a8a', t:180 }; return; }
+  if (meta.stash.length >= STASH_CAP) { menuMsg = { text:'倉庫已滿，無法鍛造', color:'#ff8a8a', t:180 }; return; }
+  if (meta.mats.set < SET_CRAFT_COST) { menuMsg = { text:'套裝核心不足（需要 ' + SET_CRAFT_COST + '）', color:'#ff8a8a', t:180 }; playSfx('uiError'); return; }
+  const owned = new Set(meta.stash.filter(it => it.setId === setId).map(it => it.kind));
+  const missing = SET_PARTS.filter(part => !owned.has(part));
+  const slot = pick(missing.length ? missing : SET_PARTS);
+  const item = createGear(Math.max(5, bestFloor || 5), slot, set.cls, 3, set.id);
+  meta.mats.set -= SET_CRAFT_COST;
+  stashGear(item); selStash = item.uid; saveMeta();
+  menuMsg = { text:'鍛造完成：' + item.name, color:set.color, t:240 };
+  playSfx('enhanceSuccess');
 }
 function addGear(it) {
   const p = player;
   if (p.items.length >= 12) {
-    const m = addMat(it.r);
+    const m = addMat(it.r, it);
     saveMeta();
     num(p.x, p.y - p.h - 10, '背包已滿 → 強化石+' + m.enh, '#7dffd6');
     return;
   }
   p.items.push(it);
   if (!p.eq[it.kind]) { p.eq[it.kind] = it; calcStats(); }
-  num(p.x, p.y - p.h - 24, '獲得 ' + it.name, RARITY_COL[it.r]);
+  num(p.x, p.y - p.h - 24, '獲得 ' + it.name, gearColor(it));
   playSfx('pickup');
 }
 function equipItem(it) {
   player.eq[it.kind] = it;
   calcStats();
-  num(player.x, player.y - player.h - 10, '裝備 ' + it.name, RARITY_COL[it.r]);
+  num(player.x, player.y - player.h - 10, '裝備 ' + it.name, gearColor(it));
   beep(820, 0.06, 'sine', 0.03);
 }
 let pendingDel = null; // {it, f} 兩段式確認:2 秒內再點一次才分解
@@ -1489,10 +1602,10 @@ function dismantle(it) {
   const i = p.items.indexOf(it);
   if (i < 0) return;
   p.items.splice(i, 1);
-  const m = addMat(it.r);
+  const m = addMat(it.r, it);
   pendingDel = null;
   saveMeta();
-  num(p.x, p.y - p.h - 10, '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : ''), '#7dffd6');
+  num(p.x, p.y - p.h - 10, '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : '') + (m.set ? ' 核心+' + m.set : ''), '#7dffd6');
   beep(500, 0.08, 'square', 0.03);
 }
 
@@ -1600,7 +1713,7 @@ function chooseFloorEvent(choice) {
   if (type === 'chest') {
     floorEvent.status = 'done';
     const rarity = Math.max(1, rollRarity(floor));
-    gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0, it:genGear(floor, rarity), t:1500, ground:468 });
+    gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0, it:genGear(floor, rarity, 'event'), t:1500, ground:468 });
     meta.mats.ench += 1; saveMeta();
     burst(floorEvent.x, floorEvent.y - 30, '#ffd36a', 24);
     num(floorEvent.x, floorEvent.y - 76, '裝備 + 附魔塵×1', '#ffd36a');
@@ -1628,7 +1741,7 @@ function checkFloorEventReward() {
   const dust = 2 + Math.floor(floor / 10);
   meta.mats.ench += dust; saveMeta();
   const rarity = floor >= 15 ? 3 : 2;
-  gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4.5, vx:0, it:genGear(floor, rarity), t:1800, ground:468 });
+  gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4.5, vx:0, it:genGear(floor, rarity, 'event'), t:1800, ground:468 });
   burst(floorEvent.x, floorEvent.y - 38, '#ffd36a', 36);
   num(floorEvent.x, floorEvent.y - 84, '試煉完成! 稀有裝 + 附魔塵×' + dust, '#ffd36a');
   playSfx('enhanceSuccess', 0.85, 1.08);
@@ -1741,7 +1854,7 @@ function resetRun() {
   for (const part of GEAR_PARTS) { // 從倉庫穿戴開局裝備(副本帶出,倉庫原件保留)
     const uid = meta.loadout[part];
     const src = uid ? meta.stash.find(s => s.uid === uid) : null;
-    if (src) {
+    if (src && gearUsableByClass(src, p.cls)) {
       const cp = Object.assign({}, src, { affixes: (src.affixes || []).map(a => a && Object.assign({}, a)) });
       p.items.push(cp); p.eq[part] = cp;
     }
@@ -1881,8 +1994,8 @@ function hitMon(m, d, crit, noChain) {
     }
     if (m.type === 'boss') {
       // 保底傳說裝 + 追加一件隨機裝
-      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3), t: 1500, ground: 468 }); // 保底史詩,深層傳說
-      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2), t: 1500, ground: 468 });
+      gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
+      gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });
     } else if (!m.eventMon) {
       if (Math.random() < gearDropChance(m.elite)) {
         gearDrops.push({
@@ -2068,9 +2181,9 @@ function dismantleStash(it) {
   if (i < 0) return;
   meta.stash.splice(i, 1);
   for (const part of GEAR_PARTS) if (meta.loadout[part] === it.uid) meta.loadout[part] = null;
-  const m = addMat(it.r);
+  const m = addMat(it.r, it);
   saveMeta();
-  menuMsg = { text: '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : ''), color: '#7dffd6', t: 180 };
+  menuMsg = { text: '分解 → 強化石+' + m.enh + (m.ench ? ' 附魔塵+' + m.ench : '') + (m.set ? ' 套裝核心+' + m.set : ''), color: '#7dffd6', t: 180 };
   beep(500, 0.1, 'square', 0.03);
 }
 // ---------- 強化 ----------
@@ -2256,9 +2369,13 @@ function handleTap(mx, my) {
         if (!inside(b)) continue;
         const sel = meta.stash.find(s => s.uid === selStash);
         if (!sel) return;
-        if (b.act === 'equip') { meta.loadout[sel.kind] = meta.loadout[sel.kind] === sel.uid ? null : sel.uid; saveMeta(); return; }
+        if (b.act === 'equip') {
+          if (!gearUsableByClass(sel, chosenCls)) { menuMsg = { text:'此裝備限 ' + (sel.cls === 'mage' ? '法師' : '劍士') + ' 使用', color:'#ff8a8a', t:180 }; playSfx('uiError'); return; }
+          meta.loadout[sel.kind] = meta.loadout[sel.kind] === sel.uid ? null : sel.uid; saveMeta(); return;
+        }
         if (b.act === 'enhance') { enhanceGear(sel); return; }
         if (b.act === 'enchant') { enchantGearSlot(sel, b.slot); return; }
+        if (b.act === 'forgeSet') { forgeSetPiece(sel.setId); return; }
         if (b.act === 'dismantle') {
           if (pendingStashDel === sel.uid) { dismantleStash(sel); selStash = null; }
           else pendingStashDel = sel.uid;
@@ -2957,7 +3074,7 @@ function render() {
   for (const gd of gearDrops) {
     const blink = gd.t < 150 && Math.floor(gd.t / 8) % 2 === 0;
     if (!blink) {
-      const r = gd.it.r, col = RARITY_COL[r];
+      const r = gd.it.r, col = gearColor(gd.it);
       if (r >= 2) { // 稀有以上:發光柱,越高越亮
         const gl = 0.12 + 0.06 * r + Math.sin(frame * 0.12) * 0.05;
         ctx.fillStyle = col; ctx.globalAlpha = gl;
@@ -3041,7 +3158,7 @@ function render() {
     drawSprite(p.cls === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0);
     const sx = p.x + p.face * 14;
     if (p.cls === 'mage') {
-      const orb = p.eq.weapon ? RARITY_COL[p.eq.weapon.r] : '#f2c14e';
+      const orb = p.eq.weapon ? gearColor(p.eq.weapon) : '#f2c14e';
       ctx.fillStyle = PAL['a'];
       if (p.cast > 0) {
         ctx.fillRect(sx - 2, p.y - 58, 4, 30);
@@ -3052,7 +3169,7 @@ function render() {
         ctx.fillStyle = orb; ctx.fillRect(sx - 4, p.y - 46, 8, 8);
       }
     } else {
-      const blade = p.eq.weapon ? RARITY_COL[p.eq.weapon.r] : '#b89a6a';
+      const blade = p.eq.weapon ? gearColor(p.eq.weapon) : '#b89a6a';
       if (p.cast > 0) {
         ctx.fillStyle = blade;
         ctx.fillRect(p.face > 0 ? p.x + 12 : p.x - 40, p.y - 32, 28, 5);
@@ -3288,7 +3405,7 @@ function slotBox(sx, sy, slot, label) {
   if (it) drawItemIcon(it, sx + 6, sy + 6, 32);
   ctx.textAlign = 'center';
   ctx.font = '10px "Courier New",monospace';
-  ctx.fillStyle = it ? RARITY_COL[it.r || 0] : '#667';
+  ctx.fillStyle = it ? gearColor(it) : '#667';
   ctx.fillText(it ? gearLabel(it) : label, sx + 22, sy + 56);
   ctx.textAlign = 'left';
 }
@@ -3317,6 +3434,14 @@ function drawItemWin() {
   ctx.fillStyle = '#9ecbff';
   ctx.fillText('攻擊 ' + Math.round(atkPow()) + '  爆擊 ' + (critRate() * 100).toFixed(1) + '%', dx + 4, dy + dh + 18);
   ctx.fillText('減傷 ' + armorDef() + '  移速 ' + moveSpd().toFixed(1) + '  HP ' + p.mhp, dx + 4, dy + dh + 34);
+  const activeSets = Object.entries(equippedSetCounts(p.eq)).filter(([, count]) => count >= 2);
+  if (activeSets.length) {
+    ctx.font = 'bold 10px ' + STAT_FONT;
+    for (let i = 0; i < Math.min(2, activeSets.length); i++) {
+      const [setId, count] = activeSets[i], set = GEAR_SET_BY_ID[setId];
+      ctx.fillStyle = set.color; ctx.fillText('⬟ ' + set.name + ' ' + count + '/4　套裝效果已啟動', dx + 4, dy + dh + 50 + i * 14);
+    }
+  }
   const bx = x + 232, by = y + 36, bw = w - 244;
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
   ctx.fillText('背包(點擊換裝/✕分解+2魂)', bx, by + 12);
@@ -3339,7 +3464,7 @@ function drawItemWin() {
     }
     drawItemIcon(it, bx, ry - 11, 20);
     ctx.font = 'bold 12px "Courier New",monospace';
-    ctx.fillStyle = RARITY_COL[it.r || 0]; ctx.textAlign = 'left';
+    ctx.fillStyle = gearColor(it); ctx.textAlign = 'left';
     ctx.fillText(gearLabel(it), bx + 24, ry + 3);
     ctx.font = '10px "Courier New",monospace';
     ctx.fillStyle = '#8890b8';
@@ -3397,9 +3522,9 @@ function drawStatsPanel() {
   const combatRows = [
     ['攻擊力', Math.round(atk), '基礎 ' + atkBase().toFixed(1) + ' × 倍率 ' + atkMultiplier().toFixed(2), '#ffe680'],
     ['傷害範圍', Math.round(atk * 0.85) + '～' + Math.round(atk * 1.15), '每次攻擊隨機 85%～115%'],
-    ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 永久' + (meta.up.crit * 0.5).toFixed(1) + '% + 卡/裝/附魔'],
+    ['爆擊率', (crit * 100).toFixed(1) + '%', '基礎8% + 永久' + (meta.up.crit * 0.5).toFixed(1) + '% + 卡/裝/附魔/套裝'],
     ['爆擊傷害', Math.round((1.6 + affixV('critDmg')) * 100) + '%', '基礎160% + 狂虐附魔'],
-    ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg + (perkV('overcharge') ? '；奧術超載 Lv' + perkV('overcharge') : '')],
+    ['技能傷害', '+' + Math.round((skillDamageMul() - 1) * 100) + '%', '絕技精通 Lv' + p.cd.xdmg + (perkV('overcharge') ? '；奧術超載 Lv' + perkV('overcharge') : '') + (affixV('skillDmg') ? '；套裝加成' : '')],
     ['冷卻倍率', '×' + cooldownMul().toFixed(2), '迅捷出手 Lv' + p.cd.aspd + '；永久冷卻 -' + (meta.up.haste * 1.5).toFixed(1) + '%'],
     ['承受傷害', '×' + recvMul.toFixed(2), '防禦本能 -' + meta.up.guard + '%' + (perkV('glass') ? '；玻璃大砲放大' : '')],
     ['吸血／擊殺回血', Math.round((perkV('vamp') * 0.06 + affixV('lifesteal')) * 100) + '% / ' + (p.cd.ls * 3), '吸血鬼、吸血附魔／嗜血卡']
@@ -3707,8 +3832,8 @@ function renderTown() {
   ctx.fillText('城鎮', 12, 20);
   ctx.fillStyle = '#7dffd6'; ctx.fillText('靈魂 ' + meta.souls, 80, 20);
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 12px "Courier New",monospace';
-  ctx.fillText('石' + meta.mats.enh + ' 塵' + meta.mats.ench, 200, 20);
-  ctx.fillStyle = '#b98cff'; ctx.fillText('活躍 ' + activityState.activity + '/300', 306, 20);
+  ctx.fillText('石' + meta.mats.enh + ' 塵' + meta.mats.ench + ' 核' + meta.mats.set, 190, 20);
+  ctx.fillStyle = '#b98cff'; ctx.fillText('活躍 ' + activityState.activity + '/300', 320, 20);
   statsBtn = { x: W - 102, y: 5, w: 92, h: 25 };
   ctx.fillStyle = 'rgba(125,255,214,0.14)'; ctx.fillRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
   ctx.strokeStyle = '#547f80'; ctx.lineWidth = 1; ctx.strokeRect(statsBtn.x, statsBtn.y, statsBtn.w, statsBtn.h);
@@ -3744,11 +3869,12 @@ function renderStashTab() {
   if (pendingStashDel && !meta.stash.some(s => s.uid === pendingStashDel)) pendingStashDel = null;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px ' + STAT_FONT; ctx.fillText('裝備倉庫', 24, 130);
-  ctx.fillStyle = '#747b9e'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('管理出戰配置，強化與附魔收藏裝備', 115, 130);
+  ctx.fillStyle = '#747b9e'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('管理出戰配置、套裝鍛造、強化與附魔', 115, 130);
   const stashResources = [
-    { x: 620, w: 104, icon: '◆', label: '強化石', value: meta.mats.enh, color: '#ffbd72' },
-    { x: 732, w: 104, icon: '✦', label: '附魔塵', value: meta.mats.ench, color: '#d9a8ff' },
-    { x: 844, w: 92, icon: '▣', label: '容量', value: meta.stash.length + '/' + STASH_CAP, color: '#9fc7ff' }
+    { x: 596, w: 80, icon: '⬟', label: '套裝核心', value: meta.mats.set, color: '#7dffd6' },
+    { x: 682, w: 80, icon: '◆', label: '強化石', value: meta.mats.enh, color: '#ffbd72' },
+    { x: 768, w: 80, icon: '✦', label: '附魔塵', value: meta.mats.ench, color: '#d9a8ff' },
+    { x: 854, w: 82, icon: '▣', label: '容量', value: meta.stash.length + '/' + STASH_CAP, color: '#9fc7ff' }
   ];
   for (const r of stashResources) {
     fillRoundRect(r.x, 112, r.w, 28, 4, 'rgba(255,255,255,0.045)', '#343850', 1);
@@ -3776,7 +3902,7 @@ function renderStashTab() {
     if (it) {
       stashBtns.push({ x: loadPanel.x + 12, y, w: loadPanel.w - 24, h: 52, uid: it.uid });
       drawItemIcon(it, loadPanel.x + 62, y + 6, 40);
-      ctx.fillStyle = RARITY_COL[it.r]; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(gearLabel(it), loadPanel.x + 108, y + 20);
+      ctx.fillStyle = gearColor(it); ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(gearLabel(it), loadPanel.x + 108, y + 20);
       ctx.fillStyle = '#7b829f'; ctx.font = '9px ' + STAT_FONT; ctx.fillText(gearDesc(it), loadPanel.x + 108, y + 38);
       ctx.fillStyle = '#76e2c6'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'right'; ctx.fillText('出戰中', loadPanel.x + loadPanel.w - 22, y + 18); ctx.textAlign = 'left';
     } else {
@@ -3794,13 +3920,14 @@ function renderStashTab() {
     const cxx = gx + (i % cols) * (cell + gap), cyy = gy + Math.floor(i / cols) * (cell + gap);
     const on = it && selStash === it.uid;
     if (on) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 7; }
-    fillRoundRect(cxx, cyy, cell, cell, 4, it ? (on ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.045)') : 'rgba(0,0,0,0.16)', it ? (on ? '#7dffd6' : RARITY_COL[it.r]) : '#292d43', on ? 2 : 1);
+    fillRoundRect(cxx, cyy, cell, cell, 4, it ? (on ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.045)') : 'rgba(0,0,0,0.16)', it ? (on ? '#7dffd6' : gearColor(it)) : '#292d43', on ? 2 : 1);
     ctx.shadowBlur = 0;
     if (it) {
       stashBtns.push({ x: cxx, y: cyy, w: cell, h: cell, uid: it.uid });
       drawItemIcon(it, cxx + 5, cyy + 3, 36);
       if (GEAR_PARTS.some(pt => meta.loadout[pt] === it.uid)) { ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('▲', cxx + 4, cyy + 11); }
       if (it.enh > 0) { ctx.fillStyle = '#ffcf6a'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('+' + it.enh, cxx + cell - 3, cyy + 12); }
+      if (it.setId) { ctx.fillStyle = gearColor(it); ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'left'; ctx.fillText('⬟', cxx + 4, cyy + cell - 4); }
       const enchanted = (it.affixes || []).filter(Boolean).length;
       if (enchanted) { ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 9px "Courier New",monospace'; ctx.textAlign = 'right'; ctx.fillText('✦' + enchanted, cxx + cell - 3, cyy + cell - 4); }
       ctx.textAlign = 'left';
@@ -3811,17 +3938,19 @@ function renderStashTab() {
     normalizeGear(sel);
     const wx = workPanel.x, wy = workPanel.y;
     drawItemIcon(sel, wx + 16, wy + 14, 44);
-    ctx.textAlign = 'left'; ctx.fillStyle = RARITY_COL[sel.r]; ctx.font = 'bold 14px ' + STAT_FONT;
+    ctx.textAlign = 'left'; ctx.fillStyle = gearColor(sel); ctx.font = 'bold 14px ' + STAT_FONT;
     ctx.fillText(gearLabel(sel), wx + 70, wy + 25);
     ctx.fillStyle = '#777e9d'; ctx.font = '10px ' + STAT_FONT;
-    ctx.fillText(RARITY_NAME[sel.r] + ' ' + PART_NAME[sel.kind] + '  •  ' + gearDesc(sel), wx + 70, wy + 43);
+    const selectedSet = GEAR_SET_BY_ID[sel.setId];
+    ctx.fillText((selectedSet ? selectedSet.name + '套裝' : RARITY_NAME[sel.r]) + ' ' + PART_NAME[sel.kind] + '  •  ' + gearDesc(sel), wx + 70, wy + 43);
     const lv = sel.enh || 0;
     const equipped = meta.loadout[sel.kind] === sel.uid;
+    const usable = gearUsableByClass(sel, chosenCls);
     const b1 = { x: wx + 278, y: wy + 13, w: 92, h: 36, act: 'equip' };
     stashActBtns.push(b1);
-    fillRoundRect(b1.x, b1.y, b1.w, b1.h, 4, equipped ? 'rgba(125,255,214,0.16)' : 'rgba(255,255,255,0.055)', equipped ? '#68c1ac' : '#42465d', 1);
-    ctx.fillStyle = equipped ? '#8affdc' : '#d5d8e8'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
-    ctx.fillText(equipped ? '✓ 卸下裝備' : '設為出戰', b1.x + b1.w / 2, b1.y + 23);
+    fillRoundRect(b1.x, b1.y, b1.w, b1.h, 4, equipped ? 'rgba(125,255,214,0.16)' : usable ? 'rgba(255,255,255,0.055)' : 'rgba(255,90,90,0.055)', equipped ? '#68c1ac' : usable ? '#42465d' : '#613f4a', 1);
+    ctx.fillStyle = equipped ? '#8affdc' : usable ? '#d5d8e8' : '#b57882'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText(equipped ? '✓ 卸下裝備' : usable ? '設為出戰' : '限' + (sel.cls === 'mage' ? '法師' : '劍士'), b1.x + b1.w / 2, b1.y + 23);
     const pend = pendingStashDel === sel.uid;
     const b2 = { x: wx + 488, y: wy + 13, w: 104, h: 36, act: 'dismantle' };
     stashActBtns.push(b2); fillRoundRect(b2.x, b2.y, b2.w, b2.h, 4, pend ? 'rgba(226,59,59,0.26)' : 'rgba(255,255,255,0.04)', pend ? '#e05b66' : '#42465d', 1);
@@ -3835,7 +3964,16 @@ function renderStashTab() {
       ctx.fillText('⚒ 強化  ◆' + enhCost(lv), b3.x + b3.w / 2, b3.y + 23);
     }
     ctx.textAlign = 'left'; ctx.font = '9px ' + STAT_FONT;
-    if (lv < ENH_MAX) {
+    if (selectedSet) {
+      const count = loadoutSetCount(selectedSet.id), bonusText = selectedSet.bonuses.map(b => b.pieces + '件 ' + b.text).join('  •  ');
+      ctx.fillStyle = selectedSet.color; ctx.font = 'bold 8px ' + STAT_FONT; ctx.textAlign = 'left';
+      ctx.fillText(selectedSet.name + ' ' + count + '/4  •  ' + bonusText, wx + 16, wy + 68);
+      const fb = { x:wx + 470, y:wy + 56, w:108, h:26, act:'forgeSet' };
+      stashActBtns.push(fb);
+      const canForge = usable && meta.mats.set >= SET_CRAFT_COST && meta.stash.length < STASH_CAP;
+      fillRoundRect(fb.x, fb.y, fb.w, fb.h, 4, canForge ? 'rgba(125,255,214,0.15)' : 'rgba(255,255,255,0.03)', canForge ? selectedSet.color : '#3b4054', 1);
+      ctx.fillStyle = canForge ? '#dffff6' : '#697089'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.textAlign = 'center'; ctx.fillText('鍛造缺件  ⬟' + SET_CRAFT_COST, fb.x + fb.w / 2, fb.y + 17);
+    } else if (lv < ENH_MAX) {
       const zone = enhZone(lv), zt = zone === 'safe' ? '安全保級' : zone === 'down' ? '失敗降級' : '爆裝 ' + Math.round(enhBoomRate(lv) * 100) + '%';
       ctx.fillStyle = '#747b98'; ctx.fillText('強化 +' + lv + ' → +' + (lv + 1) + '  •  成功 ' + Math.round(enhRate(lv) * 100) + '%  •  ' + zt, wx + 16, wy + 66);
     } else { ctx.fillStyle = '#ffe680'; ctx.fillText('強化已滿 +' + ENH_MAX, wx + 16, wy + 66); }
