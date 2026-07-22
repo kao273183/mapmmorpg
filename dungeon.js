@@ -1,4 +1,4 @@
-// ---------- dungeon route lifecycle (v0.26 D1) ----------
+// ---------- dungeon route lifecycle (v0.26 D2-A) ----------
 let dungeonRun = null;
 let currentRoomSpec = null;
 let routePanel = null;
@@ -28,29 +28,156 @@ function dungeonRng(value) {
 function dungeonRoomIndex(atFloor) { return ((atFloor - 1) % 5) + 1; }
 function dungeonChapter(atFloor) { return Math.floor((atFloor - 1) / 5) + 1; }
 
+function dungeonBiomeDef(atFloor) {
+  const index = Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5));
+  return DUNGEON_BIOME_DEFS[Math.max(0, index)];
+}
+
+function dungeonRoomRng(spec, purpose) {
+  return dungeonRng((spec && spec.seed || 1) + ':' + purpose);
+}
+
+function dungeonEventCandidatesForRoom(type, chapter) {
+  const families = type === 'treasure' ? ['chest'] : type === 'event' ? ['shrine', 'trial'] : [];
+  if (!families.length) return [];
+  return Object.values(DUNGEON_EVENT_DEFS).filter(def =>
+    families.includes(def.family) && chapter >= (def.minChapter || 1)
+  );
+}
+
+function dungeonEventHistoryMultiplier(eventId, history) {
+  const reversed = (history || []).slice().reverse();
+  const ago = reversed.indexOf(eventId);
+  if (ago < 0) return 1;
+  if (ago < 2) return 0;
+  if (ago < 4) return 0.25;
+  return 1;
+}
+
+function dungeonEventIdForRoom(type, seed, chapter, history) {
+  const candidates = dungeonEventCandidatesForRoom(type, chapter || 1);
+  if (!candidates.length) return null;
+  const rng = dungeonRng(seed + ':event-pick');
+  let weighted = candidates.map(def => ({
+    def,
+    weight:(def.weight || 1) * dungeonEventHistoryMultiplier(def.id, history)
+  }));
+  let total = weighted.reduce((sum, item) => sum + item.weight, 0);
+
+  // 同一家族在早期章節可能被最近紀錄完全封鎖；此時選擇最久未出現者，確保房間仍有內容。
+  if (total <= 0) {
+    const reversed = (history || []).slice().reverse();
+    const age = def => {
+      const index = reversed.indexOf(def.id);
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+    };
+    const oldestAge = Math.max(...candidates.map(age));
+    weighted = candidates.filter(def => age(def) === oldestAge).map(def => ({ def, weight:def.weight || 1 }));
+    total = weighted.reduce((sum, item) => sum + item.weight, 0);
+  }
+
+  let roll = rng() * total;
+  for (const item of weighted) {
+    roll -= item.weight;
+    if (roll <= 0) return item.def.id;
+  }
+  return weighted[weighted.length - 1].def.id;
+}
+
+function dungeonEnemyTags(type, biome) {
+  if (type === 'camp') return ['無敵人'];
+  if (type === 'elite') return ['2 隻菁英', biome.enemyTag];
+  if (type === 'treasure') return ['少量守衛'];
+  if (type === 'event') return ['事件守衛'];
+  if (type === 'hazard') return [biome.enemyTag];
+  if (type === 'boss') return [biome.bossName];
+  return [biome.enemyTag];
+}
+
 function makeRoomSpec(type, atFloor, branch) {
   const def = DUNGEON_ROOM_DEFS[type] || DUNGEON_ROOM_DEFS.safe;
+  const resolvedType = DUNGEON_ROOM_DEFS[type] ? type : 'safe';
+  const branchId = branch || 0;
+  const seed = dungeonSeedHash((dungeonRun ? dungeonRun.seed : 1) + ':' + atFloor + ':' + resolvedType + ':' + branchId);
+  const biome = dungeonBiomeDef(atFloor);
+  let hazardId = resolvedType === 'hazard' ? biome.hazardId : null;
+  const chapter = dungeonChapter(atFloor);
+  const eventId = dungeonEventIdForRoom(resolvedType, seed, chapter, dungeonRun ? dungeonRun.eventHistory : []);
+  if (eventId === 'hazard_trial') hazardId = biome.hazardId;
+  const eventDef = eventId ? DUNGEON_EVENT_DEFS[eventId] : null;
+  const hazardDef = hazardId ? DUNGEON_HAZARD_DEFS[hazardId] : null;
   return {
-    id:'f' + atFloor + '-' + type + '-' + (branch || 0),
+    id:'f' + atFloor + '-' + resolvedType + '-' + branchId,
     floor:atFloor,
-    chapter:dungeonChapter(atFloor),
+    chapter,
     roomIndex:dungeonRoomIndex(atFloor),
-    type,
-    threat:def.threat,
+    biomeId:biome.id,
+    type:resolvedType,
+    threat:eventDef ? Math.max(def.threat, eventDef.threat || 0) : def.threat,
     score:def.score,
-    rewardTags:def.rewards.slice(),
-    seed:dungeonSeedHash((dungeonRun ? dungeonRun.seed : 1) + ':' + atFloor + ':' + type + ':' + (branch || 0))
+    enemyTags:dungeonEnemyTags(resolvedType, biome),
+    rewardTags:(eventDef ? eventDef.rewards : hazardDef ? hazardDef.rewards : def.rewards).slice(),
+    hazardId,
+    eventId,
+    seed
   };
 }
 
-function resetDungeonRun() {
-  const seed = dungeonSeedHash(Date.now() + ':' + Math.random() + ':' + (meta.playerName || '勇者'));
+function generateDungeonPlatforms(spec, width) {
+  const rng = dungeonRoomRng(spec, 'platforms');
+  const result = [{ x:0, y:468, w:width, ground:true }];
+  const rowsY = [405, 325, 250];
+  let px = 150;
+  while (px < width - 260) {
+    const pw = 140 + rng() * 120;
+    if (rng() < 0.82) {
+      const ri = (rng() * 3) | 0;
+      result.push({ x:px, y:rowsY[ri], w:pw });
+      let ux = px, uw = pw;
+      for (let r = ri - 1; r >= 0; r--) {
+        const near = result.some(q => !q.ground && q.y === rowsY[r] && q.x < ux + uw + 40 && q.x + q.w > ux - 40);
+        if (!near) {
+          const sw = 90 + rng() * 50;
+          const dir = rng() < 0.5 ? -1 : 1;
+          const sx = Math.max(20, Math.min(width - sw - 20, dir < 0 ? ux - sw + 34 : ux + uw - 34));
+          result.push({ x:sx, y:rowsY[r], w:sw });
+          ux = sx; uw = sw;
+        }
+      }
+    }
+    px += pw + 60 + rng() * 130;
+  }
+  return result;
+}
+
+function generateDungeonEnemyTypes(spec, pool, count) {
+  const rng = dungeonRoomRng(spec, 'enemy-types');
+  const result = [];
+  for (let i = 0; i < count; i++) result.push(pool[(rng() * pool.length) | 0]);
+  return result;
+}
+
+function dungeonEventPosition(spec, width) {
+  const rng = dungeonRoomRng(spec, 'event-position');
+  return Math.round(width * (0.46 + rng() * 0.24));
+}
+
+function dungeonHazardAvailable(atFloor) {
+  if (!DUNGEON_D2_FLAGS.hazards) return false;
+  const biome = dungeonBiomeDef(atFloor);
+  const def = DUNGEON_HAZARD_DEFS[biome.hazardId];
+  return !!(def && def.implemented);
+}
+
+function resetDungeonRun(benchmarkProfile) {
+  const seed = benchmarkProfile ? benchmarkProfile.seed : dungeonSeedHash(Date.now() + ':' + Math.random() + ':' + (meta.playerName || '勇者'));
   dungeonRun = {
     seed,
     chapter:1,
     explorationScore:0,
     roomHistory:[],
     eventHistory:[],
+    hazardTutorials:{},
     chapterUsed:{ camp:false, treasure:false },
     completedFloor:0,
     rewardedFloor:0,
@@ -59,6 +186,12 @@ function resetDungeonRun() {
   };
   currentRoomSpec = makeRoomSpec('safe', 1, 0);
   dungeonRun.roomHistory.push('safe');
+  if (typeof startDungeonBalanceRun === 'function') {
+    startDungeonBalanceRun(seed, typeof chosenCls === 'string' ? chosenCls : 'unknown', undefined, benchmarkProfile ? {
+      mode:'benchmark', benchmarkId:benchmarkProfile.id, benchmarkLabel:benchmarkProfile.label
+    } : { mode:'natural' });
+    recordDungeonRoomEntry(currentRoomSpec);
+  }
   routePanel = null;
   chapterPanel = null;
 }
@@ -81,6 +214,7 @@ function generateRouteChoices(nextFloor) {
   let pool = ['safe', 'elite', 'event'];
   if (!dungeonRun.chapterUsed.treasure) pool.push('treasure');
   if (!dungeonRun.chapterUsed.camp && roomIndex >= 3) pool.push('camp');
+  if (dungeonHazardAvailable(nextFloor)) pool.push('hazard');
   let filtered = pool.filter(type => recent.filter(x => x === type).length < 2);
   if (filtered.length < 2) filtered = pool.slice();
 
@@ -101,6 +235,7 @@ function openRouteSelection() {
   if (!dungeonRun) return;
   const nextFloor = floor + 1;
   dungeonRun.choices = generateRouteChoices(nextFloor);
+  if (typeof recordDungeonRouteOffer === 'function') recordDungeonRouteOffer(dungeonRun.choices);
   routePanel = { choices:dungeonRun.choices };
   portal = null;
   clearGameInputs();
@@ -110,6 +245,7 @@ function openRouteSelection() {
 function chooseDungeonRoute(index) {
   if (!routePanel || !routePanel.choices[index]) return;
   const spec = routePanel.choices[index];
+  if (typeof recordDungeonRouteChoice === 'function') recordDungeonRouteChoice(spec);
   routePanel = null;
   enterDungeonRoom(spec);
 }
@@ -119,6 +255,7 @@ function applyRoomEntry(spec) {
   currentRoomSpec = spec;
   dungeonRun.chapter = spec.chapter;
   dungeonRun.roomHistory.push(spec.type);
+  if (spec.eventId) dungeonRun.eventHistory.push(spec.eventId);
   if (spec.type === 'camp') dungeonRun.chapterUsed.camp = true;
   if (spec.type === 'treasure') dungeonRun.chapterUsed.treasure = true;
 }
@@ -126,6 +263,7 @@ function applyRoomEntry(spec) {
 function enterDungeonRoom(spec) {
   const p = player;
   applyRoomEntry(spec);
+  if (typeof recordDungeonRoomEntry === 'function') recordDungeonRoomEntry(spec);
   floor = spec.floor;
   if (floor > 1) activityProgress('floors', 1);
   const campHeal = 0.05 * perkV('camp');
@@ -150,12 +288,20 @@ function grantRoomClearReward(spec) {
     meta.mats.enh += 1;
     saveMeta();
     num(player.x, player.y - player.h - 58, '菁英房完成 · 強化石 +1', '#d9a8ff');
+  } else if (spec.type === 'hazard') {
+    const soulBonus = dungeonHazardSoulBonus(floor);
+    soulsRun += soulBonus;
+    meta.mats.enh += 1;
+    saveMeta();
+    num(player.x, player.y - player.h - 58, '險境完成 · 靈魂 +' + soulBonus + ' · 強化石 +1', '#ffb45e');
   }
 }
 
 function completeDungeonRoom() {
   if (!dungeonRun || mons.length > 0 || dungeonRun.completedFloor === floor) return;
+  if (typeof floorTrial !== 'undefined' && typeof dungeonTrialBlocksCompletion === 'function' && dungeonTrialBlocksCompletion(floorTrial)) return;
   dungeonRun.completedFloor = floor;
+  if (typeof recordDungeonRoomComplete === 'function') recordDungeonRoomComplete(currentRoomSpec);
   grantRoomClearReward(currentRoomSpec);
   const isBoss = currentRoomSpec && currentRoomSpec.type === 'boss';
   portal = { x:worldW - 70, y:468, kind:isBoss ? 'chapter' : 'next' };
