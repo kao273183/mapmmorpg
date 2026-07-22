@@ -16,8 +16,8 @@ for (const file of componentTests) {
 }
 
 const source = [
-  fs.readFileSync(path.join(root, 'dungeon-data.js'), 'utf8'),
-  fs.readFileSync(path.join(root, 'dungeon.js'), 'utf8'),
+  fs.readFileSync(path.join(root, 'src', 'dungeon', 'data.js'), 'utf8'),
+  fs.readFileSync(path.join(root, 'src', 'dungeon', 'core.js'), 'utf8'),
   `
   function __resetIntegratedRun(seed) {
     dungeonRun = {

@@ -13,8 +13,8 @@ const context = vm.createContext({
   }
 });
 
-const dataSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-data.js'), 'utf8');
-const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-balance.js'), 'utf8');
+const dataSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'data.js'), 'utf8');
+const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'balance.js'), 'utf8');
 vm.runInContext(dataSource + '\n' + balanceSource + `
 globalThis.d3cApi = {
   calibration:DUNGEON_D3C_CALIBRATION,
@@ -50,8 +50,8 @@ const exported = JSON.parse(api.exportRecords());
 assert.strictEqual(exported.benchmark.calibration.adjustments.length, 3);
 assert.strictEqual(exported.natural.calibration.basis, 'fixed-benchmark-model');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
-const dungeonSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon.js'), 'utf8');
+const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const dungeonSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'core.js'), 'utf8');
 assert.ok(gameSource.includes('DUNGEON_D3C_CALIBRATION.eliteHpMultiplier'));
 assert.ok(gameSource.includes("version:'0.28.9'"));
 assert.ok(dungeonSource.includes('dungeonHazardSoulBonus(floor)'));

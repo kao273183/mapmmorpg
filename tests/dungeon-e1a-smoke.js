@@ -13,9 +13,9 @@ const context = vm.createContext({
   }
 });
 
-const dataSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-data.js'), 'utf8');
-const bossSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-bosses.js'), 'utf8');
-const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-balance.js'), 'utf8');
+const dataSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'data.js'), 'utf8');
+const bossSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'bosses.js'), 'utf8');
+const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'balance.js'), 'utf8');
 vm.runInContext(dataSource + `
 function dungeonBiomeDef(atFloor) {
   const index = Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5));
@@ -105,7 +105,7 @@ assert.strictEqual(report.bossStats.cavern_lord.highestPhase, 2);
 assert.strictEqual(report.bossStats.cavern_lord.deathSources[0].source, '洞窟領主的落地震波');
 assert.strictEqual(JSON.parse(api.exportRecords()).version, 3);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes('createDungeonBoss(bossDef, n, sc)'));
 assert.ok(gameSource.includes('dungeonBossTelegraph(m)'));

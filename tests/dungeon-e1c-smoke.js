@@ -14,8 +14,8 @@ const context = vm.createContext({
   dmgPlayer:event => { damageEvents.push(event); return false; }
 });
 
-const dataSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-data.js'), 'utf8');
-const bossSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-bosses.js'), 'utf8');
+const dataSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'data.js'), 'utf8');
+const bossSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'bosses.js'), 'utf8');
 vm.runInContext(dataSource + `
 function dungeonBiomeDef(atFloor) {
   return DUNGEON_BIOME_DEFS[Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5))];
@@ -94,7 +94,7 @@ for (let i = 0; i < api.def.attackSlots[1].warningFrames; i++) api.updateSpecial
 for (let i = 0; i < 18; i++) api.updateEffects(player);
 assert.strictEqual(damageEvents.length, 0, 'rock shelves must protect against the ground shockwave');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['rock-active','wave-active','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));

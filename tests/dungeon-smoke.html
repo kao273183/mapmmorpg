@@ -10,17 +10,17 @@
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
-<script src="tiles.js?v=1"></script>
-<script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.29.6"></script>
-<script src="dungeon-bosses.js?v=0.29.6"></script>
-<script src="dungeon-balance.js?v=0.29.6"></script>
-<script src="dungeon.js?v=0.29.6"></script>
-<script src="dungeon-hazards.js?v=0.29.6"></script>
-<script src="dungeon-events.js?v=0.29.6"></script>
-<script src="dungeon-trials.js?v=0.29.6"></script>
-<script src="dungeon-ui.js?v=0.29.6"></script>
-<script src="game.js?v=0.29.6"></script>
+<script src="src/data/tiles.js?v=1"></script>
+<script src="src/data/items.js?v=1"></script>
+<script src="src/dungeon/data.js?v=0.29.6"></script>
+<script src="src/dungeon/bosses.js?v=0.29.6"></script>
+<script src="src/dungeon/balance.js?v=0.29.6"></script>
+<script src="src/dungeon/core.js?v=0.29.6"></script>
+<script src="src/dungeon/hazards.js?v=0.29.6"></script>
+<script src="src/dungeon/events.js?v=0.29.6"></script>
+<script src="src/dungeon/trials.js?v=0.29.6"></script>
+<script src="src/dungeon/ui.js?v=0.29.6"></script>
+<script src="src/game.js?v=0.29.6"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';

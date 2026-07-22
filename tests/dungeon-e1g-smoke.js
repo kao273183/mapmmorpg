@@ -13,7 +13,7 @@ const context = vm.createContext({
   }
 });
 
-const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-balance.js'), 'utf8');
+const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'balance.js'), 'utf8');
 vm.runInContext(balanceSource + `
 globalThis.e1gApi = {
   targets:DUNGEON_BOSS_BENCHMARK_TARGETS,
@@ -86,7 +86,7 @@ assert.strictEqual(exported.version, 3);
 assert.strictEqual(exported.bossBenchmark.cases.length, 10);
 assert.strictEqual(exported.benchmark.summary.runs, 10);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));

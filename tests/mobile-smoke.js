@@ -4,10 +4,10 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
-const mobileSource = fs.readFileSync(path.join(root, 'mobile.js'), 'utf8');
+const mobileSource = fs.readFileSync(path.join(root, 'src', 'mobile.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const game = fs.readFileSync(path.join(root, 'game.js'), 'utf8');
+const game = fs.readFileSync(path.join(root, 'src', 'game.js'), 'utf8');
 
 function makeMobileContext({ coarse, portrait, width }) {
   const listeners = {};
