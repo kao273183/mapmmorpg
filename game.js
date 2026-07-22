@@ -944,6 +944,9 @@ let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
 let portal = null;
 let floorEvent = null, eventPanel = null, floorTrial = null;
+const DUNGEON_BENCHMARK_SNAPSHOT_KEY = 'pixelrogue_dungeon_benchmark_snapshot_v1';
+let pendingDungeonBenchmarkId = null, activeDungeonBenchmarkId = null;
+let dungeonBenchmarkProgressSnapshot = null;
 const eventChoiceBtns = [];
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
@@ -1947,17 +1950,28 @@ function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增�
   beep(180, 0.2, 'sawtooth', 0.05);
 }
 function resetRun() {
+  const benchmarkProfile = pendingDungeonBenchmarkId && typeof dungeonBenchmarkProfile === 'function' ? dungeonBenchmarkProfile(pendingDungeonBenchmarkId) : null;
+  if (benchmarkProfile) chosenCls = benchmarkProfile.classId;
+  activeDungeonBenchmarkId = benchmarkProfile ? benchmarkProfile.id : null;
+  pendingDungeonBenchmarkId = null;
   const p = player;
   p.cls = chosenCls;
   p.lv = 1; p.xp = 0;
   p.cd = { atk: 0, hp: 0, crit: 0, spd: 0, aspd: 0, xdmg: 0, ls: 0, mp: 0, pot: 0, def: 0, heal: 0, ifr: 0 };
   p.items = []; p.eq = { weapon: null, armor: null, helmet: null, boots: null, acc: null };
-  for (const part of GEAR_PARTS) { // 從倉庫穿戴開局裝備(副本帶出,倉庫原件保留)
-    const uid = meta.loadout[part];
-    const src = uid ? meta.stash.find(s => s.uid === uid) : null;
-    if (src && gearUsableByClass(src, p.cls)) {
-      const cp = Object.assign({}, src, { affixes: (src.affixes || []).map(a => a && Object.assign({}, a)) });
-      p.items.push(cp); p.eq[part] = cp;
+  if (benchmarkProfile) {
+    for (const src of benchmarkProfile.gear) {
+      const cp = Object.assign({}, src, { affixes:(src.affixes || []).map(a => a && Object.assign({}, a)) });
+      p.items.push(cp); p.eq[cp.kind] = cp;
+    }
+  } else {
+    for (const part of GEAR_PARTS) { // 從倉庫穿戴開局裝備(副本帶出,倉庫原件保留)
+      const uid = meta.loadout[part];
+      const src = uid ? meta.stash.find(s => s.uid === uid) : null;
+      if (src && gearUsableByClass(src, p.cls)) {
+        const cp = Object.assign({}, src, { affixes: (src.affixes || []).map(a => a && Object.assign({}, a)) });
+        p.items.push(cp); p.eq[part] = cp;
+      }
     }
   }
   p.bag = { hp: meta.up.pots, mp: meta.up.pots };
@@ -1977,7 +1991,7 @@ function resetRun() {
   floor = 1; kills = 0; soulsRun = 0; gearSeq = 1;
   pendingPicks = 0;
   dmgNums.length = 0; parts.length = 0;
-  resetDungeonRun();
+  resetDungeonRun(benchmarkProfile);
   genFloor(1, currentRoomSpec);
   if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
   gameState = 'play';
@@ -1986,18 +2000,61 @@ function resetRun() {
   setTimeout(() => beep(880, 0.15, 'sine', 0.04), 100);
 }
 function endRun(result) {
+  const benchmarkRun = !!activeDungeonBenchmarkId;
   const gained = Math.round(soulsRun * soulGainMul());
-  meta.souls += gained;
+  if (!benchmarkRun) meta.souls += gained;
   let stashed = 0;
-  for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
-  lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource, result:result === 'extract' ? 'extract' : 'death' };
+  if (!benchmarkRun) for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
+  lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource, result:result === 'extract' ? 'extract' : 'death', benchmarkId:activeDungeonBenchmarkId };
   if (typeof finishDungeonBalanceRun === 'function') finishDungeonBalanceRun(lastRun);
-  if (floor > bestFloor) bestFloor = floor;
-  saveMeta();
+  if (benchmarkRun) restoreDungeonBenchmarkProgress();
+  else { if (floor > bestFloor) bestFloor = floor; saveMeta(); }
+  activeDungeonBenchmarkId = null;
   gameState = 'dead';
   setHint('Enter 返回基地');
   if (lastRun.result === 'extract') playSfx('uiConfirm', 0.95, 1.08);
   else beep(120, 0.4, 'sawtooth', 0.05);
+}
+
+function snapshotDungeonBenchmarkProgress() {
+  dungeonBenchmarkProgressSnapshot = {
+    meta:JSON.parse(JSON.stringify(meta)),
+    activity:JSON.parse(JSON.stringify(activityState)),
+    bestFloor
+  };
+  try { localStorage.setItem(DUNGEON_BENCHMARK_SNAPSHOT_KEY, JSON.stringify(dungeonBenchmarkProgressSnapshot)); } catch (err) {}
+}
+function restoreDungeonBenchmarkProgress() {
+  let snapshot = dungeonBenchmarkProgressSnapshot;
+  if (!snapshot) {
+    try { snapshot = JSON.parse(localStorage.getItem(DUNGEON_BENCHMARK_SNAPSHOT_KEY)); } catch (err) {}
+  }
+  dungeonBenchmarkProgressSnapshot = null;
+  if (!snapshot) return;
+  for (const key of Object.keys(meta)) delete meta[key];
+  Object.assign(meta, snapshot.meta);
+  for (const key of Object.keys(activityState)) delete activityState[key];
+  Object.assign(activityState, snapshot.activity);
+  bestFloor = snapshot.bestFloor;
+  saveMeta(); saveActivity();
+  try { localStorage.removeItem(DUNGEON_BENCHMARK_SNAPSHOT_KEY); } catch (err) {}
+}
+function recoverAbandonedDungeonBenchmark() {
+  try {
+    if (localStorage.getItem(DUNGEON_BENCHMARK_SNAPSHOT_KEY)) restoreDungeonBenchmarkProgress();
+  } catch (err) {}
+}
+function startDungeonBenchmarkRun(profileId) {
+  const profile = typeof dungeonBenchmarkProfile === 'function' ? dungeonBenchmarkProfile(profileId) : null;
+  if (!profile) { menuMsg = { text:'基準設定不存在', color:'#ff5a5a', t:180 }; playSfx('uiError'); return false; }
+  snapshotDungeonBenchmarkProgress();
+  pendingDungeonBenchmarkId = profile.id;
+  chosenCls = profile.classId;
+  settingsOpen = false; settingsPage = 'main'; settingsMode = null;
+  closeSaveEdit(); clearGameInputs();
+  resetRun();
+  num(player.x, player.y - player.h - 48, '固定基準：' + profile.label + ' · ' + profile.gearLabel, '#ffe680');
+  return true;
 }
 
 // ---------- fx ----------
@@ -2216,8 +2273,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.28.7';
+const GAME_VERSION = '0.28.8';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.28.8', date:'2026-07-22', title:'D3-B 固定基準局與報表',
+    items:['劍士與法師各加入新手、第二章、第三章三組固定裝備與種子。','自然遊玩與固定基準局分開統計，不混用樣本。','報表新增職業、房型、承傷占比、試煉與警戒線比較。']
+  },
   {
     version:'0.28.7', date:'2026-07-22', title:'D3 平衡紀錄與遊戲內更新紀錄',
     items:['記錄最近 60 局的路線、房型、耗時、承傷與撤退結果。','設定新增平衡紀錄摘要，可複製完整 JSON 供測試比較。','設定新增更新紀錄頁，可直接查看最近版本內容。']
@@ -2232,7 +2293,7 @@ const GAME_UPDATE_NOTES = [
   }
 ];
 let settingsOpen = false, settingsMode = null; // 'import' | 'rename' | null
-let settingsPage = 'main', settingsUpdateIndex = 0;
+let settingsPage = 'main', settingsUpdateIndex = 0, settingsBalanceMode = 'natural', settingsBenchmarkIndex = 0;
 const settingsBtns = [];
 let saveInput = null;
 function getSaveInput() {
@@ -2291,34 +2352,59 @@ function renderSettingsUpdates(mx, my, mw, mh) {
   drawSettingsButton(mx + mw - 188, my + mh - 58, 160, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
 }
 function renderSettingsBalance(mx, my, mw, mh) {
-  const summary = typeof dungeonBalanceSummary === 'function' ? dungeonBalanceSummary() : { runs:0, extractRate:0, averageFloor:0, averageDurationSec:0, riskyChoiceRate:0, averageDamage:0, topDamage:[] };
+  const report = typeof dungeonBalanceReport === 'function' ? dungeonBalanceReport(settingsBalanceMode) : null;
+  const summary = report ? report.summary : { runs:0, extractRate:0, averageFloor:0, averageDurationSec:0, riskyChoiceRate:0, averageDamage:0, topDamage:[] };
   ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
-  ctx.fillText('最近 ' + summary.runs + ' / 60 局（只保存在此瀏覽器）', W / 2, my + 78);
+  ctx.fillText(settingsBalanceMode === 'benchmark' ? '固定基準局 · 與自然遊玩分開' : '自然遊玩 · 最近 60 局', W / 2, my + 72);
+  drawSettingsButton(mx + 146, my + 84, 138, 30, '自然遊玩', 'balanceNatural', settingsBalanceMode === 'natural' ? 'rgba(125,255,214,0.18)' : null);
+  drawSettingsButton(mx + 296, my + 84, 138, 30, '固定基準', 'balanceBenchmark', settingsBalanceMode === 'benchmark' ? 'rgba(185,140,255,0.18)' : null);
   const rows = [
-    ['平均到達', summary.runs ? summary.averageFloor.toFixed(1) + ' 層' : '尚無資料'],
+    ['樣本', summary.runs ? summary.runs + ' 局' : '尚無資料'],
     ['平均局長', summary.runs ? Math.round(summary.averageDurationSec / 60) + ' 分鐘' : '—'],
-    ['撤退率', summary.runs ? Math.round(summary.extractRate * 100) + '%' : '—'],
+    ['劍士平均樓層', report && report.classStats.warrior.runs ? report.classStats.warrior.averageFloor.toFixed(1) : '—'],
+    ['法師平均樓層', report && report.classStats.mage.runs ? report.classStats.mage.averageFloor.toFixed(1) : '—'],
     ['高風險選擇', summary.runs ? Math.round(summary.riskyChoiceRate * 100) + '%' : '—'],
-    ['平均承傷', summary.runs ? Math.round(summary.averageDamage) : '—']
+    ['撤退率', summary.runs ? Math.round(summary.extractRate * 100) + '%' : '—']
   ];
   for (let i = 0; i < rows.length; i++) {
-    const x = mx + 32 + (i % 2) * 258, y = my + 104 + Math.floor(i / 2) * 62;
+    const x = mx + 32 + (i % 2) * 258, y = my + 126 + Math.floor(i / 2) * 58;
     ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(x, y, 244, 48);
     ctx.strokeStyle = '#343850'; ctx.strokeRect(x, y, 244, 48);
     ctx.textAlign = 'left'; ctx.fillStyle = '#7f86a7'; ctx.font = '11px "Courier New",monospace'; ctx.fillText(rows[i][0], x + 12, y + 18);
     ctx.textAlign = 'right'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(String(rows[i][1]), x + 232, y + 33);
   }
-  ctx.textAlign = 'left'; ctx.fillStyle = '#b98cff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('主要承傷來源', mx + 32, my + 302);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#b98cff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('主要承傷來源', mx + 32, my + 320);
   ctx.fillStyle = '#aeb4d0'; ctx.font = '11px "Courier New",monospace';
-  const damageText = summary.topDamage.length ? summary.topDamage.map(([name, value]) => name + ' ' + Math.round(value)).join('　·　') : '完成地城後會顯示排行';
-  ctx.fillText(damageText, mx + 32, my + 324);
+  const damageText = report && report.damageShares.length ? report.damageShares.slice(0, 3).map(item => item.source + ' ' + Math.round(item.share * 100) + '%').join('　·　') : '完成地城後會顯示排行';
+  ctx.fillText(damageText, mx + 32, my + 342);
+  ctx.fillStyle = report && report.alerts.length ? '#ffb45e' : '#6f7695';
+  ctx.fillText(report && report.alerts.length ? '警戒：' + report.alerts[0] : '樣本達門檻後自動檢查平衡警戒線', mx + 32, my + 366);
   if (menuMsg) {
     ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
     if (--menuMsg.t <= 0) menuMsg = null;
   }
-  drawSettingsButton(mx + 28, my + mh - 58, 250, 38, '複製完整測試紀錄', 'copyBalance', 'rgba(185,140,255,0.16)');
-  drawSettingsButton(mx + mw - 268, my + mh - 58, 240, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+  drawSettingsButton(mx + 20, my + mh - 58, 190, 38, '複製完整報表', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + 220, my + mh - 58, 160, 38, '基準設定', 'benchmarkSetup', 'rgba(255,180,94,0.12)');
+  drawSettingsButton(mx + 390, my + mh - 58, 170, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+}
+function renderSettingsBenchmark(mx, my, mw, mh) {
+  const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];
+  ctx.fillStyle = '#7dffd6'; ctx.font = '12px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText('固定種子與開局裝備；永久成長維持目前帳號', W / 2, my + 70);
+  for (let i = 0; i < profiles.length; i++) {
+    const profile = profiles[i], x = mx + 24 + (i % 2) * 270, y = my + 92 + Math.floor(i / 2) * 70;
+    const selected = i === settingsBenchmarkIndex;
+    const b = drawSettingsButton(x, y, 262, 54, profile.label, 'benchmarkSelect', selected ? 'rgba(185,140,255,0.2)' : null);
+    b.index = i;
+    ctx.fillStyle = selected ? '#ffe680' : '#7f86a7'; ctx.font = '10px "Courier New",monospace';
+    ctx.fillText(profile.gearLabel + ' · Seed ' + profile.seed, x + 131, y + 44);
+  }
+  const selected = profiles[settingsBenchmarkIndex];
+  ctx.fillStyle = '#8c92b1'; ctx.font = '11px "Courier New",monospace';
+  ctx.fillText(selected ? '開始後不會改動倉庫；本局標記為 ' + selected.id : '沒有可用基準', W / 2, my + 326);
+  drawSettingsButton(mx + 24, my + mh - 58, 260, 38, '開始固定基準局', 'benchmarkStart', 'rgba(255,180,94,0.18)');
+  drawSettingsButton(mx + mw - 284, my + mh - 58, 260, 38, '返回平衡報表', 'balanceBack', 'rgba(125,255,214,0.14)');
 }
 function renderSettings() {
   settingsBtns.length = 0;
@@ -2328,9 +2414,10 @@ function renderSettings() {
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace';
-  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 紀 錄' : '設 定', W / 2, my + 38);
+  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 報 表' : settingsPage === 'benchmark' ? '固 定 基 準 局' : '設 定', W / 2, my + 38);
   if (settingsPage === 'updates') { renderSettingsUpdates(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'balance') { renderSettingsBalance(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
+  if (settingsPage === 'benchmark') { renderSettingsBenchmark(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
   ctx.fillStyle = audioSettings.muted ? '#ff8a8a' : '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
@@ -2422,7 +2509,8 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (settingsOpen) {
     if (k === 'escape' && !settingsMode) {
-      if (settingsPage !== 'main') settingsPage = 'main';
+      if (settingsPage === 'benchmark') settingsPage = 'balance';
+      else if (settingsPage !== 'main') settingsPage = 'main';
       else { settingsOpen = false; closeSaveEdit(); clearGameInputs(); }
     }
     return;
@@ -2506,6 +2594,16 @@ function handleTap(mx, my) {
       if (b.act === 'updatesOlder') { settingsUpdateIndex = Math.min(GAME_UPDATE_NOTES.length - 1, settingsUpdateIndex + 1); playSfx('uiSelect'); return; }
       if (b.act === 'updatesNewer') { settingsUpdateIndex = Math.max(0, settingsUpdateIndex - 1); playSfx('uiSelect'); return; }
       if (b.act === 'balance') { settingsPage = 'balance'; playSfx('uiSelect'); return; }
+      if (b.act === 'balanceNatural') { settingsBalanceMode = 'natural'; playSfx('uiSelect'); return; }
+      if (b.act === 'balanceBenchmark') { settingsBalanceMode = 'benchmark'; playSfx('uiSelect'); return; }
+      if (b.act === 'benchmarkSetup') { settingsPage = 'benchmark'; playSfx('uiSelect'); return; }
+      if (b.act === 'benchmarkSelect') { settingsBenchmarkIndex = Math.max(0, b.index | 0); playSfx('uiSelect'); return; }
+      if (b.act === 'benchmarkStart') {
+        const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];
+        if (profiles[settingsBenchmarkIndex]) startDungeonBenchmarkRun(profiles[settingsBenchmarkIndex].id);
+        return;
+      }
+      if (b.act === 'balanceBack') { settingsPage = 'balance'; settingsBalanceMode = 'benchmark'; playSfx('uiSelect'); return; }
       if (b.act === 'settingsBack') { settingsPage = 'main'; playSfx('uiSelect'); return; }
       if (b.act === 'copyBalance') {
         const records = typeof exportDungeonBalanceRecords === 'function' ? exportDungeonBalanceRecords() : '{}';
@@ -3858,9 +3956,9 @@ function drawDead() {
   ctx.fillText('到達 第 ' + lastRun.floor + ' 層', W / 2, 240);
   ctx.fillText('擊殺 ' + lastRun.kills + ' 隻怪物', W / 2, 270);
   ctx.fillStyle = '#7dffd6';
-  ctx.fillText('獲得靈魂 +' + lastRun.gained, W / 2, 300);
+  ctx.fillText(lastRun.benchmarkId ? '測試靈魂 +' + lastRun.gained : '獲得靈魂 +' + lastRun.gained, W / 2, 300);
   ctx.fillStyle = extracted ? '#9ecbff' : '#ffb0b0'; ctx.font = 'bold 14px "Courier New",monospace';
-  ctx.fillText(extracted ? '本章獎勵與探索成果已保存' : '最後傷害：' + (lastRun.cause || '未知攻擊'), W / 2, 326);
+  ctx.fillText(lastRun.benchmarkId ? '固定基準局不保存角色進度' : extracted ? '本章獎勵與探索成果已保存' : '最後傷害：' + (lastRun.cause || '未知攻擊'), W / 2, 326);
   if (lastRun.stashed) { ctx.fillStyle = '#d8b365'; ctx.fillText('裝備存入倉庫 ' + lastRun.stashed + ' 件', W / 2, 350); }
   ctx.fillStyle = Math.floor(frame / 30) % 2 === 0 ? '#ffe680' : '#8890b8';
   ctx.font = '15px "Courier New",monospace';
@@ -4670,7 +4768,7 @@ function renderMenu() {
   ctx.fillText('進入地城', startBtn.x + bw2 / 2 - 22, startBtn.y + 33);
   ctx.fillStyle = '#e3c4f3'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('[ ENTER ]', startBtn.x + bw2 / 2 + 82, startBtn.y + 33);
   ctx.fillStyle = '#777e9f'; ctx.font = '10px ' + STAT_FONT;
-  ctx.fillText(lastRun ? '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
+  ctx.fillText(lastRun ? (lastRun.benchmarkId ? '上次基準  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  進度未保存' : '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained) : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
 
   // 永久成長分成戰鬥／冒險兩頁，維持清楚密度並方便繼續擴充。
   metaBtns.length = 0;
@@ -4762,6 +4860,7 @@ function loop(now) {
   if (settingsOpen) renderSettings();
   requestAnimationFrame(loop);
 }
+recoverAbandonedDungeonBenchmark();
 calcStats();
 gameState = 'town'; setHint(HINT_TOWN);
 document.addEventListener('visibilitychange', () => {

@@ -169,8 +169,8 @@ function dungeonHazardAvailable(atFloor) {
   return !!(def && def.implemented);
 }
 
-function resetDungeonRun() {
-  const seed = dungeonSeedHash(Date.now() + ':' + Math.random() + ':' + (meta.playerName || '勇者'));
+function resetDungeonRun(benchmarkProfile) {
+  const seed = benchmarkProfile ? benchmarkProfile.seed : dungeonSeedHash(Date.now() + ':' + Math.random() + ':' + (meta.playerName || '勇者'));
   dungeonRun = {
     seed,
     chapter:1,
@@ -187,7 +187,9 @@ function resetDungeonRun() {
   currentRoomSpec = makeRoomSpec('safe', 1, 0);
   dungeonRun.roomHistory.push('safe');
   if (typeof startDungeonBalanceRun === 'function') {
-    startDungeonBalanceRun(seed, typeof chosenCls === 'string' ? chosenCls : 'unknown');
+    startDungeonBalanceRun(seed, typeof chosenCls === 'string' ? chosenCls : 'unknown', undefined, benchmarkProfile ? {
+      mode:'benchmark', benchmarkId:benchmarkProfile.id, benchmarkLabel:benchmarkProfile.label
+    } : { mode:'natural' });
     recordDungeonRoomEntry(currentRoomSpec);
   }
   routePanel = null;
