@@ -6,6 +6,16 @@
 mapmmorpg/
 ├─ index.html                 正式入口與腳本載入順序
 ├─ style.css                  全域與手機版樣式
+├─ assets/
+│  ├─ README.md               素材分區與授權維護規則
+│  ├─ runtime/                瀏覽器會直接請求的遊戲素材
+│  │  ├─ audio/               音效與授權
+│  │  ├─ equipment/           目前使用的裝備圖示
+│  │  └─ skills/              技能圖示與動畫圖集
+│  └─ source/                 不由遊戲直接載入的原始素材包
+│     ├─ item-library/        備選裝備與道具素材
+│     ├─ kenney-rpg-urban-pack/ 原始城市圖塊包
+│     └─ itemsheet.png        內嵌道具圖集的來源圖片
 ├─ src/
 │  ├─ data/                   內嵌圖集資料
 │  │  ├─ tiles.js
@@ -32,7 +42,7 @@ mapmmorpg/
 │     └─ main.js              固定 60 Hz 主迴圈與啟動
 ├─ tests/                     Node smoke tests 與固定瀏覽器情境
 ├─ doc/                       設計、計畫、Roadmap 與變更紀錄
-└─ audio/ item/ Skill/ ...    素材；F1-C 再分 runtime/source
+└─ README.md                  專案入口說明
 ```
 
 ## 腳本載入契約
@@ -65,7 +75,8 @@ mapmmorpg/
 ## 放置規則
 
 - 新的地城規則、資料與介面分別放入 `src/dungeon/` 對應模組，不再新增根目錄腳本。
-- 圖集產生結果放入 `src/data/`；圖片與音效原檔仍屬素材，不放進程式目錄。
+- 圖集產生結果放入 `src/data/`；圖片與音效原檔仍屬 `assets/`，不放進程式目錄。
 - 非地城主流程依既有執行順序放在 `src/game/`；新增跨檔宣告時必須同步維護載入契約與測試 helper。
 - 歷史文件可保留當時檔名；仍具現行效力的設計與測試必須引用目前路徑。
-- 素材目錄在 F1-C 前不搬動，避免程式結構與大量二進位重新命名混在同一批。
+- `assets/runtime/` 只放瀏覽器可能直接請求的檔案；原始素材包、備選圖檔與產生內嵌圖集的來源放在 `assets/source/`。
+- 新增或搬動 runtime 素材時，必須同步更新程式路徑、授權文件與結構 smoke test。

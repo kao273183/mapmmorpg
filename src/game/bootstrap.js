@@ -27,7 +27,7 @@ let itemsheetReady = false;
 if (window.ITEMSHEET_URI) { itemsheet.onload = () => { itemsheetReady = true; }; itemsheet.src = window.ITEMSHEET_URI; }
 // Akari21 equipment art. Quality tiers deliberately use distinct silhouettes
 // so upgrades are readable before the player checks the item text.
-const GEAR_ART_ROOT = 'item/equipment/Akari21/';
+const GEAR_ART_ROOT = 'assets/runtime/equipment/';
 const GEAR_ART = {
   warrior: {
     weapon: ['sword - wood.png', 'sword - metal.png', 'sword - gold.png', 'special sword - ice.png', 'special sword - fire.png'],
@@ -123,24 +123,24 @@ const SKILL_ICON_FILES = {
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
   const normal = new Image(), gray = new Image();
-  normal.src = 'Skill/256x256px/Normal/' + n + ' Icon.png';
-  gray.src = 'Skill/256x256px/Gray/' + n + ' Icon.png';
+  normal.src = 'assets/runtime/skills/icons/normal/' + n + ' Icon.png';
+  gray.src = 'assets/runtime/skills/icons/gray/' + n + ' Icon.png';
   skillIcons[id] = normal; skillIconsGray[id] = gray;
 }
 const SKILL_VFX_DEFS = {
-  groundBurst:{ src:'Skill/1 Magic/1.png', frames:8 },
-  rune:{ src:'Skill/1 Magic/2.png', frames:8 },
-  beam:{ src:'Skill/1 Magic/3.png', frames:8 },
-  slashBeam:{ src:'Skill/1 Magic/3_2.png', frames:8 },
-  fireball:{ src:'Skill/1 Magic/4.png', frames:4 },
-  fireballDiag:{ src:'Skill/1 Magic/4_1.png', frames:4 },
-  explosion:{ src:'Skill/1 Magic/4_2.png', frames:4 },
-  impact:{ src:'Skill/1 Magic/6.png', frames:4 },
-  groundImpact:{ src:'Skill/1 Magic/6_2.png', frames:4 },
-  iceSpikes:{ src:'Skill/1 Magic/7.png', frames:8 },
-  roots:{ src:'Skill/1 Magic/8.png', frames:8 },
-  smoke:{ src:'Skill/1 Magic/9.png', frames:8 },
-  teleport:{ src:'Skill/1 Magic/10.png', frames:6 }
+  groundBurst:{ src:'assets/runtime/skills/vfx/1.png', frames:8 },
+  rune:{ src:'assets/runtime/skills/vfx/2.png', frames:8 },
+  beam:{ src:'assets/runtime/skills/vfx/3.png', frames:8 },
+  slashBeam:{ src:'assets/runtime/skills/vfx/3_2.png', frames:8 },
+  fireball:{ src:'assets/runtime/skills/vfx/4.png', frames:4 },
+  fireballDiag:{ src:'assets/runtime/skills/vfx/4_1.png', frames:4 },
+  explosion:{ src:'assets/runtime/skills/vfx/4_2.png', frames:4 },
+  impact:{ src:'assets/runtime/skills/vfx/6.png', frames:4 },
+  groundImpact:{ src:'assets/runtime/skills/vfx/6_2.png', frames:4 },
+  iceSpikes:{ src:'assets/runtime/skills/vfx/7.png', frames:8 },
+  roots:{ src:'assets/runtime/skills/vfx/8.png', frames:8 },
+  smoke:{ src:'assets/runtime/skills/vfx/9.png', frames:8 },
+  teleport:{ src:'assets/runtime/skills/vfx/10.png', frames:6 }
 };
 const skillVfxImages = {};
 for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
@@ -184,11 +184,11 @@ function combatVibrate(ms) {
   try { navigator.vibrate(ms); } catch (err) {}
 }
 const SFX_FILES = {
-  swordSwing:'audio/sfx/sword_swing.ogg', hit:'audio/sfx/hit.ogg', critical:'audio/sfx/critical.ogg',
-  hurt:'audio/sfx/player_hurt.ogg', pickup:'audio/sfx/pickup.ogg', chest:'audio/sfx/chest_open.ogg',
-  uiSelect:'audio/sfx/ui_select.ogg', uiConfirm:'audio/sfx/ui_confirm.ogg', uiError:'audio/sfx/ui_error.ogg',
-  enhanceSuccess:'audio/sfx/enhance_success.ogg', enhanceFail:'audio/sfx/enhance_fail.ogg', itemBreak:'audio/sfx/item_break.ogg',
-  fire:'audio/sfx/spell_fire.ogg', lightning:'audio/sfx/spell_lightning.ogg', ice:'audio/sfx/spell_ice.ogg', meteor:'audio/sfx/spell_meteor.ogg'
+  swordSwing:'assets/runtime/audio/sfx/sword_swing.ogg', hit:'assets/runtime/audio/sfx/hit.ogg', critical:'assets/runtime/audio/sfx/critical.ogg',
+  hurt:'assets/runtime/audio/sfx/player_hurt.ogg', pickup:'assets/runtime/audio/sfx/pickup.ogg', chest:'assets/runtime/audio/sfx/chest_open.ogg',
+  uiSelect:'assets/runtime/audio/sfx/ui_select.ogg', uiConfirm:'assets/runtime/audio/sfx/ui_confirm.ogg', uiError:'assets/runtime/audio/sfx/ui_error.ogg',
+  enhanceSuccess:'assets/runtime/audio/sfx/enhance_success.ogg', enhanceFail:'assets/runtime/audio/sfx/enhance_fail.ogg', itemBreak:'assets/runtime/audio/sfx/item_break.ogg',
+  fire:'assets/runtime/audio/sfx/spell_fire.ogg', lightning:'assets/runtime/audio/sfx/spell_lightning.ogg', ice:'assets/runtime/audio/sfx/spell_ice.ogg', meteor:'assets/runtime/audio/sfx/spell_meteor.ogg'
 };
 const SFX_VOLUME = { swordSwing:0.55, hit:0.45, critical:0.62, hurt:0.58, pickup:0.48, chest:0.55, uiSelect:0.38, uiConfirm:0.48, uiError:0.45, enhanceSuccess:0.55, enhanceFail:0.52, itemBreak:0.68, fire:0.48, lightning:0.52, ice:0.46, meteor:0.58 };
 const SFX_COOLDOWN = { hit:35, critical:45, hurt:80, pickup:55, uiSelect:50 };
