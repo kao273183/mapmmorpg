@@ -5,34 +5,42 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.13">
+<link rel="stylesheet" href="style.css?v=0.29.14">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="src/data/tiles.js?v=1"></script>
 <script src="src/data/items.js?v=1"></script>
-<script src="src/dungeon/data.js?v=0.29.13"></script>
-<script src="src/dungeon/bosses.js?v=0.29.13"></script>
-<script src="src/dungeon/balance.js?v=0.29.13"></script>
-<script src="src/dungeon/core.js?v=0.29.13"></script>
-<script src="src/dungeon/modifiers.js?v=0.29.13"></script>
-<script src="src/dungeon/hazards.js?v=0.29.13"></script>
-<script src="src/dungeon/events.js?v=0.29.13"></script>
-<script src="src/dungeon/trials.js?v=0.29.13"></script>
-<script src="src/dungeon/ui.js?v=0.29.13"></script>
-<script src="src/game/bootstrap.js?v=0.29.13"></script>
-<script src="src/game/progression.js?v=0.29.13"></script>
-<script src="src/game/systems.js?v=0.29.13"></script>
-<script src="src/game/run.js?v=0.29.13"></script>
-<script src="src/game/interface.js?v=0.29.13"></script>
-<script src="src/game/update.js?v=0.29.13"></script>
-<script src="src/game/render.js?v=0.29.13"></script>
-<script src="src/game/town.js?v=0.29.13"></script>
-<script src="src/game/main.js?v=0.29.13"></script>
+<script src="src/dungeon/data.js?v=0.29.14"></script>
+<script src="src/dungeon/bosses.js?v=0.29.14"></script>
+<script src="src/dungeon/balance.js?v=0.29.14"></script>
+<script src="src/dungeon/core.js?v=0.29.14"></script>
+<script src="src/dungeon/modifiers.js?v=0.29.14"></script>
+<script src="src/dungeon/hazards.js?v=0.29.14"></script>
+<script src="src/dungeon/events.js?v=0.29.14"></script>
+<script src="src/dungeon/trials.js?v=0.29.14"></script>
+<script src="src/dungeon/ui.js?v=0.29.14"></script>
+<script src="src/game/bootstrap.js?v=0.29.14"></script>
+<script src="src/game/progression.js?v=0.29.14"></script>
+<script src="src/game/systems.js?v=0.29.14"></script>
+<script src="src/game/run.js?v=0.29.14"></script>
+<script>window.__FORCE_TOUCH_CONTROLS__ = new URLSearchParams(location.search).get('touch') === '1';</script>
+<script src="src/game/interface.js?v=0.29.14"></script>
+<script src="src/game/update.js?v=0.29.14"></script>
+<script src="src/game/render.js?v=0.29.14"></script>
+<script src="src/game/town.js?v=0.29.14"></script>
+<script src="src/game/main.js?v=0.29.14"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
+const viewportWidth = parseInt(smokeParams.get('viewportWidth'), 10);
+const viewportHeight = parseInt(smokeParams.get('viewportHeight'), 10);
+if (Number.isFinite(viewportWidth) && Number.isFinite(viewportHeight)) {
+  document.documentElement.style.setProperty('--app-width', viewportWidth + 'px');
+  document.documentElement.style.setProperty('--app-height', viewportHeight + 'px');
+  document.documentElement.style.setProperty('--canvas-width', Math.floor(Math.min(960, viewportWidth, viewportHeight * 16 / 9)) + 'px');
+}
 if (smokeParams.get('class') === 'mage') chosenCls = 'mage';
 resetRun();
 function openFixedEvent(eventId, options) {
@@ -254,6 +262,22 @@ if (mode.startsWith('boss-')) {
   combatSettings.numbers = 'compact';
   enterDungeonRoom(makeRoomSpec('hazard', 12, 0));
   for (const hazard of dungeonHazards) { hazard.phase = 'warning'; hazard.timer = 20; }
+} else if (mode === 'mobile-joystick') {
+  floorT = 0;
+  updateVirtualJoystick(virtualJoystick.x + virtualJoystick.radius, virtualJoystick.y);
+  const rightOnly = keys.arrowright && !keys.arrowleft && !keys.arrowdown;
+  updateVirtualJoystick(virtualJoystick.x - virtualJoystick.radius, virtualJoystick.y + virtualJoystick.radius);
+  const leftDown = keys.arrowleft && !keys.arrowright && keys.arrowdown;
+  resetVirtualJoystick();
+  const released = !keys.arrowleft && !keys.arrowright && !keys.arrowdown;
+  joystickTouchId = 99;
+  joystickVectorX = 0.72;
+  joystickVectorY = 0.18;
+  setGameKey('arrowright', true);
+  const ok = rightOnly && leftDown && released;
+  window.__dungeonSmokeResult = { ok, joystick:true, rightOnly, leftDown, released, direction:'right' };
+  document.title = 'Dungeon Mobile Joystick';
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
 } else if (mode === 'camp') {
   enterDungeonRoom(makeRoomSpec('camp', 4, 0));
 } else if (mode === 'treasure') {
