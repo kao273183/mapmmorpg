@@ -74,7 +74,7 @@ assert.strictEqual(api.getRuns().length, 60, 'history should retain only the lat
 summary = api.dungeonBalanceSummary();
 assert.strictEqual(summary.runs, 60);
 const exported = JSON.parse(api.exportDungeonBalanceRecords());
-assert.strictEqual(exported.version, 1);
+assert.strictEqual(exported.version, 2);
 assert.strictEqual(exported.runs.length, 60);
 assert.ok(storage.has('pixelrogue_dungeon_balance_v1'));
 

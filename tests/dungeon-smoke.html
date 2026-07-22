@@ -5,21 +5,21 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.28.7">
+<link rel="stylesheet" href="style.css?v=0.28.8">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.28.7"></script>
-<script src="dungeon-balance.js?v=0.28.7"></script>
-<script src="dungeon.js?v=0.28.7"></script>
-<script src="dungeon-hazards.js?v=0.28.7"></script>
-<script src="dungeon-events.js?v=0.28.7"></script>
-<script src="dungeon-trials.js?v=0.28.7"></script>
-<script src="dungeon-ui.js?v=0.28.7"></script>
-<script src="game.js?v=0.28.7"></script>
+<script src="dungeon-data.js?v=0.28.8"></script>
+<script src="dungeon-balance.js?v=0.28.8"></script>
+<script src="dungeon.js?v=0.28.8"></script>
+<script src="dungeon-hazards.js?v=0.28.8"></script>
+<script src="dungeon-events.js?v=0.28.8"></script>
+<script src="dungeon-trials.js?v=0.28.8"></script>
+<script src="dungeon-ui.js?v=0.28.8"></script>
+<script src="game.js?v=0.28.8"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -175,6 +175,35 @@ if (mode.startsWith('trial-')) {
   openTownPanel('save');
   settingsPage = 'balance';
   document.title = 'Dungeon Settings Balance';
+} else if (mode === 'settings-benchmark') {
+  openTownPanel('save');
+  settingsPage = 'benchmark';
+  settingsBenchmarkIndex = 3;
+  document.title = 'Dungeon Settings Benchmark';
+} else if (mode === 'settings-benchmark-report') {
+  const profile = dungeonBenchmarkProfile('mage-chapter2');
+  startDungeonBalanceRun(profile.seed, profile.classId, Date.now(), { mode:'benchmark', benchmarkId:profile.id, benchmarkLabel:profile.label });
+  recordDungeonRouteOffer([makeRoomSpec('safe', 2, 0), makeRoomSpec('hazard', 2, 1)]);
+  recordDungeonRouteChoice(makeRoomSpec('hazard', 2, 1));
+  recordDungeonDamage('落石區', 24);
+  finishDungeonBalanceRun({ result:'extract', floor:10, kills:20, gained:40 }, Date.now() + 900000);
+  openTownPanel('save');
+  settingsPage = 'balance';
+  settingsBalanceMode = 'benchmark';
+  document.title = 'Dungeon Settings Benchmark Report';
+} else if (mode === 'benchmark-run') {
+  meta.souls = 77; meta.mats = { enh:5, ench:4, set:3 }; meta.stash = []; bestFloor = 6;
+  const before = JSON.stringify({ souls:meta.souls, mats:meta.mats, stash:meta.stash, bestFloor });
+  const started = startDungeonBenchmarkRun('mage-chapter2');
+  const profile = dungeonBenchmarkProfile('mage-chapter2');
+  const fixedGear = started && player.cls === 'mage' && activeDungeonBenchmarkId === profile.id && dungeonRun.seed === profile.seed && player.items.length === 5 && player.items.every(item => item.benchmark);
+  meta.souls = 999; meta.mats.enh = 999; floor = 10; kills = 20; soulsRun = 40;
+  endRun('extract');
+  const after = JSON.stringify({ souls:meta.souls, mats:meta.mats, stash:meta.stash, bestFloor });
+  const ok = fixedGear && before === after && lastRun.benchmarkId === profile.id && dungeonBalanceReport('benchmark').summary.runs >= 1;
+  window.__dungeonSmokeResult = { ok, fixedGear, restored:before === after, benchmarkId:lastRun.benchmarkId };
+  document.title = ok ? 'Dungeon Benchmark Run PASS' : 'Dungeon Benchmark Run FAIL';
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
 } else if (mode === 'validate') {
   const issues = [];
   for (let seed = 1; seed <= 1000; seed++) {
