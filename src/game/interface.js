@@ -59,8 +59,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.14';
+const GAME_VERSION = '0.29.15';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.15', date:'2026-07-22', title:'虛擬搖桿放大與 PWA',
+    items:['虛擬搖桿預設放大約 1.35 倍，所有尺寸改由單一係數推導並以左下角為錨點，放大不出畫面。','設定頁新增「手機搖桿大小」：−／＋、拖曳長條、重置(80%～200%)，即時生效並記住。','新增 PWA：可加到主畫面、離線遊玩、版本自動更新(桌機／手機皆偵測)，並提供安裝提示。']
+  },
   {
     version:'0.29.14', date:'2026-07-22', title:'行動版顯示與虛擬搖桿',
     items:['橫向畫面改依瀏覽器實際可視高度縮放，Safari 網址列與分頁列展開時也不會裁掉遊戲上下緣。','左側三個方向按鈕改為可拖曳的圓形虛擬搖桿，支援左右移動與向下穿越平台。','保留右側跳躍、衝刺、技能、藥水、裝備與能力按鈕，並補齊窄高度與多點觸控回歸。']
@@ -303,7 +307,7 @@ function renderSettingsBenchmark(mx, my, mw, mh) {
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 580, mh = 470, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 580, mh = 504, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
@@ -327,7 +331,20 @@ function renderSettings() {
   sm(mx + 156, my + 196, 118, '閃光 ' + (combatSettings.flashes ? '完整' : '降低'), 'flashes', combatSettings.flashes);
   sm(mx + 286, my + 196, 118, '數字 ' + (combatSettings.numbers === 'full' ? '完整' : '精簡'), 'numbers', combatSettings.numbers === 'full');
   sm(mx + 416, my + 196, 118, '觸覺 ' + (combatSettings.haptics ? '開' : '關'), 'haptics', combatSettings.haptics);
-  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 252;
+  // 手機搖桿大小
+  ctx.fillStyle = '#7dc4ff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText('手機搖桿大小：' + Math.round(virtualJoystick.size * 100) + '%', W / 2, my + 240);
+  sm(mx + 26, my + 252, 60, '－', 'joySizeDown', false);
+  const jbX = mx + 96, jbY = my + 252, jbW = 300, jbH = 34;
+  settingsBtns.push({ x: jbX, y: jbY, w: jbW, h: jbH, act: 'joySizeBar' });
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(jbX, jbY, jbW, jbH);
+  ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(jbX, jbY, jbW, jbH);
+  const jRatio = (virtualJoystick.size - JOY_SIZE_MIN) / (JOY_SIZE_MAX - JOY_SIZE_MIN);
+  ctx.fillStyle = 'rgba(125,196,255,0.35)'; ctx.fillRect(jbX, jbY, jbW * jRatio, jbH);
+  ctx.fillStyle = '#cfe4ff'; ctx.fillRect(jbX + jbW * jRatio - 2, jbY - 3, 4, jbH + 6);
+  sm(mx + 406, my + 252, 60, '＋', 'joySizeUp', false);
+  sm(mx + 478, my + 252, 76, '重置', 'joySizeReset', false);
+  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 306;
   const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
   mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
   mk(bx2, byy, '匯入存檔', 'import');
@@ -511,6 +528,10 @@ function handleTap(mx, my) {
       if (b.act === 'volDown') { changeSfxVolume(-0.1); return; }
       if (b.act === 'volUp') { changeSfxVolume(0.1); return; }
       if (b.act === 'mute') { toggleSfxMute(); return; }
+      if (b.act === 'joySizeDown') { setJoystickSize(virtualJoystick.size - 0.1); playSfx('uiSelect'); return; }
+      if (b.act === 'joySizeUp') { setJoystickSize(virtualJoystick.size + 0.1); playSfx('uiSelect'); return; }
+      if (b.act === 'joySizeReset') { setJoystickSize(JOY_SIZE_DEFAULT); playSfx('uiSelect'); return; }
+      if (b.act === 'joySizeBar') { const r = Math.max(0, Math.min(1, (mx - b.x) / b.w)); setJoystickSize(JOY_SIZE_MIN + r * (JOY_SIZE_MAX - JOY_SIZE_MIN)); playSfx('uiSelect'); return; }
       if (b.act === 'shake') {
         combatSettings.shake = (combatSettings.shake + 1) % 3; saveCombatSettings();
         triggerCombatFeel('boss', null, { stop:0 }); playSfx('uiSelect'); return;
@@ -624,7 +645,29 @@ cv.addEventListener('mousedown', e => {
 // ---------- touch controls ----------
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.__FORCE_TOUCH_CONTROLS__ === true;
 if (window.__FORCE_TOUCH_CONTROLS__ === true) document.documentElement.classList.add('force-touch-controls');
-const virtualJoystick = { x:100, y:404, radius:70, hitRadius:88, knobRange:38 };
+// 虛擬搖桿：所有尺寸由單一 size 係數推導(1 = 原始 70px 半徑)。
+// 以左下角為錨點(左緣 x=30、底緣 y=474 固定),放大時往右上長，永遠不出畫面。
+const virtualJoystick = { x:100, y:404, size:1, baseRadius:70, radius:70, hitRadius:88, knobRange:38, cross:44, knobR:27 };
+const JOY_SIZE_MIN = 0.8, JOY_SIZE_MAX = 2.0, JOY_SIZE_DEFAULT = 1.35;
+function applyVirtualJoystickSize(size) {
+  const s = Math.max(JOY_SIZE_MIN, Math.min(JOY_SIZE_MAX, size || JOY_SIZE_DEFAULT));
+  const r = virtualJoystick.baseRadius * s;
+  virtualJoystick.size = s;
+  virtualJoystick.radius = r;
+  virtualJoystick.hitRadius = r * 1.26;
+  virtualJoystick.knobRange = r * 0.54;
+  virtualJoystick.cross = r * 0.63;
+  virtualJoystick.knobR = r * 0.39;
+  virtualJoystick.x = 30 + r;   // 左緣固定 x=30
+  virtualJoystick.y = 474 - r;  // 底緣固定 y=474
+}
+function saveJoystickSize() { try { localStorage.setItem('joystickSize', String(virtualJoystick.size)); } catch (e) {} }
+function setJoystickSize(v) { applyVirtualJoystickSize(Math.round((v || 0) * 20) / 20); saveJoystickSize(); } // 對齊 0.05 格
+(function initJoystickSize() {
+  let s = JOY_SIZE_DEFAULT;
+  try { const v = parseFloat(localStorage.getItem('joystickSize')); if (!isNaN(v)) s = v; } catch (e) {}
+  applyVirtualJoystickSize(s);
+})();
 let joystickTouchId = null;
 let joystickVectorX = 0;
 let joystickVectorY = 0;
@@ -745,12 +788,12 @@ function drawTouchUI() {
   ctx.strokeStyle = stickActive ? 'rgba(125,255,214,0.82)' : 'rgba(200,205,236,0.54)'; ctx.lineWidth = 3; ctx.stroke();
   ctx.strokeStyle = 'rgba(200,205,236,0.22)'; ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(virtualJoystick.x - 44, virtualJoystick.y); ctx.lineTo(virtualJoystick.x + 44, virtualJoystick.y);
-  ctx.moveTo(virtualJoystick.x, virtualJoystick.y - 44); ctx.lineTo(virtualJoystick.x, virtualJoystick.y + 44);
+  ctx.moveTo(virtualJoystick.x - virtualJoystick.cross, virtualJoystick.y); ctx.lineTo(virtualJoystick.x + virtualJoystick.cross, virtualJoystick.y);
+  ctx.moveTo(virtualJoystick.x, virtualJoystick.y - virtualJoystick.cross); ctx.lineTo(virtualJoystick.x, virtualJoystick.y + virtualJoystick.cross);
   ctx.stroke();
   const knobX = virtualJoystick.x + joystickVectorX * virtualJoystick.knobRange;
   const knobY = virtualJoystick.y + joystickVectorY * virtualJoystick.knobRange;
-  ctx.beginPath(); ctx.arc(knobX, knobY, 27, 0, Math.PI * 2);
+  ctx.beginPath(); ctx.arc(knobX, knobY, virtualJoystick.knobR, 0, Math.PI * 2);
   ctx.fillStyle = stickActive ? 'rgba(125,255,214,0.66)' : 'rgba(200,205,236,0.38)'; ctx.fill();
   ctx.strokeStyle = stickActive ? '#c6fff0' : 'rgba(255,255,255,0.68)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = 'bold 11px "Courier New",monospace';
