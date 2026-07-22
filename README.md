@@ -2,7 +2,7 @@
 
 瀏覽器像素 Roguelite RPG。
 
-程式碼已集中於 `src/`，地城模組位於 `src/dungeon/`；目前的載入順序與後續拆分規則請見 [專案結構](doc/PROJECT-STRUCTURE.md)。
+程式碼已集中於 `src/`；地城模組位於 `src/dungeon/`，主遊戲依責任拆分於 `src/game/`。目前的載入順序與放置規則請見 [專案結構](doc/PROJECT-STRUCTURE.md)。
 
 ## 音效
 

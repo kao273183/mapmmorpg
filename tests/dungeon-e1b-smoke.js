@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const damageEvents = [];
 const context = vm.createContext({
@@ -77,7 +78,7 @@ for (let i = 0; i < api.def.attackSlots[1].warningFrames; i++) api.updateSpecial
 assert.strictEqual(api.projectiles().length, 5);
 assert.ok(api.projectiles().every(seed => seed.seed && seed.sourceName === '草原領主的種子彈幕'));
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes('updateDungeonBossEffects(p)'));
 assert.ok(gameSource.includes('drawDungeonBossEffects()'));

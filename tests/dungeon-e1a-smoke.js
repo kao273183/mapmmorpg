@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const storage = new Map();
 const context = vm.createContext({
@@ -105,7 +106,7 @@ assert.strictEqual(report.bossStats.cavern_lord.highestPhase, 2);
 assert.strictEqual(report.bossStats.cavern_lord.deathSources[0].source, '洞窟領主的落地震波');
 assert.strictEqual(JSON.parse(api.exportRecords()).version, 3);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes('createDungeonBoss(bossDef, n, sc)'));
 assert.ok(gameSource.includes('dungeonBossTelegraph(m)'));

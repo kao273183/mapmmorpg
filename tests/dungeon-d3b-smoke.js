@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const storage = new Map();
 const context = vm.createContext({
@@ -103,7 +104,7 @@ for (let i = 0; i < 65; i++) {
 assert.strictEqual(api.summary('benchmark').runs, 60, 'benchmark history should have its own 60-run cap');
 assert.strictEqual(api.summary('natural').runs, 2, 'benchmark runs must not evict natural-play history');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 assert.ok(gameSource.includes('startDungeonBenchmarkRun'));
 assert.ok(gameSource.includes('restoreDungeonBenchmarkProgress'));
 assert.ok(gameSource.includes("settingsBalanceMode = 'benchmark'"));

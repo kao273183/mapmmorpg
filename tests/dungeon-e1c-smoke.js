@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const damageEvents = [];
 const context = vm.createContext({
@@ -94,7 +95,7 @@ for (let i = 0; i < api.def.attackSlots[1].warningFrames; i++) api.updateSpecial
 for (let i = 0; i < 18; i++) api.updateEffects(player);
 assert.strictEqual(damageEvents.length, 0, 'rock shelves must protect against the ground shockwave');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['rock-active','wave-active','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));

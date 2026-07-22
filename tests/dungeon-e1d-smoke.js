@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const damageEvents = [];
 const context = vm.createContext({
@@ -86,7 +87,7 @@ finalVentBoss.phase = 3;
 assert.strictEqual(api.start(finalVentBoss, player, 'vent_chain'), true);
 assert.strictEqual(api.effects().length, 6);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['charge-active','vent-active','vent-safe','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));

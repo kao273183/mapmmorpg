@@ -211,7 +211,7 @@ roomSpec = {
 
 ### 9.2 檔案拆分
 
-為避免 `src/game.js` 繼續膨脹，地城功能已拆出：
+為避免 `src/game/` 的主流程繼續膨脹，地城功能已拆出：
 
 - `src/dungeon/data.js`：房型、事件、地形與生成權重。
 - `src/dungeon/core.js`：種子、路線生成、房間生命週期與章節結算。

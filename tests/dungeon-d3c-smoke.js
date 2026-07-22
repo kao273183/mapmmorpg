@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const storage = new Map();
 const context = vm.createContext({
@@ -50,7 +51,7 @@ const exported = JSON.parse(api.exportRecords());
 assert.strictEqual(exported.benchmark.calibration.adjustments.length, 3);
 assert.strictEqual(exported.natural.calibration.basis, 'fixed-benchmark-model');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const dungeonSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'core.js'), 'utf8');
 assert.ok(gameSource.includes('DUNGEON_D3C_CALIBRATION.eliteHpMultiplier'));
 assert.ok(gameSource.includes("version:'0.28.9'"));

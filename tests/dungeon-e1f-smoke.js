@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const context = vm.createContext({
   console,
@@ -93,7 +94,7 @@ assert.strictEqual(finalPlatforms.filter(platform => platform.voidDisabled).leng
 api.clear();
 assert.strictEqual(finalPlatforms.filter(platform => platform.voidDisabled).length, 0, 'clearing boss effects must restore erased platforms');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 assert.ok(gameSource.includes("startDungeonBossSpecialAttack(m, p, nextAttack, plats)"));

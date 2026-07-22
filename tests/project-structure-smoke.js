@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { GAME_SOURCE_FILES } = require('./helpers/game-source');
 
 const root = path.resolve(__dirname, '..');
 const requiredSources = [
@@ -15,9 +16,10 @@ const requiredSources = [
   'src/dungeon/trials.js',
   'src/dungeon/ui.js',
   'src/mobile.js',
-  'src/game.js'
+  ...GAME_SOURCE_FILES
 ];
 for (const source of requiredSources) assert.ok(fs.existsSync(path.join(root, source)), source + ' should exist');
+assert.ok(!fs.existsSync(path.join(root, 'src', 'game.js')), 'the split game monolith should not return');
 
 const retiredRootSources = [
   'tiles.js', 'items.js', 'dungeon-data.js', 'dungeon-bosses.js', 'dungeon-balance.js', 'dungeon.js',
@@ -46,7 +48,7 @@ const indexScripts = scriptSources('index.html');
 const smokeScripts = scriptSources('tests/dungeon-smoke.html');
 assert.deepStrictEqual(indexScripts.slice(0, sharedOrder.length), sharedOrder);
 assert.deepStrictEqual(smokeScripts.slice(0, sharedOrder.length), sharedOrder);
-assert.deepStrictEqual(indexScripts.slice(-2), ['src/mobile.js', 'src/game.js']);
-assert.strictEqual(smokeScripts[smokeScripts.length - 1], 'src/game.js');
+assert.deepStrictEqual(indexScripts.slice(sharedOrder.length), ['src/mobile.js', ...GAME_SOURCE_FILES]);
+assert.deepStrictEqual(smokeScripts.slice(sharedOrder.length), GAME_SOURCE_FILES);
 
 console.log('project structure smoke test passed (src layout and browser script order)');
