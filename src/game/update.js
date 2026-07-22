@@ -409,6 +409,7 @@ function update() {
       o.x += dx / dist * sp; o.y += dy / dist * sp;
       if (dist < 22) {
         soulsRun++;
+        if (typeof recordDungeonReward === 'function') recordDungeonReward('souls', 1);
         parts.push({ x: o.x, y: o.y, vx: 0, vy: -1, t: 12, color: '#7dffd6' });
         orbs.splice(orbs.indexOf(o), 1);
       }

@@ -135,6 +135,7 @@ function rollPick() {
   const pool = CARDS.filter(c => cardLv(c) < CARD_MAXLV); // 滿等的卡不再抽到
   if (pool.length === 0) { // 全部卡滿等,改給靈魂獎勵
     soulsRun += 3;
+    if (typeof recordDungeonReward === 'function') recordDungeonReward('souls', 3);
     num(player.x, player.y - player.h - 10, '強化全滿級  靈魂 +3', '#7dffd6');
     beep(900, 0.1, 'sine', 0.04);
     if (--pendingPicks > 0) rollPick(); else gameState = 'play';

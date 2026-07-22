@@ -202,6 +202,7 @@ function dropFloorEventGear(minRarity, source) {
   const rarity = Math.max(minRarity || 0, rollRarity(floor));
   gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0,
     it:genGear(floor, rarity, source || 'event'), t:1800, ground:468 });
+  if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 1);
 }
 function chooseFloorEvent(choice) {
   if (!eventPanel || !floorEvent || floorEvent.status !== 'idle') { eventPanel = null; return; }
@@ -214,6 +215,8 @@ function chooseFloorEvent(choice) {
     playSfx('uiError');
     return;
   }
+  const materialsBefore = Object.values(meta.mats || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const soulsBefore = soulsRun;
   const outcome = runDungeonEventEffect(selected.effectId, def, currentRoomSpec, floorEventState(), {
     getSouls:() => soulsRun,
     spendSouls:amount => { soulsRun -= amount; },
@@ -228,6 +231,11 @@ function chooseFloorEvent(choice) {
     num(player.x, player.y - player.h - 18, outcome.message, outcome.color);
     playSfx('uiError');
     return;
+  }
+  if (typeof recordDungeonReward === 'function') {
+    const materialsAfter = Object.values(meta.mats || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    recordDungeonReward('materials', Math.max(0, materialsAfter - materialsBefore));
+    recordDungeonReward('souls', Math.max(0, soulsRun - soulsBefore));
   }
   floorEvent.status = outcome.status;
   burst(floorEvent.x, floorEvent.y - 42, outcome.color, outcome.status === 'declined' ? 10 : 28);
@@ -536,12 +544,14 @@ function hitMon(m, d, crit, noChain) {
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });
+      if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 2);
     } else if (!m.eventMon) {
       if (Math.random() < gearDropChance(m.elite)) {
         gearDrops.push({
           x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
           it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
         });
+        if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 1);
       }
     }
     if (m.trialMon) recordDungeonTrialEnemyDefeat(floorTrial);

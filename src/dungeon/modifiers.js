@@ -432,3 +432,115 @@ function snapshotDungeonModifierState(state) {
     pending:dungeonModifierOfferCopy(state.pending)
   };
 }
+
+// G1-F keeps the first balance pass reproducible and separate from natural-play
+// telemetry. Values are estimates for the paired D3 chapter-three profiles, not
+// claims about player samples; the live report records the same four profiles.
+const DUNGEON_G1_BALANCE_MODEL = {
+  id:'g1f-round-1',
+  version:'0.29.13',
+  date:'2026-07-22',
+  basis:'fixed-benchmark-model',
+  benchmarkIds:['warrior-chapter3', 'mage-chapter3'],
+  offerFloors:[3, 7, 11, 14],
+  assumptions:{ standardKills:20, baseRoomRewards:10 },
+  adjustments:[],
+  baselines:{
+    warrior:{ clearSec:960, damageTaken:150, souls:100, roomRewards:10 },
+    mage:{ clearSec:930, damageTaken:165, souls:100, roomRewards:10 }
+  },
+  cases:[
+    { id:'neutral', label:'無效果', blessings:[], curses:[] },
+    { id:'blessings', label:'只拿祝福', blessings:['sunsteel_edge', 'soul_bloom'], curses:[] },
+    { id:'curses', label:'只拿詛咒', blessings:[], curses:['hardened_horde', 'razor_bargain'] },
+    { id:'mixed', label:'祝福＋詛咒', blessings:['sunsteel_edge', 'soul_bloom'], curses:['hardened_horde', 'razor_bargain'] }
+  ],
+  thresholds:{ classGapPct:0.15, maxSoulMul:2, maxBossSkillDamageMul:2 }
+};
+
+function dungeonG1DefinitionValue(registry, id, side) {
+  const def = registry && registry[id];
+  const effect = def && (side ? def[side] : def.effect);
+  return effect ? Math.min(Number(effect.cap) || Infinity, Math.max(0, Number(effect.value) || 0)) : 0;
+}
+
+function dungeonG1BalanceMetrics(classId, caseId) {
+  const model = DUNGEON_G1_BALANCE_MODEL;
+  const baseline = model.baselines[classId];
+  const definition = model.cases.find(item => item.id === caseId);
+  if (!baseline || !definition) return null;
+  const hasBlessing = id => definition.blessings.includes(id);
+  const hasCurse = id => definition.curses.includes(id);
+  const blessing = id => hasBlessing(id) ? dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, id) : 0;
+  const curse = (id, side) => hasCurse(id) ? dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, id, side) : 0;
+  const outgoingMul = (1 + blessing('sunsteel_edge')) * (1 + curse('frail_power', 'reward'));
+  const enemyHpMul = 1 + curse('hardened_horde', 'risk');
+  const incomingMul = 1 + curse('razor_bargain', 'risk');
+  const soulMul = (1 + blessing('soul_bloom')) * (1 + curse('hardened_horde', 'reward')) * (1 + curse('last_light', 'reward'));
+  const extraGearChance = blessing('treasure_eye') + curse('razor_bargain', 'reward');
+  const clearSec = Math.round(baseline.clearSec * enemyHpMul / outgoingMul);
+  const damageTaken = Math.round(baseline.damageTaken * incomingMul);
+  const souls = Math.round(baseline.souls * soulMul);
+  const roomRewards = Number((baseline.roomRewards + model.assumptions.standardKills * extraGearChance).toFixed(1));
+  return {
+    classId,
+    caseId,
+    blessings:definition.blessings.slice(),
+    curses:definition.curses.slice(),
+    clearSec,
+    damageTaken,
+    souls,
+    roomRewards,
+    deltas:{
+      clearPct:clearSec / baseline.clearSec - 1,
+      damagePct:damageTaken / baseline.damageTaken - 1,
+      soulPct:souls / baseline.souls - 1,
+      roomRewardPct:roomRewards / baseline.roomRewards - 1
+    }
+  };
+}
+
+function dungeonG1BalanceReport() {
+  const model = DUNGEON_G1_BALANCE_MODEL;
+  const cases = {};
+  const alerts = [];
+  for (const definition of model.cases) {
+    const warrior = dungeonG1BalanceMetrics('warrior', definition.id);
+    const mage = dungeonG1BalanceMetrics('mage', definition.id);
+    const mean = (warrior.clearSec + mage.clearSec) / 2;
+    const classGapPct = mean ? Math.abs(warrior.clearSec - mage.clearSec) / mean : 0;
+    cases[definition.id] = { id:definition.id, label:definition.label, warrior, mage, classGapPct };
+    if (classGapPct > model.thresholds.classGapPct) alerts.push(definition.label + '職業通關時間差超過 15%');
+  }
+  const soulMul = (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'soul_bloom')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'hardened_horde', 'reward')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'last_light', 'reward'));
+  const bossSkillDamageMul = (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'sunsteel_edge')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'arcane_tide')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'hunter_mark')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'frail_power', 'reward')) *
+    (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'mana_leak', 'reward'));
+  const extremes = {
+    soulMul,
+    bossSkillDamageMul,
+    bossIncomingMul:(1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'boss_oath', 'risk')) * (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'razor_bargain', 'risk')),
+    maxHpMul:(1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'oak_heart')) * (1 - dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'frail_power', 'risk')),
+    healingMul:(1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'renewal_well')) * (1 - dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'empty_flask', 'risk')),
+    gearDropCap:0.50
+  };
+  if (soulMul > model.thresholds.maxSoulMul) alerts.push('極端靈魂倍率超過 ×2.00');
+  if (bossSkillDamageMul > model.thresholds.maxBossSkillDamageMul) alerts.push('極端 Boss 技能傷害倍率超過 ×2.00');
+  return {
+    id:model.id,
+    version:model.version,
+    date:model.date,
+    basis:model.basis,
+    benchmarkIds:model.benchmarkIds.slice(),
+    offerFloors:model.offerFloors.slice(),
+    assumptions:Object.assign({}, model.assumptions),
+    adjustments:model.adjustments.map(item => Object.assign({}, item)),
+    cases,
+    extremes,
+    alerts
+  };
+}

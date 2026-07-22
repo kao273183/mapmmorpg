@@ -109,6 +109,7 @@ function startDungeonBalanceRun(seed, classId, now, options) {
     roomTimeMs:balanceCountMap(null, DUNGEON_BALANCE_ROOM_TYPES),
     damageBySource:{},
     damageTaken:0,
+    rewards:{ gear:0, materials:0, souls:0 },
     trialResults:{ success:0, failed:0, declined:0 },
     bossEncounters:[],
     activeBoss:null,
@@ -165,6 +166,13 @@ function recordDungeonDamage(source, amount) {
   run.damageTaken += value;
   run.damageBySource[key] = (run.damageBySource[key] || 0) + value;
   if (run.activeBoss) run.activeBoss.damageTaken = (Number(run.activeBoss.damageTaken) || 0) + value;
+}
+
+function recordDungeonReward(kind, amount) {
+  const run = activeDungeonBalance();
+  const value = Math.max(0, Number(amount) || 0);
+  if (!run || !run.rewards || !Object.prototype.hasOwnProperty.call(run.rewards, kind) || value <= 0) return;
+  run.rewards[kind] += value;
 }
 
 function recordDungeonTrialResult(status) {
@@ -229,6 +237,10 @@ function finishDungeonBalanceRun(result, now) {
   if (!run) return null;
   const endedAt = Number.isFinite(now) ? now : Date.now();
   if (run.activeBoss) recordDungeonBossEnd(result && result.result === 'extract' ? 'abandoned' : 'death', result && result.cause, endedAt);
+  const modifierState = typeof dungeonRun !== 'undefined' && dungeonRun ? dungeonRun.modifierState : null;
+  const blessings = modifierState && Array.isArray(modifierState.activeBlessings) ? modifierState.activeBlessings.slice() : [];
+  const curses = modifierState && Array.isArray(modifierState.activeCurses) ? modifierState.activeCurses.slice() : [];
+  const modifierProfile = blessings.length && curses.length ? 'mixed' : blessings.length ? 'blessings' : curses.length ? 'curses' : 'neutral';
   const finalRun = {
     endedAt,
     classId:run.classId,
@@ -251,6 +263,15 @@ function finishDungeonBalanceRun(result, now) {
     roomTimeMs:run.roomTimeMs,
     damageBySource:run.damageBySource,
     damageTaken:run.damageTaken,
+    rewards:Object.assign({ gear:0, materials:0, souls:0 }, run.rewards || {}),
+    roomRewards:(Number(run.rewards && run.rewards.gear) || 0) + (Number(run.rewards && run.rewards.materials) || 0),
+    modifiers:{
+      profile:modifierProfile,
+      blessings,
+      curses,
+      declines:Math.max(0, Number(modifierState && modifierState.declines) || 0),
+      rerollsSpent:Math.max(0, Number(modifierState && modifierState.rerollsSpent) || 0)
+    },
     trialResults:run.trialResults,
     bossEncounters:run.bossEncounters.slice()
   };
@@ -326,6 +347,20 @@ function dungeonBalanceReport(mode) {
     for (const status of ['success','failed','declined']) out[status] += Number(run.trialResults && run.trialResults[status]) || 0;
     return out;
   }, { success:0, failed:0, declined:0 });
+  const modifierStats = {};
+  for (const profile of ['neutral','blessings','curses','mixed']) {
+    const list = runs.filter(run => (run.modifiers && run.modifiers.profile || 'neutral') === profile);
+    const sum = (fn) => list.reduce((total, run) => total + (Number(fn(run)) || 0), 0);
+    modifierStats[profile] = {
+      runs:list.length,
+      averageDurationSec:list.length ? sum(run => run.durationSec) / list.length : 0,
+      averageDamage:list.length ? sum(run => run.damageTaken) / list.length : 0,
+      averageSouls:list.length ? sum(run => run.souls) / list.length : 0,
+      averageRoomRewards:list.length ? sum(run => run.roomRewards) / list.length : 0,
+      warriorRuns:list.filter(run => run.classId === 'warrior').length,
+      mageRuns:list.filter(run => run.classId === 'mage').length
+    };
+  }
   const bossIds = typeof DUNGEON_BOSS_ORDER === 'undefined' ? [] : DUNGEON_BOSS_ORDER.slice();
   for (const run of runs) for (const encounter of run.bossEncounters || []) if (!bossIds.includes(encounter.bossId)) bossIds.push(encounter.bossId);
   const bossStats = {};
@@ -373,7 +408,7 @@ function dungeonBalanceReport(mode) {
     basis:DUNGEON_D3C_CALIBRATION.basis,
     adjustments:DUNGEON_D3C_CALIBRATION.adjustments.map(item => Object.assign({}, item))
   };
-  return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, roomStats, damageShares, trialResults, bossStats, alerts };
+  return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, modifierStats, roomStats, damageShares, trialResults, bossStats, alerts };
 }
 
 function dungeonBossBenchmarkComparison() {
@@ -422,7 +457,8 @@ function dungeonBossBenchmarkComparison() {
 }
 
 function exportDungeonBalanceRecords() {
-  return JSON.stringify({ version:3, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), bossBenchmark:dungeonBossBenchmarkComparison(), runs:dungeonBalance.runs }, null, 2);
+  const g1Modifiers = typeof dungeonG1BalanceReport === 'function' ? dungeonG1BalanceReport() : null;
+  return JSON.stringify({ version:3, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), bossBenchmark:dungeonBossBenchmarkComparison(), g1Modifiers, runs:dungeonBalance.runs }, null, 2);
 }
 
 loadDungeonBalance();

@@ -3,6 +3,8 @@ let dungeonRun = null;
 let currentRoomSpec = null;
 let routePanel = null;
 let chapterPanel = null;
+let modifierPanel = null;
+let modifierListOpen = false;
 
 function dungeonSeedHash(value) {
   let h = 2166136261 >>> 0;
@@ -195,6 +197,66 @@ function resetDungeonRun(benchmarkProfile) {
   }
   routePanel = null;
   chapterPanel = null;
+  modifierPanel = null;
+  modifierListOpen = false;
+}
+
+function dungeonModifierScheduledAtFloor(atFloor) {
+  const cycleFloor = ((Math.max(1, atFloor | 0) - 1) % 15) + 1;
+  return [3, 7, 11, 14].includes(cycleFloor);
+}
+
+function dungeonModifierAfterAction(action) {
+  if (action === 'chapter') openChapterSummary();
+  else if (action === 'boss') enterDungeonRoom(makeRoomSpec('boss', floor + 1, 0));
+  else openRouteSelection();
+}
+
+function openDungeonModifierTransition(afterAction) {
+  const state = dungeonRun && dungeonRun.modifierState;
+  if (!state || state.pending || !dungeonModifierScheduledAtFloor(floor)) return false;
+  let kind = state.offerSequence % 2 === 0 ? 'blessing' : 'curse';
+  let offer = beginDungeonModifierOffer(state, kind, { floor, chapter:dungeonRun.chapter, optionCount:3 });
+  if (!offer) {
+    kind = kind === 'blessing' ? 'curse' : 'blessing';
+    offer = beginDungeonModifierOffer(state, kind, { floor, chapter:dungeonRun.chapter, optionCount:3 });
+  }
+  if (!offer) return false;
+  modifierPanel = { offer, afterAction:afterAction || 'route', settled:false };
+  portal = null;
+  clearGameInputs();
+  playSfx('uiSelect', 0.85, kind === 'curse' ? 0.82 : 1.08);
+  return true;
+}
+
+function settleDungeonModifierPanel(result) {
+  if (!modifierPanel || modifierPanel.settled || !result || !result.ok) return false;
+  modifierPanel.settled = true;
+  const afterAction = modifierPanel.afterAction;
+  modifierPanel = null;
+  clearGameInputs();
+  playSfx(result.status === 'accepted' ? 'uiConfirm' : 'uiSelect', 0.9, result.status === 'accepted' ? 1.08 : 0.9);
+  dungeonModifierAfterAction(afterAction);
+  return true;
+}
+
+function chooseDungeonModifier(modifierId) {
+  if (!modifierPanel || modifierPanel.settled) return false;
+  return settleDungeonModifierPanel(acceptDungeonModifierOffer(dungeonRun.modifierState, modifierId));
+}
+
+function rerollDungeonModifierPanel() {
+  if (!modifierPanel || modifierPanel.settled) return false;
+  const offer = rerollDungeonModifierOffer(dungeonRun.modifierState);
+  if (!offer) { playSfx('uiError', 0.55, 0.85); return false; }
+  modifierPanel.offer = offer;
+  playSfx('uiSelect', 0.85, 1.12);
+  return true;
+}
+
+function declineDungeonModifierPanel() {
+  if (!modifierPanel || modifierPanel.settled) return false;
+  return settleDungeonModifierPanel(declineDungeonModifierOffer(dungeonRun.modifierState));
 }
 
 function weightedDungeonType(candidates, rng) {
@@ -290,6 +352,7 @@ function grantRoomClearReward(spec) {
   dungeonRun.explorationScore += spec.score || 0;
   if (spec.type === 'elite') {
     meta.mats.enh += 1;
+    if (typeof recordDungeonReward === 'function') recordDungeonReward('materials', 1);
     saveMeta();
     num(player.x, player.y - player.h - 58, '菁英房完成 · 強化石 +1', '#d9a8ff');
   } else if (spec.type === 'hazard') {
@@ -297,6 +360,10 @@ function grantRoomClearReward(spec) {
     const soulBonus = Math.round(dungeonHazardSoulBonus(floor) * (1 + curseBonus));
     soulsRun += soulBonus;
     meta.mats.enh += 1;
+    if (typeof recordDungeonReward === 'function') {
+      recordDungeonReward('souls', soulBonus);
+      recordDungeonReward('materials', 1);
+    }
     saveMeta();
     num(player.x, player.y - player.h - 58, '險境完成 · 靈魂 +' + soulBonus + ' · 強化石 +1', '#ffb45e');
   }
@@ -323,6 +390,10 @@ function grantChapterReward() {
   const mats = (score >= 6 ? 2 : 1) + curseBonus;
   addGear(genGear(floor, rarity));
   meta.mats.enh += mats;
+  if (typeof recordDungeonReward === 'function') {
+    recordDungeonReward('gear', 1);
+    recordDungeonReward('materials', mats);
+  }
   saveMeta();
   dungeonRun.chapterReward = { floor, score, rarity, mats, itemName:RARITY_NAME[rarity] + '裝備' };
   playSfx('chest', 0.95, 1.05);
@@ -356,11 +427,8 @@ function extractDungeonRun() {
 
 function advanceDungeonPortal() {
   if (!portal) return;
-  if (portal.kind === 'chapter') {
-    openChapterSummary();
-    return;
-  }
   const nextFloor = floor + 1;
-  if (nextFloor % 5 === 0) enterDungeonRoom(makeRoomSpec('boss', nextFloor, 0));
-  else openRouteSelection();
+  const afterAction = portal.kind === 'chapter' ? 'chapter' : nextFloor % 5 === 0 ? 'boss' : 'route';
+  if (openDungeonModifierTransition(afterAction)) return;
+  dungeonModifierAfterAction(afterAction);
 }
