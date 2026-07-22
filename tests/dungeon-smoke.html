@@ -5,24 +5,139 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.26.2">
+<link rel="stylesheet" href="style.css?v=0.28.7">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.26.0"></script>
-<script src="dungeon.js?v=0.26.0"></script>
-<script src="dungeon-ui.js?v=0.26.0"></script>
-<script src="game.js?v=0.26.1"></script>
+<script src="dungeon-data.js?v=0.28.7"></script>
+<script src="dungeon-balance.js?v=0.28.7"></script>
+<script src="dungeon.js?v=0.28.7"></script>
+<script src="dungeon-hazards.js?v=0.28.7"></script>
+<script src="dungeon-events.js?v=0.28.7"></script>
+<script src="dungeon-trials.js?v=0.28.7"></script>
+<script src="dungeon-ui.js?v=0.28.7"></script>
+<script src="game.js?v=0.28.7"></script>
 <script>
-const mode = new URLSearchParams(location.search).get('mode') || 'route';
+const smokeParams = new URLSearchParams(location.search);
+const mode = smokeParams.get('mode') || 'route';
+if (smokeParams.get('class') === 'mage') chosenCls = 'mage';
 resetRun();
-if (mode === 'route') {
+function openFixedEvent(eventId, options) {
+  const def = DUNGEON_EVENT_DEFS[eventId];
+  const atFloor = (def.minChapter || 1) >= 2 ? 7 : 3;
+  const type = def.family === 'chest' ? 'treasure' : 'event';
+  const spec = makeRoomSpec(type, atFloor, 0);
+  spec.eventId = eventId;
+  spec.hazardId = eventId === 'hazard_trial' ? dungeonBiomeDef(atFloor).hazardId : null;
+  spec.threat = Math.max(DUNGEON_ROOM_DEFS[type].threat, def.threat || 0);
+  spec.rewardTags = def.rewards.slice();
+  enterDungeonRoom(spec);
+  mons.length = 0;
+  completeDungeonRoom();
+  if (options && options.insufficient === 'souls') soulsRun = 0;
+  if (options && options.insufficient === 'hp') player.hp = Math.round(player.mhp * 0.2);
+  player.x = floorEvent.x; player.y = floorEvent.y;
+  openFloorEvent();
+}
+function resolveFixedTrial(outcome) {
+  if (outcome === 'declined') { chooseFloorEvent(1); return; }
+  chooseFloorEvent(0);
+  if (outcome === 'wave2') {
+    for (const m of mons.filter(mon => mon.trialMon)) recordDungeonTrialEnemyDefeat(floorTrial);
+    mons = mons.filter(mon => !mon.trialMon);
+    updateFloorTrial(0);
+    return;
+  }
+  if ((outcome === 'failed' || outcome === 'failed-clear') && floorTrial.type === 'timed') { floorTrial.timeLeft = 1; updateFloorTrial(1); }
+  if ((outcome === 'failed' || outcome === 'failed-clear') && floorTrial.type === 'flawless') recordFloorTrialDamage(1);
+  if (outcome === 'failed-clear') { mons = []; completeDungeonRoom(); return; }
+  if (outcome === 'failed') return;
+  if (outcome !== 'success') return;
+  for (let guard = 0; guard < 3 && floorTrial.status === 'active'; guard++) {
+    for (const m of mons.filter(mon => mon.trialMon)) recordDungeonTrialEnemyDefeat(floorTrial);
+    mons = mons.filter(mon => !mon.trialMon);
+    if (floorTrial.type === 'hazard') player.x = floorTrial.targetX;
+    updateFloorTrial(0);
+  }
+}
+if (mode.startsWith('trial-')) {
+  const trialModes = {
+    'elite':'elite_ambush', 'elite-success':'elite_ambush', 'elite-declined':'elite_ambush',
+    'timed':'timed_clear', 'timed-wave2':'timed_clear', 'timed-success':'timed_clear', 'timed-failed':'timed_clear', 'timed-failed-clear':'timed_clear',
+    'flawless':'flawless_wave', 'flawless-success':'flawless_wave', 'flawless-failed':'flawless_wave', 'flawless-failed-clear':'flawless_wave',
+    'hazard':'hazard_trial', 'hazard-success':'hazard_trial', 'hazard-declined':'hazard_trial'
+  };
+  const trialMode = mode.slice(6);
+  openFixedEvent(trialModes[trialMode]);
+  resolveFixedTrial(trialMode === 'timed-wave2' ? 'wave2' : trialMode.endsWith('-failed-clear') ? 'failed-clear' : trialMode.endsWith('-success') ? 'success' : trialMode.endsWith('-failed') ? 'failed' : trialMode.endsWith('-declined') ? 'declined' : 'active');
+} else if (mode.startsWith('event-')) {
+  const eventMode = mode.slice(6);
+  const aliases = { 'sealed-insufficient':'sealed_chest', 'blood-insufficient':'blood_blessing', 'fate-reroll':'fate_altar' };
+  const eventId = aliases[eventMode] || eventMode;
+  openFixedEvent(eventId, {
+    insufficient:eventMode === 'sealed-insufficient' ? 'souls' : eventMode === 'blood-insufficient' ? 'hp' : null
+  });
+  if (eventMode === 'fate-reroll') {
+    chooseFloorEvent(0);
+    pendingPicks = 1;
+    rollPick();
+  }
+} else if (mode === 'route') {
   mons.length = 0;
   completeDungeonRoom();
   openRouteSelection();
+} else if (mode === 'route-d2a') {
+  dungeonRun.choices = [makeRoomSpec('hazard', 2, 0), makeRoomSpec('event', 2, 1)];
+  routePanel = { choices:dungeonRun.choices };
+  portal = null;
+} else if (mode === 'route-trial-hazard') {
+  const trialSpec = makeRoomSpec('event', 7, 0);
+  trialSpec.eventId = 'hazard_trial';
+  trialSpec.hazardId = dungeonBiomeDef(7).hazardId;
+  trialSpec.threat = 3;
+  trialSpec.rewardTags = DUNGEON_EVENT_DEFS.hazard_trial.rewards.slice();
+  dungeonRun.choices = [trialSpec, makeRoomSpec('safe', 7, 1)];
+  routePanel = { choices:dungeonRun.choices };
+  portal = null;
+} else if (mode === 'hazard') {
+  enterDungeonRoom(makeRoomSpec('hazard', 2, 0));
+} else if (mode === 'hazard-active') {
+  enterDungeonRoom(makeRoomSpec('hazard', 2, 0));
+  for (const hazard of dungeonHazards) { hazard.phase = 'active'; hazard.timer = 9999; }
+} else if (mode === 'hazard-hit') {
+  enterDungeonRoom(makeRoomSpec('hazard', 2, 0));
+  const hazard = dungeonHazards[0];
+  hazard.phase = 'active'; hazard.timer = 9999;
+  player.x = hazard.x; player.y = hazard.y; player.inv = 0;
+} else if (mode === 'hazard-cave') {
+  enterDungeonRoom(makeRoomSpec('hazard', 7, 0));
+} else if (mode === 'hazard-cave-active') {
+  enterDungeonRoom(makeRoomSpec('hazard', 7, 0));
+  for (const hazard of dungeonHazards) { hazard.phase = 'active'; hazard.timer = 16; }
+} else if (mode === 'hazard-lava') {
+  enterDungeonRoom(makeRoomSpec('hazard', 12, 0));
+  for (const hazard of dungeonHazards) { hazard.phase = 'active'; hazard.timer = 9999; }
+} else if (mode === 'hazard-ice') {
+  enterDungeonRoom(makeRoomSpec('hazard', 17, 0));
+} else if (mode === 'hazard-void') {
+  enterDungeonRoom(makeRoomSpec('hazard', 22, 0));
+  mons.length = 0;
+  spawnDungeonHazards(currentRoomSpec, worldW, null, plats);
+  for (const hazard of dungeonHazards) { hazard.phase = 'warning'; hazard.timer = 9999; }
+} else if (mode === 'hazard-void-gone') {
+  enterDungeonRoom(makeRoomSpec('hazard', 22, 0));
+  mons.length = 0;
+  spawnDungeonHazards(currentRoomSpec, worldW, null, plats);
+  for (const hazard of dungeonHazards) { hazard.phase = 'gone'; hazard.timer = 9999; hazard.platform.voidDisabled = true; }
+} else if (mode === 'hazard-lowfx') {
+  combatSettings.flashes = false;
+  combatSettings.shake = 0;
+  combatSettings.numbers = 'compact';
+  enterDungeonRoom(makeRoomSpec('hazard', 12, 0));
+  for (const hazard of dungeonHazards) { hazard.phase = 'warning'; hazard.timer = 20; }
 } else if (mode === 'camp') {
   enterDungeonRoom(makeRoomSpec('camp', 4, 0));
 } else if (mode === 'treasure') {
@@ -33,6 +148,33 @@ if (mode === 'route') {
   dungeonRun.explorationScore = 6;
   completeDungeonRoom();
   openChapterSummary();
+} else if (mode === 'result-death' || mode === 'result-extract') {
+  const extracted = mode === 'result-extract';
+  floor = 7; kills = 4; soulsRun = 12;
+  meta.souls = 100; meta.up.soul = 0; meta.stash = []; meta.mats = { enh:7, ench:5, set:3 };
+  bestFloor = 3;
+  player.items = [genGear(floor, 1)];
+  lastDamageSource = extracted ? '成功撤退' : '落石區';
+  endRun(extracted ? 'extract' : 'death');
+  const ok = gameState === 'dead' && lastRun.result === (extracted ? 'extract' : 'death') && lastRun.gained === 12 &&
+    meta.souls === 112 && meta.stash.length === 1 && meta.mats.enh === 7 && meta.mats.ench === 5 && meta.mats.set === 3 && bestFloor === 7;
+  window.__dungeonSmokeResult = { ok, result:lastRun.result, gained:lastRun.gained, stashed:lastRun.stashed, souls:meta.souls, mats:meta.mats, bestFloor, cause:lastRun.cause };
+  document.title = ok ? 'Dungeon Result PASS ' + lastRun.result : 'Dungeon Result FAIL ' + lastRun.result;
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+} else if (mode === 'settings-updates') {
+  openTownPanel('save');
+  settingsPage = 'updates';
+  settingsUpdateIndex = 0;
+  document.title = 'Dungeon Settings Updates';
+} else if (mode === 'settings-balance') {
+  recordDungeonRouteOffer([makeRoomSpec('safe', 2, 0), makeRoomSpec('hazard', 2, 1)]);
+  recordDungeonRouteChoice(makeRoomSpec('hazard', 2, 1));
+  recordDungeonDamage('熔岩噴口', 18);
+  recordDungeonTrialResult('success');
+  finishDungeonBalanceRun({ result:'extract', floor:7, kills:12, gained:36 }, Date.now() + 600000);
+  openTownPanel('save');
+  settingsPage = 'balance';
+  document.title = 'Dungeon Settings Balance';
 } else if (mode === 'validate') {
   const issues = [];
   for (let seed = 1; seed <= 1000; seed++) {
