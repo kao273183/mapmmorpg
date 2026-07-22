@@ -149,7 +149,7 @@ for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
 let worldW = 2000;
 
 function setHint(t) { document.getElementById('hint').innerHTML = t; }
-const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Shift 衝刺&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;P 能力&nbsp;|&nbsp;M 當局效果';
+const HINT_PLAY = '← → 移動&nbsp;|&nbsp;Shift 衝刺&nbsp;|&nbsp;Space 跳躍(↓+Space 下跳)&nbsp;|&nbsp;Z / X / C 技能&nbsp;|&nbsp;A 紅水 S 藍水&nbsp;|&nbsp;I 裝備&nbsp;|&nbsp;P 能力&nbsp;|&nbsp;M 當局效果&nbsp;|&nbsp;長按 Q 逃走';
 const HINT_MENU = '[1]/[2] 選職業&nbsp;|&nbsp;點擊購買永久強化&nbsp;|&nbsp;Enter 開始冒險';
 const HINT_TOWN = '方向鍵 / WASD 四方向移動 或 點擊地面走動&nbsp;|&nbsp;Space 與 NPC 互動&nbsp;|&nbsp;Enter 聊天&nbsp;|&nbsp;P 能力';
 

@@ -384,6 +384,24 @@ function resetRun() {
   beep(660, 0.1, 'sine', 0.04);
   setTimeout(() => beep(880, 0.15, 'sine', 0.04), 100);
 }
+// ---------- 逃走機制（道中長按逃走；受擊中斷；保留戰利品，視為撤退）----------
+let fleeChannelT = 0;
+const FLEE_CHANNEL_FRAMES = 90; // 1.5 秒
+function fleeChannelActive() { return fleeChannelT > 0; }
+function fleeChannelProgress() { return Math.min(1, fleeChannelT / FLEE_CHANNEL_FRAMES); }
+function interruptFleeChannel() { fleeChannelT = 0; }
+function fleeToBase() {
+  fleeChannelT = 0;
+  lastDamageSource = '主動逃走';
+  endRun('extract');
+}
+function updateFleeChannel() {
+  if (gameState !== 'play' || (typeof eventPanel !== 'undefined' && eventPanel)) { fleeChannelT = 0; return; }
+  if (!keys['q']) { fleeChannelT = 0; return; }
+  if (fleeChannelT === 0) playSfx('uiSelect', 0.6, 0.9);
+  fleeChannelT++;
+  if (fleeChannelT >= FLEE_CHANNEL_FRAMES) fleeToBase();
+}
 function endRun(result) {
   const benchmarkRun = !!activeDungeonBenchmarkId;
   const gained = Math.round(soulsRun * soulGainMul());

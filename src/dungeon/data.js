@@ -22,6 +22,43 @@ function dungeonHazardSoulBonus(atFloor) {
   return Math.max(base, Math.round(base * DUNGEON_D3C_CALIBRATION.hazardSoulMultiplier));
 }
 
+// ---------- 地形難度模式（一般 / 複雜）----------
+// 「一般」保留反應型地形（荊棘、落石、熔岩）的「看提示→閃開」核心，
+// 但移除會改變移動規則的地形（冰面滑行、虛空平台消失），並降低陷阱密度與傷害。
+// 「複雜」＝現行完整地形系統。設定存於本瀏覽器，不影響存檔碼。
+// hazardChanceMul：險境房出現機率倍率；bossStrengthMul：Boss 生命與傷害倍率。
+const TERRAIN_MODE_DEFS = {
+  normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossStrengthMul:0.85 },
+  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossStrengthMul:1 }
+};
+const TERRAIN_MODE_KEY = 'pixelrogue_terrain_mode';
+let terrainMode = 'normal';
+try {
+  const savedTerrainMode = localStorage.getItem(TERRAIN_MODE_KEY);
+  if (savedTerrainMode === 'normal' || savedTerrainMode === 'complex') terrainMode = savedTerrainMode;
+} catch (e) {}
+function terrainModeConfig() { return TERRAIN_MODE_DEFS[terrainMode] || TERRAIN_MODE_DEFS.normal; }
+function setTerrainMode(mode) {
+  terrainMode = mode === 'complex' ? 'complex' : 'normal';
+  try { localStorage.setItem(TERRAIN_MODE_KEY, terrainMode); } catch (e) {}
+  return terrainMode;
+}
+// 冰面滑行與虛空平台消失只在「複雜」模式生效。
+function terrainMovementHazardsEnabled() { return terrainModeConfig().movementHazards; }
+// 依模式縮放每房陷阱數量下限保持 1，避免整房完全無地形。
+function terrainHazardMaxPerRoom(def) {
+  const base = def && Number.isFinite(def.maxPerRoom) ? def.maxPerRoom : 3;
+  return Math.max(1, Math.round(base * terrainModeConfig().maxPerRoomMul));
+}
+// 判斷某地形是否屬於「移動改變型」（一般模式下會被中和）。
+function terrainHazardIsMovementType(hazardId) {
+  return hazardId === 'ice_floor' || hazardId === 'void_platforms';
+}
+// 一般模式降低險境房出現機率。
+function dungeonHazardChanceMul() { return terrainModeConfig().hazardChanceMul; }
+// 一般模式降低 Boss 生命與傷害。
+function dungeonBossStrengthMul() { return terrainModeConfig().bossStrengthMul; }
+
 const DUNGEON_BIOME_DEFS = [
   { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },
   { id:'cavern', name:'幽暗洞窟', hazardId:'falling_rocks', enemyTag:'蝙蝠、孢子怪', bossName:'洞窟領主' },

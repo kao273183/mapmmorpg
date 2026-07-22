@@ -259,11 +259,18 @@ function declineDungeonModifierPanel() {
   return settleDungeonModifierPanel(declineDungeonModifierOffer(dungeonRun.modifierState));
 }
 
+function dungeonRouteTypeWeight(type) {
+  const base = DUNGEON_ROUTE_WEIGHTS[type] || 1;
+  // 一般難度下降低險境房的出現機率。
+  if (type === 'hazard' && typeof dungeonHazardChanceMul === 'function') return Math.max(0.2, base * dungeonHazardChanceMul());
+  return base;
+}
+
 function weightedDungeonType(candidates, rng) {
-  const total = candidates.reduce((sum, type) => sum + (DUNGEON_ROUTE_WEIGHTS[type] || 1), 0);
+  const total = candidates.reduce((sum, type) => sum + dungeonRouteTypeWeight(type), 0);
   let roll = rng() * total;
   for (const type of candidates) {
-    roll -= DUNGEON_ROUTE_WEIGHTS[type] || 1;
+    roll -= dungeonRouteTypeWeight(type);
     if (roll <= 0) return type;
   }
   return candidates[candidates.length - 1] || 'safe';
@@ -422,6 +429,14 @@ function extractDungeonRun() {
   if (!chapterPanel) return;
   chapterPanel = null;
   lastDamageSource = '成功撤退';
+  endRun('extract');
+}
+
+// 路線選擇畫面直接撤退回基地（保留戰利品，視為撤退不算死亡）。
+function retreatFromRoute() {
+  if (!routePanel) return;
+  routePanel = null;
+  lastDamageSource = '主動撤退';
   endRun('extract');
 }
 

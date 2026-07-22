@@ -65,7 +65,7 @@ function scriptSources(file) {
   return Array.from(html.matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g), match => match[1]);
 }
 
-const releaseVersion = '0.29.14';
+const releaseVersion = '0.29.17';
 function releaseResourceVersions(file) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
   return Array.from(html.matchAll(/(?:style\.css|src\/(?:dungeon\/[^"?]+|game\/[^"?]+|mobile\.js))\?v=([^"&]+)/g), match => match[1]);
@@ -95,7 +95,7 @@ const indexScripts = scriptSources('index.html');
 const smokeScripts = scriptSources('tests/dungeon-smoke.html');
 assert.deepStrictEqual(indexScripts.slice(0, sharedOrder.length), sharedOrder);
 assert.deepStrictEqual(smokeScripts.slice(0, sharedOrder.length), sharedOrder);
-assert.deepStrictEqual(indexScripts.slice(sharedOrder.length), ['src/mobile.js', ...GAME_SOURCE_FILES]);
+assert.deepStrictEqual(indexScripts.slice(sharedOrder.length), ['src/mobile.js', ...GAME_SOURCE_FILES, 'src/pwa.js', 'src/install.js']);
 assert.deepStrictEqual(smokeScripts.slice(sharedOrder.length), GAME_SOURCE_FILES);
 
 console.log('project structure smoke test passed (src/assets layout, browser order, release version)');

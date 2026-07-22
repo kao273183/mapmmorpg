@@ -70,6 +70,9 @@ vm.createContext(context);
 vm.runInContext(source, context, { filename:'dungeon-d2c-bundle.js' });
 const api = context.__d2c;
 
+// 本測試驗證「複雜」模式的完整地形機制（滑冰慣性、虛空平台消失、完整密度）。
+context.setTerrainMode('complex');
+
 const expected = [
   [2, 'thorn_roots'],
   [7, 'falling_rocks'],

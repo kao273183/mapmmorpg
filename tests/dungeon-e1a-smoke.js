@@ -45,6 +45,8 @@ globalThis.e1aApi = {
 };`, context);
 
 const api = context.e1aApi;
+// Boss 基準數值以「複雜」難度為準；一般難度會另行減幅。
+if (typeof context.setTerrainMode === 'function') context.setTerrainMode('complex');
 assert.deepStrictEqual(Array.from(api.order), ['meadow_lord','cavern_lord','volcano_lord','tundra_lord','void_lord']);
 assert.deepStrictEqual([5,10,15,20,25].map(floor => api.forFloor(floor).id), Array.from(api.order));
 

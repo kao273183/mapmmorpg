@@ -228,6 +228,7 @@ function skillDmg(mult) { // 絕技精通卡:全部出戰技能傷害+15%/層
 }
 function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→死亡)
   const p = player;
+  if (typeof interruptFleeChannel === 'function') interruptFleeChannel(); // 受擊中斷逃走蓄力
   const event = typeof hit === 'number' ? { amount:hit } : (hit || {});
   let d = event.amount || 0;
   const sourceX = Number.isFinite(event.sourceX) ? event.sourceX : p.x;

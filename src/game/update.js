@@ -2,6 +2,8 @@
 // ---------- update ----------
 function update() {
   const p = player;
+  updateFleeChannel();
+  if (gameState !== 'play') return; // 逃走成功後本幀不再繼續處理
   if (eventPanel) return;
   if (p.inv > 0) p.inv--;
   if (p.potCd > 0) p.potCd--;

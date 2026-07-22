@@ -1,5 +1,6 @@
 // ---------- dungeon route UI (v0.26 D2-A) ----------
 const routeChoiceBtns = [];
+let routeRetreatBtn = null;
 const chapterChoiceBtns = [];
 const modifierChoiceBtns = [];
 let modifierRerollBtn = null;
@@ -24,6 +25,7 @@ function handleDungeonPanelKey(key) {
   }
   if (routePanel) {
     if (key === '1' || key === '2') chooseDungeonRoute(parseInt(key, 10) - 1);
+    else if (key === 'r') retreatFromRoute();
     return true;
   }
   if (chapterPanel) {
@@ -54,6 +56,7 @@ function handleDungeonPanelTap(mx, my) {
   }
   if (routePanel) {
     for (const b of routeChoiceBtns) if (inside(b)) { chooseDungeonRoute(b.index); return true; }
+    if (inside(routeRetreatBtn)) { retreatFromRoute(); return true; }
     return true;
   }
   if (chapterPanel) {
@@ -259,8 +262,13 @@ function drawRoutePanel() {
     ctx.fillStyle = '#14162b'; ctx.font = 'bold 14px ' + STAT_FONT;
     ctx.fillText('[' + (i + 1) + '] 進入', b.x + b.w / 2, b.y + 246);
   }
+  routeRetreatBtn = { x:W / 2 - 150, y:428, w:300, h:34 };
+  ctx.fillStyle = 'rgba(226,59,59,0.16)'; ctx.fillRect(routeRetreatBtn.x, routeRetreatBtn.y, routeRetreatBtn.w, routeRetreatBtn.h);
+  ctx.strokeStyle = '#e26b6b'; ctx.lineWidth = 1; ctx.strokeRect(routeRetreatBtn.x, routeRetreatBtn.y, routeRetreatBtn.w, routeRetreatBtn.h);
+  ctx.fillStyle = '#ffbcbc'; ctx.font = 'bold 14px ' + STAT_FONT; ctx.textAlign = 'center';
+  ctx.fillText('[R] 返回基地（保留戰利品撤退）', W / 2, routeRetreatBtn.y + 23);
   ctx.fillStyle = '#737a9a'; ctx.font = '11px ' + STAT_FONT;
-  ctx.fillText('本章探索評價：' + dungeonRun.explorationScore + '　·　Boss 前會保留低風險路線', W / 2, 450);
+  ctx.fillText('本章探索評價：' + dungeonRun.explorationScore + '　·　Boss 前會保留低風險路線', W / 2, 478);
   ctx.textAlign = 'left';
 }
 

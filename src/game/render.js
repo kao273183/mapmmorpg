@@ -448,9 +448,21 @@ function render() {
   }
 
   if (p.itemWin) drawItemWin();
+  drawFleeChannel();
   drawTouchUI();
   drawEventPanel();
   drawDungeonPanels();
+}
+function drawFleeChannel() {
+  if (gameState !== 'play' || typeof fleeChannelActive !== 'function' || !fleeChannelActive()) return;
+  const prog = fleeChannelProgress();
+  const w = 300, h = 30, x = W / 2 - w / 2, y = 150;
+  ctx.fillStyle = 'rgba(20,22,43,0.9)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(226,107,107,0.55)'; ctx.fillRect(x + 2, y + 2, (w - 4) * prog, h - 4);
+  ctx.strokeStyle = '#e26b6b'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ffe0e0'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText('逃走中… ' + Math.round(prog * 100) + '%（受擊中斷）', W / 2, y + 20);
+  ctx.textAlign = 'left';
 }
 function bar(x, y, w, h, ratio, color, label) {
   ctx.fillStyle = '#111'; ctx.fillRect(x, y, w, h);
