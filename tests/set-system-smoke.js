@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const { loadGameSource } = require('./helpers/game-source');
 
 const root = path.resolve(__dirname, '..');
-const source = loadGameSource(root);
+const source = fs.readFileSync(path.join(root, 'src/dungeon/modifiers.js'), 'utf8') + '\n' + loadGameSource(root);
 const gradient = { addColorStop() {} };
 const canvasContext = new Proxy({
   setTransform() {}, drawImage() {}, fillRect() {}, strokeRect() {}, beginPath() {}, arc() {}, ellipse() {}, fill() {}, stroke() {},
@@ -36,6 +36,34 @@ const context = vm.createContext({
 
 vm.runInContext(source, context, { filename:'game.js' });
 vm.runInContext(`
+  globalThis.dungeonRun = { modifierState:{
+    activeBlessings:['sunsteel_edge','arcane_tide','hunter_mark','oak_heart','guardian_shell','renewal_well','wind_stride','swift_dash','aerial_grace','soul_bloom','treasure_eye','fate_thread'],
+    activeCurses:['hardened_horde','razor_bargain','frail_power','mana_leak','broken_hourglass','sealed_fate','leaden_steps','empty_flask','last_light','elite_tribute','hazard_wager','boss_oath'], uses:{}
+  } };
+  player.eq = { weapon:null, armor:null, helmet:null, boots:null, acc:null };
+  player.cd = { atk:0, hp:0, crit:0, spd:0, aspd:0, xdmg:0, ls:0, mp:0, pot:0, def:0, heal:0, ifr:0 };
+  player.perk = {}; player.cls = 'warrior'; player.lv = 1; player.hp = 100; player.mp = player.mmp;
+  calcStats();
+  if (player.mhp !== 103) throw new Error('oak heart and frail power did not combine in the real max HP calculation');
+  if (Math.abs(skillDamageMul() - 1.3216) > 0.0001) throw new Error('arcane tide and mana leak did not combine in real skill damage');
+  if (Math.abs(moveSpd() - 2.068) > 0.0001) throw new Error('wind stride and leaden steps did not combine in real movement speed');
+  if (Math.abs(jumpV() - 12.5) > 0.0001) throw new Error('aerial grace did not affect real jump strength');
+  if (Math.abs(soulGainMul() - 1.940625) > 0.0001) throw new Error('blessing and curse soul multipliers did not combine');
+  if (Math.abs(gearDropChance(false, 1) - 0.1575) > 0.0001) throw new Error('treasure eye and razor bargain did not combine in real gear drops');
+  if (gearDropChance(true, 1) !== 0.5) throw new Error('elite tribute did not respect the 50% gear drop cap');
+  if (Math.abs(blessingHeal(100) - 81.25) > 0.0001) throw new Error('renewal well and empty flask did not combine in real healing');
+  if (armorDef() !== 3) throw new Error('leaden steps did not grant real fixed defense');
+  if (Math.abs(critRate() - 0.18) > 0.0001) throw new Error('broken hourglass did not grant real critical chance');
+  if (Math.abs(cooldownMul() - 1.15) > 0.0001) throw new Error('broken hourglass did not increase real skill cooldown');
+  if (skillMpCost({ mp:10 }) !== 12) throw new Error('mana leak did not increase real skill MP cost');
+  if (Math.abs(dungeonCurseIncomingDamage(100) - 115) > 0.0001) throw new Error('razor bargain did not increase real incoming damage');
+  if (dungeonBlessingDashCooldown(120) !== 96) throw new Error('swift dash did not affect the real dash cooldown');
+  const sealedState = { activeBlessings:[], activeCurses:[], rerollsRemaining:2, rerollsSpent:0, declines:0, history:[], uses:{},
+    pending:{ id:'sealed-runtime', kind:'curse', floor:12, chapter:3, status:'offered', rerollIndex:0, options:['sealed_fate'] } };
+  player.eventRerolls = 0;
+  acceptDungeonModifierOffer(sealedState, 'sealed_fate');
+  if (sealedState.rerollsRemaining !== 0 || player.eventRerolls !== 2) throw new Error('sealed fate did not exchange modifier rerolls for card rerolls');
+
   if (GEAR_SETS.length !== 4) throw new Error('expected four launch sets');
   if (meta.mats.set !== 0) throw new Error('old saves should migrate with zero set cores');
   const originalRandom = Math.random; Math.random = () => 0; player.cls = 'warrior';

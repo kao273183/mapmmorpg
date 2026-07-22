@@ -196,7 +196,8 @@ function lavaVentHitsPlayer(hazard, p) {
 function damageFromDungeonHazard(hazard, def, options) {
   const o = options || {};
   hazard.hitThisCycle = true;
-  const damage = Math.max(def.minDamage || 1, Math.round(player.mhp * (def.damagePct || 0)));
+  const baseDamage = Math.max(def.minDamage || 1, Math.round(player.mhp * (def.damagePct || 0)));
+  const damage = Math.round(typeof dungeonCurseHazardDamage === 'function' ? dungeonCurseHazardDamage(baseDamage) : baseDamage);
   if (o.slowFrames) player.hazardSlowT = Math.max(player.hazardSlowT || 0, o.slowFrames);
   if (o.launch) { player.vy = Math.min(player.vy, o.launch); player.onGround = false; }
   return dmgPlayer({ amount:damage, sourceName:def.name, sourceX:hazard.x, heavy:!!o.heavy });

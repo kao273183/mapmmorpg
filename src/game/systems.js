@@ -120,6 +120,14 @@ const CARDS = [
 const pickBtns = [];
 let pickRerollBtn = null;
 function perkV(id) { return player.perk[id] || 0; }
+function blessingV(id) { return typeof dungeonBlessingValue === 'function' ? dungeonBlessingValue(id) : 0; }
+function curseRiskV(id) { return typeof dungeonCurseValue === 'function' ? dungeonCurseValue(id, 'risk') : 0; }
+function curseRewardV(id) { return typeof dungeonCurseValue === 'function' ? dungeonCurseValue(id, 'reward') : 0; }
+function blessingHeal(amount) {
+  const blessed = typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(amount) : amount;
+  return typeof dungeonCurseHealingAmount === 'function' ? dungeonCurseHealingAmount(blessed) : blessed;
+}
+function skillMpCost(definition) { return Math.ceil((definition && definition.mp || 0) * (1 + curseRiskV('mana_leak'))); }
 function cardLv(c) { return c.stat ? player.cd[c.id] : perkV(c.id); }
 const CARD_MAXLV = 5;
 function rollPick() {
@@ -127,6 +135,7 @@ function rollPick() {
   const pool = CARDS.filter(c => cardLv(c) < CARD_MAXLV); // 滿等的卡不再抽到
   if (pool.length === 0) { // 全部卡滿等,改給靈魂獎勵
     soulsRun += 3;
+    if (typeof recordDungeonReward === 'function') recordDungeonReward('souls', 3);
     num(player.x, player.y - player.h - 10, '強化全滿級  靈魂 +3', '#7dffd6');
     beep(900, 0.1, 'sine', 0.04);
     if (--pendingPicks > 0) rollPick(); else gameState = 'play';
@@ -142,10 +151,13 @@ function rollPick() {
   gameState = 'pick';
 }
 function rerollPickFromEvent() {
-  if (gameState !== 'pick' || player.eventRerolls <= 0) return false;
-  player.eventRerolls--;
+  if (gameState !== 'pick') return false;
+  const eventReroll = player.eventRerolls > 0;
+  const blessingReroll = !eventReroll && typeof consumeDungeonBlessingCharge === 'function' && consumeDungeonBlessingCharge('fate_thread');
+  if (!eventReroll && !blessingReroll) return false;
+  if (eventReroll) player.eventRerolls--;
   rollPick();
-  num(player.x, player.y - player.h - 12, '命運重抽', '#ffd36a');
+  num(player.x, player.y - player.h - 12, blessingReroll ? '命運絲線重抽' : '命運重抽', '#ffd36a');
   playSfx('uiSelect', 0.9, 1.12);
   return true;
 }
@@ -180,25 +192,25 @@ function atkMultiplier() {
   return m;
 }
 function atkPow() { return atkBase() * atkMultiplier(); }
-function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit'); }
+function critRate() { return Math.min(1, 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit') + curseRewardV('broken_hourglass')); }
 function armorDef() {
-  return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def);
+  return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def + curseRewardV('leaden_steps'));
 }
-function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
-function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
-function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
-function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (1 - curseRiskV('leaden_steps')) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
+function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0) + blessingV('aerial_grace'); }
+function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (1 + blessingV('arcane_tide')) * (1 + curseRewardV('mana_leak')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
+function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste) * (1 + curseRiskV('broken_hourglass')); }
 function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
 function gearDropChance(elite, atFloor = floor) {
   const base = Math.min(0.025 + 0.0025 * atFloor + 0.01 * meta.up.treasure, 0.10);
-  return Math.min(base + affixV('gearDrop') + (elite ? 0.15 : 0), 0.50);
+  return Math.min(base + affixV('gearDrop') + blessingV('treasure_eye') + curseRewardV('razor_bargain') + (elite ? 0.15 + curseRewardV('elite_tribute') : 0), 0.50);
 }
-function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')) * (1 + affixV('soulGain')); }
+function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')) * (1 + affixV('soulGain')) * (1 + blessingV('soul_bloom')) * (1 + curseRewardV('hardened_horde')) * (1 + curseRewardV('last_light')); }
 const SOUL_DROP_CHANCE = 0.25;
 function calcStats() {
   const p = player;
   const gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
-  p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
+  p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * (1 + blessingV('oak_heart')) * (1 - curseRiskV('frail_power')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
   p.mmp = 30 + (p.cls === 'mage' ? 15 : 0) + p.lv * 4 + 15 * p.cd.mp;
   if (p.hp > p.mhp) p.hp = p.mhp;
   if (p.mp > p.mmp) p.mp = p.mmp;
@@ -221,6 +233,7 @@ function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→�
   const sourceX = Number.isFinite(event.sourceX) ? event.sourceX : p.x;
   const sourceName = event.sourceName || '未知攻擊';
   d = Math.max(1, Math.round(d * (1 + 0.25 * perkV('glass')) * (1 - 0.01 * meta.up.guard))); // 玻璃大砲／永久防禦本能
+  if (typeof dungeonCurseIncomingDamage === 'function') d = Math.max(1, Math.round(dungeonCurseIncomingDamage(d)));
   const thorns = 0.4 * perkV('thorns') + affixV('thorns');
   const retaliate = () => { // 先完成護盾／無傷判定，再結算荊棘，避免同幀擊殺誤判無傷成功。
     if (thorns <= 0) return;
@@ -269,14 +282,15 @@ function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→�
   combatVibrate(event.heavy ? 25 : 20);
   playSfx('hurt');
   if (p.hp <= 0) {
-    if (p.revives > 0) { // 不死鳥:每場一次致死復活
+    const reviveBlocked = typeof dungeonCurseBlocksRevive === 'function' && dungeonCurseBlocksRevive();
+    if (!reviveBlocked && p.revives > 0) { // 不死鳥:每場一次致死復活
       p.revives--; p.hp = Math.round(p.mhp * 0.5); p.inv = 90;
       burst(p.x, p.y - p.h / 2, '#ffd23e', 30);
       num(p.x, p.y - p.h - 20, '不死鳥復活!', '#ffd23e');
       beep(880, 0.2, 'sine', 0.05); setTimeout(() => beep(1100, 0.2, 'sine', 0.05), 120);
       return false;
     }
-    if (affixV('undying') > 0 && !p.affixDeathUsed) {
+    if (!reviveBlocked && affixV('undying') > 0 && !p.affixDeathUsed) {
       p.affixDeathUsed = true; p.hp = Math.round(p.mhp * 0.5); p.inv = 90;
       burst(p.x, p.y - p.h / 2, '#d9a8ff', 30);
       num(p.x, p.y - p.h - 20, '不滅發動!', '#d9a8ff');
@@ -544,7 +558,8 @@ function trySkill(i) {
   if (!id) return { ok:false, reason:'blocked', slot:i };
   if (p.slotCd[i] > 0) return { ok:false, reason:'cooldown', slot:i, skillId:id };
   const def = SKILL_DEFS[id];
-  if (p.mp < def.mp) {
+  const mpCost = skillMpCost(def);
+  if (p.mp < mpCost) {
     num(p.x, p.y - p.h - 10, 'MP不足', '#7f9cff', { size:14, pop:2 });
     skillPulseT[i] = 12;
     playSfx('uiError', 0.55, 0.85);
@@ -557,7 +572,7 @@ function trySkill(i) {
     return { ok:false, reason:'invalidTarget', slot:i, skillId:id };
   }
   activityProgress('skills', 1);
-  if (!result || !result.free) p.mp -= def.mp;
+  if (!result || !result.free) p.mp -= mpCost;
   p.slotCd[i] = result && result.resetCd ? 0 : Math.max(def.minCd || 6, Math.round(def.cd * t.cd * cooldownMul()));
   if (p.slotCd[i] > 0 && perkV('echo') > 0 && Math.random() < 0.04 * perkV('echo')) {
     p.slotCd[i] = 0;

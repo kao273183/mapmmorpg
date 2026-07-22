@@ -11,6 +11,7 @@ const requiredSources = [
   'src/dungeon/bosses.js',
   'src/dungeon/balance.js',
   'src/dungeon/core.js',
+  'src/dungeon/modifiers.js',
   'src/dungeon/hazards.js',
   'src/dungeon/events.js',
   'src/dungeon/trials.js',
@@ -64,7 +65,7 @@ function scriptSources(file) {
   return Array.from(html.matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g), match => match[1]);
 }
 
-const releaseVersion = '0.29.7';
+const releaseVersion = '0.29.13';
 function releaseResourceVersions(file) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
   return Array.from(html.matchAll(/(?:style\.css|src\/(?:dungeon\/[^"?]+|game\/[^"?]+|mobile\.js))\?v=([^"&]+)/g), match => match[1]);
@@ -84,6 +85,7 @@ const sharedOrder = [
   'src/dungeon/bosses.js',
   'src/dungeon/balance.js',
   'src/dungeon/core.js',
+  'src/dungeon/modifiers.js',
   'src/dungeon/hazards.js',
   'src/dungeon/events.js',
   'src/dungeon/trials.js',

@@ -58,8 +58,32 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.7';
+const GAME_VERSION = '0.29.13';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.13', date:'2026-07-22', title:'G1-F 平衡與完整收尾',
+    items:['以 D3 劍士／法師配對基準比較無效果、只拿祝福、只拿詛咒與混合四種局況。','固定模型與極端疊加均未越過首輪警戒，因此保留既有數值，不以理論值冒充自然遊玩樣本。','平衡紀錄新增祝福／詛咒組合、通關時間、承傷、靈魂與房間獎勵，完整報表可一併匯出。']
+  },
+  {
+    version:'0.29.12', date:'2026-07-22', title:'G1-E 異變選擇介面',
+    items:['每隔 3～4 層交替提供祝福與自願詛咒，選完後才繼續原本的路線或 Boss。','候選卡直接顯示效果；詛咒分開顯示代價與對應收益，支援兩次重抽與安全拒絕。','桌機與手機共用卡片命中區；HUD 可按 M 或點擊查看本局持有的祝福與詛咒。']
+  },
+  {
+    version:'0.29.11', date:'2026-07-22', title:'G1-D 事件結果擴充',
+    items:['新增遺忘熔爐、流浪鍊金師、回音書庫、失落商隊與古代秘藏。','事件定義由 12 個增至 17 個，正式非拒絕結果由 10 種增至 20 種。','新事件均提供安全離開；交易會預覽實際成本，資源不足不扣款，完成後不重複發獎。']
+  },
+  {
+    version:'0.29.10', date:'2026-07-22', title:'G1-C 十二種詛咒',
+    items:['新增戰鬥、奧術、生存、挑戰各 3 種，共 12 種自願詛咒。','每個詛咒都同時公開代價與對應收益，涵蓋玩家、敵人、菁英、險境與 Boss 結算。','封印命運會失去剩餘異變重抽並換得兩次選卡重抽；最後燈火禁用復活並提高靈魂收益。']
+  },
+  {
+    version:'0.29.9', date:'2026-07-22', title:'G1-B 十二種祝福',
+    items:['新增攻擊、防禦、機動、資源各 3 種，共 12 種每局祝福，依章節逐步解鎖。','祝福已接入傷害、生命與護盾、回復、移動、衝刺、跳躍、靈魂及裝備掉落結算。','所有祝福各自設有單次取得上限；命運絲線每局只提供一次額外升級選卡重抽。']
+  },
+  {
+    version:'0.29.8', date:'2026-07-22', title:'G1-A 祝福與詛咒技術地基',
+    items:['建立祝福／詛咒共用的每局狀態、選擇、接受與安全拒絕流程。','同一地城種子可重現選項；每局提供兩次有限重抽，且不會重複提供已持有項目。','詛咒資料必須同時標示代價與對應收益；本批只建立契約，不調整戰鬥數值。']
+  },
   {
     version:'0.29.7', date:'2026-07-22', title:'F1 專案結構整理',
     items:['程式碼集中至 src，主遊戲依責任拆成九個載入順序固定的模組。','遊戲素材與原始素材包分流至 assets/runtime 與 assets/source。','完成完整 smoke、手機橫向、正式頁素材與舊存檔回歸；本次不調整玩法數值。']
@@ -203,7 +227,8 @@ function renderSettingsBalance(mx, my, mw, mh) {
   const calibration = report && report.calibration;
   const bossEncounterCount = report ? Object.values(report.bossStats || {}).reduce((sum, item) => sum + (item.encounters || 0), 0) : 0;
   ctx.fillStyle = '#7dffd6'; ctx.font = '10px "Courier New",monospace';
-  ctx.fillText(calibration ? '校準 v' + calibration.version + '　Boss 紀錄 ' + bossEncounterCount + ' 場 · 擊殺時間／死亡招式／最終階段' : '', mx + 32, my + 389);
+  const g1Model = typeof dungeonG1BalanceReport === 'function' ? dungeonG1BalanceReport() : null;
+  ctx.fillText(calibration ? '校準 v' + calibration.version + '　·　G1 四組模型' + (g1Model && !g1Model.alerts.length ? '通過' : '待檢查') + '　·　Boss 紀錄 ' + bossEncounterCount + ' 場' : '', mx + 32, my + 389);
   if (menuMsg) {
     ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
@@ -623,9 +648,13 @@ function releaseVbtn(b) {
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
   unlockAudio();
+  if (eventPanel || dungeonPanelOpen()) {
+    const firstTouch = e.changedTouches[0];
+    if (firstTouch) { const [mx, my] = touchPos(firstTouch); handleTap(mx, my); }
+    return;
+  }
   for (const t of e.changedTouches) {
     const [mx, my] = touchPos(t);
-    if (eventPanel || dungeonPanelOpen()) { handleTap(mx, my); continue; }
     if (gameState === 'play') {
       const b = vbtnAt(mx, my);
       if (b) {

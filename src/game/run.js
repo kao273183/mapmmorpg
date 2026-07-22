@@ -2,7 +2,8 @@
 // ---------- floor generation ----------
 function monsterHp(base, sc, n, extraMul = 1) {
   const endurance = 1.5 + Math.min(0.75, 0.025 * (n - 1));
-  return Math.round(base * sc * endurance * extraMul);
+  const hp = base * sc * endurance * extraMul;
+  return Math.round(typeof dungeonCurseBaseEnemyHp === 'function' ? dungeonCurseBaseEnemyHp(hp) : hp);
 }
 function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
   rng = rng || Math.random;
@@ -56,10 +57,15 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
     return;
   }
   const elite = rng() < eliteCh;
-  const hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
+  let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
+  let damage = 8 * sc * (elite ? 1.6 : 1);
+  if (elite && typeof dungeonCurseEliteStat === 'function') {
+    hp = Math.round(dungeonCurseEliteStat(hp));
+    damage = dungeonCurseEliteStat(damage);
+  }
   mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + rng() * 0.4) * (rng() < 0.5 ? -1 : 1),
     minx, maxx, hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
-    dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
+    dmg: Math.round(damage),
     w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3 });
 }
 function currentFloorEventDef() {
@@ -196,6 +202,7 @@ function dropFloorEventGear(minRarity, source) {
   const rarity = Math.max(minRarity || 0, rollRarity(floor));
   gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0,
     it:genGear(floor, rarity, source || 'event'), t:1800, ground:468 });
+  if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 1);
 }
 function chooseFloorEvent(choice) {
   if (!eventPanel || !floorEvent || floorEvent.status !== 'idle') { eventPanel = null; return; }
@@ -208,9 +215,12 @@ function chooseFloorEvent(choice) {
     playSfx('uiError');
     return;
   }
+  const materialsBefore = Object.values(meta.mats || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const soulsBefore = soulsRun;
   const outcome = runDungeonEventEffect(selected.effectId, def, currentRoomSpec, floorEventState(), {
     getSouls:() => soulsRun,
     spendSouls:amount => { soulsRun -= amount; },
+    gainSouls:amount => { soulsRun += amount; },
     dropGear:dropFloorEventGear,
     spawnMimic:spawnEventMimic,
     startTrial:startFloorTrial,
@@ -221,6 +231,11 @@ function chooseFloorEvent(choice) {
     num(player.x, player.y - player.h - 18, outcome.message, outcome.color);
     playSfx('uiError');
     return;
+  }
+  if (typeof recordDungeonReward === 'function') {
+    const materialsAfter = Object.values(meta.mats || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    recordDungeonReward('materials', Math.max(0, materialsAfter - materialsBefore));
+    recordDungeonReward('souls', Math.max(0, soulsRun - soulsBefore));
   }
   floorEvent.status = outcome.status;
   burst(floorEvent.x, floorEvent.y - 42, outcome.color, outcome.status === 'declined' ? 10 : 28);
@@ -245,6 +260,10 @@ function promoteDungeonElite(m) {
   m.elite = true;
   m.hp = Math.round(m.hp * DUNGEON_D3C_CALIBRATION.eliteHpMultiplier); m.mhp = m.hp;
   m.dmg = Math.round(m.dmg * 1.25); m.xpv = Math.round(m.xpv * 2);
+  if (typeof dungeonCurseEliteStat === 'function') {
+    m.hp = Math.round(dungeonCurseEliteStat(m.hp)); m.mhp = m.hp;
+    m.dmg = Math.round(dungeonCurseEliteStat(m.dmg));
+  }
   m.w = Math.round(m.w * 1.15); m.h = Math.round(m.h * 1.15);
 }
 function genFloor(n, roomSpec) {
@@ -283,7 +302,7 @@ function genFloor(n, roomSpec) {
     };
     if (eventDef.family === 'trial') floorTrial = createDungeonTrial(eventDef, spec, player, worldW);
   } else if (roomType === 'camp') {
-    player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.25));
+    player.hp = Math.min(player.mhp, player.hp + Math.round(blessingHeal(player.mhp * 0.25)));
     player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.25));
     num(player.x, player.y - player.h - 34, '營地休整 · HP / MP +25%', '#8aa8ff');
   }
@@ -470,11 +489,13 @@ function explodeBomber(m) {
   return dead;
 }
 function hitMon(m, d, crit, noChain) {
+  if (typeof dungeonBlessingDamageForTarget === 'function') d = Math.max(1, Math.round(dungeonBlessingDamageForTarget(d, m)));
+  if (typeof dungeonCurseOutgoingDamage === 'function') d = Math.max(1, Math.round(dungeonCurseOutgoingDamage(d)));
   if (m.hp < m.mhp * 0.25 && perkV('execute') > 0) d = Math.max(1, Math.round(d * (1 + 0.1 * perkV('execute'))));
   if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
   m.hp -= d; m.hitT = 8;
   const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
-  if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + d * lifesteal); // 吸血鬼/吸血詞綴
+  if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * lifesteal)); // 吸血鬼/吸血詞綴
   const feelKind = noChain ? 'tick' : crit ? (m.type === 'boss' ? 'boss' : 'crit') : Math.abs(m.x - player.x) < 110 ? 'melee' : 'ranged';
   const feel = FEEL_PRESETS[feelKind];
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff', {
@@ -493,7 +514,7 @@ function hitMon(m, d, crit, noChain) {
     else if (m.elite) activityProgress('elites', 1);
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
-    if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
+    if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(3 * player.cd.ls));
     if (player.rageT > 0 && player.rageExtend > 0) {
       player.rageT = Math.min(720, player.rageT + player.rageExtend);
       num(player.x, player.y - player.h - 28, '戰意延長', '#ff8a6a');
@@ -523,12 +544,14 @@ function hitMon(m, d, crit, noChain) {
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });
+      if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 2);
     } else if (!m.eventMon) {
       if (Math.random() < gearDropChance(m.elite)) {
         gearDrops.push({
           x: m.x - 10, y: m.y - m.h, vy: -3, vx: (Math.random() - 0.5) * 2,
           it: genGear(floor), t: 900, ground: m.type === 'bat' ? 468 : (m.baseY || m.y)
         });
+        if (typeof recordDungeonReward === 'function') recordDungeonReward('gear', 1);
       }
     }
     if (m.trialMon) recordDungeonTrialEnemyDefeat(floorTrial);
@@ -559,7 +582,7 @@ function gainXp(n) {
     p.lv++;
     pendingPicks++;
     calcStats();
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.3));
+    p.hp = Math.min(p.mhp, p.hp + Math.round(blessingHeal(p.mhp * 0.3)));
     p.mp = p.mmp;
     burst(p.x, p.y - p.h / 2, '#ffe680', 30);
     beep(523, 0.12); setTimeout(() => beep(659, 0.12), 110); setTimeout(() => beep(784, 0.2), 220);
@@ -576,7 +599,7 @@ function usePot(t) {
   p.bag[t]--; p.potCd = 30;
   activityProgress('potions', 1);
   const potMul = (1 + 0.05 * meta.up.alchemy) * (1 + 0.1 * p.cd.heal);
-  if (t === 'hp') { const heal = Math.round(60 * potMul); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
+  if (t === 'hp') { const heal = Math.round(blessingHeal(60 * potMul)); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
   else { const heal = Math.round(40 * potMul); p.mp = Math.min(p.mmp, p.mp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' MP', '#7f9cff'); }
   beep(1000, 0.07, 'sine', 0.04);
 }

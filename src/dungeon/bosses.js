@@ -94,14 +94,17 @@ function dungeonBossPhaseConfig(boss, phase) {
 
 function createDungeonBoss(definition, atFloor, scale) {
   const def = definition || dungeonBossDefForFloor(atFloor);
-  const hp = Math.round(800 * scale * def.hpMultiplier);
+  const baseHp = 800 * scale * def.hpMultiplier;
+  const baseDamage = 15 * scale * def.damageMultiplier;
+  const hp = Math.round(typeof dungeonCurseBossStat === 'function' ? dungeonCurseBossStat(baseHp) : baseHp);
+  const damage = Math.round(typeof dungeonCurseBossStat === 'function' ? dungeonCurseBossStat(baseDamage) : baseDamage);
   return {
     type:'boss', bossId:def.id, biomeId:def.biomeId, name:def.name, floor:atFloor,
     x:def.arena.width - 240, y:468, vx:0, vy:0, t:0, atkT:def.initialAttackFrames,
     tele:0, phase:1, phaseT:0, targetX:def.arena.width - 240, slamWarn:false,
     activeAttackId:null, attackCycle:0,
     hp, mhp:hp, xpv:Math.round(150 * (1 + 0.15 * (atFloor - 1))),
-    dmg:Math.round(15 * scale * def.damageMultiplier), w:84, h:56, hitT:0, elite:true, s:7,
+    dmg:damage, w:84, h:56, hitT:0, elite:true, s:7,
     intro:def.id === 'meadow_lord'
   };
 }

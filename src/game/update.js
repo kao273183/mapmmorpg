@@ -47,7 +47,8 @@ function update() {
   if (keys['arrowright']) mv = 1;
   if (inputBuffer.dash > 0 && p.dashCd <= 0) {
     const dir = mv || p.face || 1;
-    p.dashDir = dir; p.face = dir; p.dashT = DASH_DURATION; p.dashCd = DASH_COOLDOWN;
+    p.dashDir = dir; p.face = dir; p.dashT = DASH_DURATION;
+    p.dashCd = typeof dungeonBlessingDashCooldown === 'function' ? dungeonBlessingDashCooldown(DASH_COOLDOWN) : DASH_COOLDOWN;
     p.inv = Math.max(p.inv, 8); p.vy *= 0.25; inputBuffer.dash = 0;
     burst(p.x - dir * 8, p.y - p.h / 2, '#bdefff', 8);
     playSkillAnim('smoke', p.x - dir * 10, p.y - 28, { scale:0.9, flip:dir < 0, layer:'back', alpha:0.65, life:18 });
@@ -408,6 +409,7 @@ function update() {
       o.x += dx / dist * sp; o.y += dy / dist * sp;
       if (dist < 22) {
         soulsRun++;
+        if (typeof recordDungeonReward === 'function') recordDungeonReward('souls', 1);
         parts.push({ x: o.x, y: o.y, vx: 0, vy: -1, t: 12, color: '#7dffd6' });
         orbs.splice(orbs.indexOf(o), 1);
       }
@@ -442,6 +444,6 @@ function update() {
 
   // regen
   const recoveryMul = 1 + 0.1 * meta.up.recovery;
-  if (p.hp < p.mhp) p.hp = Math.min(p.mhp, p.hp + 0.008 * recoveryMul);
+  if (p.hp < p.mhp) p.hp = Math.min(p.mhp, p.hp + blessingHeal(0.008 * recoveryMul));
   if (p.mp < p.mmp) p.mp = Math.min(p.mmp, p.mp + 0.05 * (1 + 0.5 * p.cd.mp) * recoveryMul);
 }

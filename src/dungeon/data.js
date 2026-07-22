@@ -134,6 +134,58 @@ const DUNGEON_EVENT_DEFS = {
       { label:'維持原命運', detail:'不取得重抽，也不影響探索評價', effectId:'decline' }
     ]
   },
+  forgotten_forge: {
+    id:'forgotten_forge', family:'shrine', name:'遺忘熔爐', previewTag:'鍛造或拆解',
+    worldType:'shrine', minChapter:1, weight:3, threat:1, color:'#ffb45e',
+    desc:'熄滅多年的熔爐仍保存一小簇祝火。', note:'可淬鍊武器取得本局攻擊，或拆解爐材換取強化石。', rewards:['攻擊強化', '強化石'],
+    choices:[
+      { label:'以祝火淬刃', detail:'本局攻擊永久 +6%', effectId:'forge_temper' },
+      { label:'拆解爐材', detail:'強化石 ×2，立即存入素材欄', effectId:'forge_salvage' },
+      { label:'讓熔爐沉睡', detail:'安全離開，不消耗任何資源', effectId:'decline' }
+    ]
+  },
+  wandering_alchemist: {
+    id:'wandering_alchemist', family:'shrine', name:'流浪鍊金師', previewTag:'藥劑二選一',
+    worldType:'shrine', minChapter:1, weight:3, threat:1, color:'#7dffd6',
+    desc:'戴著厚重面罩的鍊金師願意分享一份配方。', note:'補給組加入背包；復原藥劑則立即回復 HP 與 MP。', rewards:['雙色藥水', '立即回復'],
+    choices:[
+      { label:'領取平衡補給', detail:'紅色藥水 ×1、藍色藥水 ×1', effectId:'alchemy_bundle' },
+      { label:'飲用復原藥劑', detail:'立即回復 50% 最大 HP 與 MP', effectId:'alchemy_restoration' },
+      { label:'謝絕配方', detail:'安全離開，不改變背包與生命', effectId:'decline' }
+    ]
+  },
+  echoing_archive: {
+    id:'echoing_archive', family:'shrine', name:'回音書庫', previewTag:'奧術記憶',
+    worldType:'shrine', minChapter:2, weight:2, threat:1, color:'#8aa8ff',
+    desc:'漂浮書頁記錄著尚未發生的施法與選擇。', note:'可清除目前技能冷卻，或取得兩次升級選卡重抽。', rewards:['技能重置', '選卡重抽'],
+    choices:[
+      { label:'抄錄施法回音', detail:'MP 回滿；三個技能冷卻立即歸零', effectId:'archive_cooldown' },
+      { label:'研讀命運索引', detail:'升級選卡重抽 +2 次', effectId:'archive_fate' },
+      { label:'闔上書頁', detail:'安全離開，不改變技能與重抽', effectId:'decline' }
+    ]
+  },
+  lost_caravan: {
+    id:'lost_caravan', family:'chest', name:'失落商隊', previewTag:'補給或交易',
+    worldType:'chest', minChapter:1, weight:3, threat:1, color:'#ffd36a',
+    soulCostBase:10, soulCostPerChapter:3,
+    desc:'傾倒的貨車旁只剩完好的補給箱與交易契約。', note:'可免費取走急救補給，或支付顯示的靈魂換取稀有裝備。', rewards:['紅色藥水', '稀有裝備'],
+    choices:[
+      { label:'取走急救補給', detail:'紅色藥水 ×2，加入背包', effectId:'caravan_supplies' },
+      { label:'履行交易契約', detail:'支付靈魂；獲得稀有以上裝備', effectId:'caravan_trade', costType:'souls' },
+      { label:'保持原狀', detail:'保留靈魂並安全離開', effectId:'decline' }
+    ]
+  },
+  ancient_cache: {
+    id:'ancient_cache', family:'chest', name:'古代秘藏', previewTag:'塵晶或靈魂',
+    worldType:'chest', minChapter:2, weight:2, threat:1, color:'#d9a8ff',
+    soulRewardBase:8, soulRewardPerChapter:2,
+    desc:'石匣內的塵晶與靈魂只能安全取出其中一側。', note:'附魔塵直接存入素材欄；靈魂數量會隨章節提高。', rewards:['附魔塵', '靈魂'],
+    choices:[
+      { label:'回收附魔塵', detail:'附魔塵 ×2，立即存入素材欄', effectId:'cache_dust' },
+      { label:'引導封存靈魂', detail:'取得依章節提高的靈魂', effectId:'cache_souls', rewardType:'souls' },
+      { label:'封回石匣', detail:'安全離開，不取走任何資源', effectId:'decline' }
+    ]
+  },
   elite_ambush: {
     id:'elite_ambush', family:'trial', name:'菁英伏擊', previewTag:'菁英伏擊',
     worldType:'challenge', minChapter:1, weight:3, threat:3, color:'#ff8a6a',

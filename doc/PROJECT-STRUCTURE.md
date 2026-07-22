@@ -27,6 +27,7 @@ mapmmorpg/
 │  │  ├─ bosses.js
 │  │  ├─ balance.js
 │  │  ├─ core.js
+│  │  ├─ modifiers.js
 │  │  ├─ hazards.js
 │  │  ├─ events.js
 │  │  ├─ trials.js
@@ -57,20 +58,21 @@ mapmmorpg/
 4. `src/dungeon/bosses.js`
 5. `src/dungeon/balance.js`
 6. `src/dungeon/core.js`
-7. `src/dungeon/hazards.js`
-8. `src/dungeon/events.js`
-9. `src/dungeon/trials.js`
-10. `src/dungeon/ui.js`
-11. `src/mobile.js`（正式入口）
-12. `src/game/bootstrap.js`
-13. `src/game/progression.js`
-14. `src/game/systems.js`
-15. `src/game/run.js`
-16. `src/game/interface.js`
-17. `src/game/update.js`
-18. `src/game/render.js`
-19. `src/game/town.js`
-20. `src/game/main.js`
+7. `src/dungeon/modifiers.js`
+8. `src/dungeon/hazards.js`
+9. `src/dungeon/events.js`
+10. `src/dungeon/trials.js`
+11. `src/dungeon/ui.js`
+12. `src/mobile.js`（正式入口）
+13. `src/game/bootstrap.js`
+14. `src/game/progression.js`
+15. `src/game/systems.js`
+16. `src/game/run.js`
+17. `src/game/interface.js`
+18. `src/game/update.js`
+19. `src/game/render.js`
+20. `src/game/town.js`
+21. `src/game/main.js`
 
 這些檔案目前共用瀏覽器全域作用域。移動或拆檔時必須同步更新正式入口、固定視覺入口與 smoke tests，並跑完整回歸。
 
