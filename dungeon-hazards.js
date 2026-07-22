@@ -205,7 +205,8 @@ function damageFromDungeonHazard(hazard, def, options) {
 function playerOnIceFloor(p) {
   if (!p.onGround) return false;
   return dungeonHazards.some(hazard => hazard.type === 'ice_floor'
-    && Math.abs(p.y - hazard.y) < 3 && p.x >= hazard.x - hazard.w / 2 && p.x <= hazard.x + hazard.w / 2);
+    && Math.abs(p.y - hazard.y) < 3 && p.x >= hazard.x - hazard.w / 2 && p.x <= hazard.x + hazard.w / 2)
+    || (typeof playerOnDungeonBossIce === 'function' && playerOnDungeonBossIce(p));
 }
 
 function dungeonHazardMoveVelocity(p, moveDirection, speed) {

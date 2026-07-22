@@ -1920,20 +1920,13 @@ function genFloor(n, roomSpec) {
 }
 function genBossFloor(n) {
   clearDungeonHazards();
-  worldW = 1300;
-  plats = [{ x: 0, y: 468, w: worldW, ground: true }];
-  plats.push({ x: 170, y: 405, w: 150 });
-  plats.push({ x: worldW - 320, y: 405, w: 150 });
-  plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
+  clearDungeonBossEffects();
+  const bossDef = dungeonBossDefForFloor(n);
+  worldW = bossDef.arena.width;
+  plats = dungeonBossArenaPlatforms(bossDef);
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const introBoss = n === 5;
-  const hp = Math.round(800 * sc * (introBoss ? 1.08 : 1.35)); // 首領教學關較短，後續 Boss 維持原耐久
-  mons = [{
-    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: introBoss ? 150 : 120, tele: 0, phase: 1, phaseT:0, intro: introBoss,
-    targetX: worldW - 240, slamWarn:false,
-    hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
-    dmg: Math.round(15 * sc * (introBoss ? 0.82 : 1)), w: 84, h: 56, hitT: 0, elite: true, s: 7
-  }];
+  mons = [createDungeonBoss(bossDef, n, sc)];
+  if (typeof recordDungeonBossStart === 'function') recordDungeonBossStart(mons[0]);
   portal = null;
   floorEvent = null; eventPanel = null; floorTrial = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
@@ -2082,7 +2075,7 @@ function burst(x, y, color, n) {
 
 // ---------- combat ----------
 const MONSTER_LABEL = { slime:'史萊姆', bat:'蝙蝠', mush:'跳菇', spore:'孢子怪', bomber:'爆裂怪', charger:'衝鋒獸', icer:'冰霜怪', splitter:'分裂怪', boss:'Boss' };
-function monsterLabel(m) { return m && m.type === 'boss' ? biomeOf(floor).boss : (MONSTER_LABEL[m && m.type] || '怪物'); }
+function monsterLabel(m) { return m && m.type === 'boss' ? (m.name || dungeonBossDef(m.bossId).name) : (MONSTER_LABEL[m && m.type] || '怪物'); }
 function removeMon(m) {
   const i = mons.indexOf(m);
   if (i < 0) return;
@@ -2153,6 +2146,7 @@ function hitMon(m, d, crit, noChain) {
       });
     }
     if (m.type === 'boss') {
+      if (typeof recordDungeonBossEnd === 'function') recordDungeonBossEnd('kill', null);
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });
@@ -2273,8 +2267,36 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.28.9';
+const GAME_VERSION = '0.29.6';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.6', date:'2026-07-22', title:'E1-G Boss 平衡與收尾',
+    items:['五隻 Boss 各加入劍士／法師固定配對基準，統計擊殺時間與承傷。','設定新增 Boss 測試紀錄頁，顯示目標區間與超過 15% 的職業差警戒。','完成手機、低特效、死亡／撤退、掉落、舊存檔與完整 smoke 回歸。']
+  },
+  {
+    version:'0.29.5', date:'2026-07-22', title:'E1-F 虛空深淵 Boss',
+    items:['深淵魔王加入虛空彈幕與平台消除，彈幕死亡來源可獨立記錄。','平台消除只作用於浮空平台；第三階段最多消除兩座，仍保留一座浮台。','地面主路徑永不消除，招式期間以穩定地面標線提示安全保底。']
+  },
+  {
+    version:'0.29.4', date:'2026-07-22', title:'E1-E 冰霜凍原 Boss',
+    items:['冰霜領主加入寒冰槍陣與暴風突進，兩種死亡來源分開記錄。','暴風突進會留下冰面並沿用滑行慣性；持續反方向輸入可煞車與反向。','第一階段先教槍陣，第二階段起才加入突進與冰面，第三階段擴大槍陣。']
+  },
+  {
+    version:'0.29.3', date:'2026-07-22', title:'E1-D 熾熱熔岩 Boss',
+    items:['熔岩魔王加入熔岩衝鋒與連鎖噴發，兩種死亡來源分開記錄。','連鎖噴口保留可穿越間隔，熄火後以冷色框標示 96 幀安全窗。','第一階段先教衝鋒，第二階段起才加入連鎖噴發，第三階段提高衝鋒距離與速度。']
+  },
+  {
+    version:'0.29.2', date:'2026-07-22', title:'E1-C 幽暗洞窟 Boss',
+    items:['洞窟領主加入落石標記與雙向洞窟衝擊波，兩種死亡來源分開記錄。','落石依階段增加為 2／3／4 處，衝擊波從第二階段起加入招式循環。','三座岩棚以發光邊線標示安全區；站上岩棚可避開落石與地面衝擊波。']
+  },
+  {
+    version:'0.29.1', date:'2026-07-22', title:'E1-B 翠綠草原 Boss',
+    items:['草原領主加入根鬚橫掃與種子彈幕，傷害來源可分別記錄。','第二階段起根鬚會留下減速荊棘，第三階段才與彈幕、跳撲組合。','新增草原領主專屬樹冠外觀；低特效仍保留地面框與招式名稱。']
+  },
+  {
+    version:'0.29.0', date:'2026-07-22', title:'E1-A 五群系 Boss 技術地基',
+    items:['五群系 Boss 改為獨立資料定義，保留現有難度與共用招式。','建立統一階段、招式預警、場地與環境互動介面。','平衡紀錄新增 Boss 擊殺時間、死亡招式與最終階段。']
+  },
   {
     version:'0.28.9', date:'2026-07-22', title:'D3-C 首輪數值校準',
     items:['固定基準模型首輪只調整三項，幅度維持 10～12.5%。','菁英單體 HP 係數 2.40→2.15；落石與熔岩傷害 8%→7%。','險境額外靈魂提高 10%；平衡報表保留完整調整前後值。']
@@ -2384,16 +2406,56 @@ function renderSettingsBalance(mx, my, mw, mh) {
   ctx.fillStyle = report && report.alerts.length ? '#ffb45e' : '#6f7695';
   ctx.fillText(report && report.alerts.length ? '警戒：' + report.alerts[0] : '樣本達門檻後自動檢查平衡警戒線', mx + 32, my + 366);
   const calibration = report && report.calibration;
+  const bossEncounterCount = report ? Object.values(report.bossStats || {}).reduce((sum, item) => sum + (item.encounters || 0), 0) : 0;
   ctx.fillStyle = '#7dffd6'; ctx.font = '10px "Courier New",monospace';
-  ctx.fillText(calibration ? '校準 v' + calibration.version + '　菁英 HP -10.4%　重地形傷害 -12.5%　險境靈魂 +10%' : '', mx + 32, my + 389);
+  ctx.fillText(calibration ? '校準 v' + calibration.version + '　Boss 紀錄 ' + bossEncounterCount + ' 場 · 擊殺時間／死亡招式／最終階段' : '', mx + 32, my + 389);
   if (menuMsg) {
     ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
     if (--menuMsg.t <= 0) menuMsg = null;
   }
-  drawSettingsButton(mx + 20, my + mh - 58, 190, 38, '複製完整報表', 'copyBalance', 'rgba(185,140,255,0.16)');
-  drawSettingsButton(mx + 220, my + mh - 58, 160, 38, '基準設定', 'benchmarkSetup', 'rgba(255,180,94,0.12)');
-  drawSettingsButton(mx + 390, my + mh - 58, 170, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+  drawSettingsButton(mx + 20, my + mh - 58, 135, 38, '複製報表', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + 165, my + mh - 58, 120, 38, 'Boss 紀錄', 'bossRecords', 'rgba(185,140,255,0.14)');
+  drawSettingsButton(mx + 295, my + mh - 58, 120, 38, '基準設定', 'benchmarkSetup', 'rgba(255,180,94,0.12)');
+  drawSettingsButton(mx + 425, my + mh - 58, 135, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+}
+function renderSettingsBosses(mx, my, mw, mh) {
+  const report = typeof dungeonBalanceReport === 'function' ? dungeonBalanceReport(settingsBalanceMode) : null;
+  const comparison = settingsBalanceMode === 'benchmark' && typeof dungeonBossBenchmarkComparison === 'function' ? dungeonBossBenchmarkComparison() : null;
+  const bossIds = typeof DUNGEON_BOSS_ORDER !== 'undefined' ? DUNGEON_BOSS_ORDER : [];
+  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText(settingsBalanceMode === 'benchmark' ? '固定基準 · 配對裝備與種子' : '自然遊玩 · 最近 60 局', W / 2, my + 66);
+  ctx.fillStyle = '#777e9f'; ctx.font = '10px "Courier New",monospace';
+  ctx.fillText('擊殺時間目標與承傷只作警戒；每職業至少 3 場後再判斷', W / 2, my + 84);
+  for (let i = 0; i < bossIds.length; i++) {
+    const id = bossIds[i], stat = report && report.bossStats[id];
+    const compared = comparison && comparison.bosses[id];
+    const target = compared ? compared.target : (typeof DUNGEON_BOSS_BENCHMARK_TARGETS !== 'undefined' ? DUNGEON_BOSS_BENCHMARK_TARGETS.find(item => item.bossId === id) : null);
+    const warrior = compared ? compared.warrior : stat && stat.classStats.warrior;
+    const mage = compared ? compared.mage : stat && stat.classStats.mage;
+    const paired = compared ? compared.paired : !!(warrior && mage && warrior.kills && mage.kills);
+    const meanClear = paired ? (warrior.averageClearSec + mage.averageClearSec) / 2 : 0;
+    const classGapPct = compared ? compared.classGapPct : paired && meanClear ? Math.abs(warrior.averageClearSec - mage.averageClearSec) / meanClear : 0;
+    const ready = compared ? compared.ready : !!(warrior && mage && warrior.encounters >= 3 && mage.encounters >= 3);
+    const x = mx + 22, y = my + 96 + i * 58, w = mw - 44;
+    ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(x, y, w, 50);
+    ctx.strokeStyle = ready && paired && classGapPct > 0.15 ? '#ffb45e' : '#343850'; ctx.strokeRect(x, y, w, 50);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 13px "Courier New",monospace';
+    ctx.fillText((stat && stat.name) || (target && target.bossName) || id, x + 12, y + 19);
+    ctx.fillStyle = '#7f86a7'; ctx.font = '10px "Courier New",monospace';
+    const encounters = stat ? stat.encounters : 0, kills = stat ? stat.kills : 0;
+    ctx.fillText('場次 ' + encounters + ' · 擊殺 ' + kills + (target ? ' · 目標 ' + target.clearSec[0] + '～' + target.clearSec[1] + '秒' : ''), x + 12, y + 39);
+    const fmtClass = (label, item) => label + ' ' + (item && item.kills ? Math.round(item.averageClearSec) + '秒／傷' + Math.round(item.averageDamage) : '—');
+    ctx.textAlign = 'right'; ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 11px "Courier New",monospace';
+    ctx.fillText(fmtClass('劍', warrior) + '　' + fmtClass('法', mage), x + w - 12, y + 20);
+    ctx.fillStyle = ready && paired ? (classGapPct <= 0.15 ? '#7dffd6' : '#ffb45e') : '#6f7695'; ctx.font = '10px "Courier New",monospace';
+    ctx.fillText(paired ? '職業差 ' + Math.round(classGapPct * 100) + '%' + (ready ? '' : ' · 待各3場') : '等待配對樣本', x + w - 12, y + 39);
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = comparison && comparison.alerts.length ? '#ffb45e' : '#6f7695'; ctx.font = '10px "Courier New",monospace';
+  const readyCount = comparison ? Object.values(comparison.bosses).filter(item => item.ready).length : 0;
+  ctx.fillText(comparison && comparison.alerts.length ? comparison.alerts[0] : readyCount ? '目前沒有超過 15% 的已配對職業警戒' : '每職業累積 3 場後啟用 15% 職業差警戒', W / 2, my + mh - 72);
+  drawSettingsButton(mx + 24, my + mh - 58, 250, 38, '複製完整報表', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + mw - 274, my + mh - 58, 250, 38, '返回平衡報表', 'bossRecordsBack', 'rgba(125,255,214,0.14)');
 }
 function renderSettingsBenchmark(mx, my, mw, mh) {
   const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];
@@ -2421,9 +2483,10 @@ function renderSettings() {
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace';
-  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 報 表' : settingsPage === 'benchmark' ? '固 定 基 準 局' : '設 定', W / 2, my + 38);
+  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 報 表' : settingsPage === 'bosses' ? 'BOSS 測 試 紀 錄' : settingsPage === 'benchmark' ? '固 定 基 準 局' : '設 定', W / 2, my + 38);
   if (settingsPage === 'updates') { renderSettingsUpdates(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'balance') { renderSettingsBalance(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
+  if (settingsPage === 'bosses') { renderSettingsBosses(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'benchmark') { renderSettingsBenchmark(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
@@ -2516,7 +2579,7 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (settingsOpen) {
     if (k === 'escape' && !settingsMode) {
-      if (settingsPage === 'benchmark') settingsPage = 'balance';
+      if (settingsPage === 'benchmark' || settingsPage === 'bosses') settingsPage = 'balance';
       else if (settingsPage !== 'main') settingsPage = 'main';
       else { settingsOpen = false; closeSaveEdit(); clearGameInputs(); }
     }
@@ -2604,6 +2667,8 @@ function handleTap(mx, my) {
       if (b.act === 'balanceNatural') { settingsBalanceMode = 'natural'; playSfx('uiSelect'); return; }
       if (b.act === 'balanceBenchmark') { settingsBalanceMode = 'benchmark'; playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkSetup') { settingsPage = 'benchmark'; playSfx('uiSelect'); return; }
+      if (b.act === 'bossRecords') { settingsPage = 'bosses'; playSfx('uiSelect'); return; }
+      if (b.act === 'bossRecordsBack') { settingsPage = 'balance'; playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkSelect') { settingsBenchmarkIndex = Math.max(0, b.index | 0); playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkStart') {
         const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];
@@ -2919,6 +2984,7 @@ function update() {
   if (p.y > 600) { p.y = 468; p.vy = 0; p.onGround = true; p.airJumped = false; }
 
   if (updateDungeonHazards()) return;
+  if (updateDungeonBossEffects(p)) return;
 
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
@@ -3097,57 +3163,67 @@ function update() {
       }
     } else if (m.type === 'boss') {
       m.t++;
-      const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
+      const bossDef = dungeonBossDef(m.bossId);
+      const ph = dungeonBossPhaseForHealth(m);
+      const phaseConfig = dungeonBossPhaseConfig(m, ph);
       if (ph > m.phase) {
         m.phase = ph; m.phaseT = 20;
-        burst(m.x, m.y - m.h / 2, '#ff5a5a', 30);
-        num(m.x, m.y - m.h - 34, '第 ' + ph + ' 階段', '#ff8a8a', { size:18, pop:4 });
+        if (typeof recordDungeonBossPhase === 'function') recordDungeonBossPhase(ph);
+        burst(m.x, m.y - m.h / 2, bossDef.color, 30);
+        num(m.x, m.y - m.h - 34, '第 ' + ph + ' 階段', bossDef.color, { size:18, pop:4 });
         beep(200, 0.3, 'sawtooth', 0.06);
-        spawnBossAdds(m.intro ? Math.max(1, ph - 1) : ph);
-      } // 第一隻 Boss 減少援軍，後續維持原數量
+        spawnBossAdds(dungeonBossAddCount(m, ph));
+      }
       if (m.phaseT > 0) m.phaseT--;
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 468 && m.vy >= 0;
-      if (m.atkT > 0) {
+      const specialAttack = updateDungeonBossSpecialAttack(m, p);
+      if (specialAttack.playerDied) return;
+      if (specialAttack.handled) {
+        m.vx = 0;
+      } else if (m.atkT > 0) {
         m.atkT--;
-        if (grounded) m.vx = dir * (ph === 1 ? 1.1 : ph === 2 ? 1.6 : 2.2); // 追著玩家走
+        if (grounded) m.vx = dir * phaseConfig.chaseSpeed; // 追著玩家走
       } else if (m.tele > 0) {
         m.tele--; m.vx = 0;
         if (m.tele === 12 || m.tele === 4) beep(m.tele === 4 ? 760 : 580, 0.05, 'square', 0.025);
         if (m.tele === 0 && grounded) {
-          m.vy = ph === 3 ? -11.5 : -9; // 跳撲
+          m.vy = phaseConfig.leapVelocity; // 跳撲
           const airTicks = Math.max(1, Math.ceil(-2 * m.vy / 0.6));
           m.vx = (m.targetX - m.x) / airTicks / Math.max(0.01, moveF);
           m.slamWarn = true;
-          { // 吐毒彈(扇形,一階段起就有,按群系微調)
-            const bb = biomeOf(floor);
-            const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
-            const chill = bb.name === '冰霜凍原';
-            const nsp = Math.max(1, (ph === 1 ? 1 : ph === 2 ? 3 : 5) - (m.intro ? 1 : 0)) + (hot ? 2 : 0);
-            const vsc = hot ? 1.25 : 1; // 熔岩彈更快
+          { // 共用跳撲彈幕；專屬招式由各 Boss 後續批次接入 attackSlots。
+            const nsp = Math.max(1, phaseConfig.volleyCount - (m.intro ? 1 : 0)) + (phaseConfig.volleyBonus || 0);
+            const vsc = phaseConfig.volleySpeed || 1;
             for (let i = 0; i < nsp; i++) {
               espits.push({
                 x: m.x, y: m.y - m.h + 6,
                 vx: ((p.x - m.x) / 55 + (i - (nsp - 1) / 2) * 1.1) * vsc,
-                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7), chill: chill, col: bb.bcol,
+                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7), chill:!!phaseConfig.projectileChill, col:bossDef.color,
                 ownerName:monsterLabel(m), heavy:ph === 3
               });
             }
             beep(320, 0.12, 'square', 0.04);
           }
-          const recovery = ph === 1 ? 100 : ph === 2 ? 74 : 54;
-          m.atkT = Math.round(recovery * (m.intro ? 1.2 : 1));
+          m.atkT = Math.round(phaseConfig.recoveryFrames * bossDef.recoveryMultiplier);
         }
       } else if (grounded) {
-        m.tele = m.intro ? 48 : 36;
-        const leap = m.intro ? 160 : 190;
-        m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - leap, Math.min(m.x + leap, p.x))));
+        const nextAttack = dungeonBossNextAttack(m);
+        if (nextAttack !== bossDef.legacyAttackId) startDungeonBossSpecialAttack(m, p, nextAttack, plats);
+        else {
+          beginDungeonBossAttack(m, bossDef.legacyAttackId);
+          m.tele = bossDef.warningFrames;
+          m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - bossDef.leapRange, Math.min(m.x + bossDef.leapRange, p.x))));
+        }
       }
-      m.vy += 0.6; if (m.vy > 14) m.vy = 14;
-      m.x += m.vx * moveF; m.y += m.vy;
-      if (m.x < 60) m.x = 60;
-      if (m.x > worldW - 60) m.x = worldW - 60;
-      if (m.y >= 468) {
+      if (!specialAttack.handled) {
+        m.vy += 0.6; if (m.vy > 14) m.vy = 14;
+        m.x += m.vx * moveF; m.y += m.vy;
+        if (m.x < 60) m.x = 60;
+        if (m.x > worldW - 60) m.x = worldW - 60;
+      }
+      if (!specialAttack.handled && m.y >= 468) {
+        const completedSlam = m.slamWarn && m.vy > 0;
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
           burst(m.x, 468, '#b05ae0', 26);
           beep(90, 0.2, 'sawtooth', 0.06);
@@ -3157,7 +3233,8 @@ function update() {
             if (dmgPlayer({ amount:d, sourceName:monsterLabel(m) + '的落地震波', sourceX:m.x, heavy:true })) return;
           }
         }
-        m.y = 468; m.vy = 0; m.slamWarn = false;
+        m.y = 468; m.vy = 0;
+        if (completedSlam) finishDungeonBossAttack(m);
       }
     } else {
       m.t++;
@@ -3199,7 +3276,7 @@ function update() {
       const d = Math.max(1, s.dmg - armorDef());
       if (s.chill) { p.chillT = 150; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }
       espits.splice(espits.indexOf(s), 1);
-      if (dmgPlayer({ amount:d, sourceName:(s.ownerName || '怪物') + '的彈幕', sourceX:s.x, heavy:!!s.heavy })) return;
+      if (dmgPlayer({ amount:d, sourceName:s.sourceName || (s.ownerName || '怪物') + '的彈幕', sourceX:s.x, heavy:!!s.heavy })) return;
       continue;
     }
     if (s.y > 505 || s.x < -20 || s.x > worldW + 20) {
@@ -3360,6 +3437,7 @@ function render() {
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
   drawDungeonHazards();
+  drawDungeonBossEffects();
   drawDungeonRoomWorld();
   drawFloorEventWorld();
   // Lv3/Lv5 技能區域特效（燃燒地面、餘震、龍捲與二次衝擊）
@@ -3428,20 +3506,21 @@ function render() {
   // Boss 跳撲與落地範圍：形狀與實際判定共用同一半徑。
   for (const m of mons) {
     if (m.type !== 'boss' || (m.tele <= 0 && !m.slamWarn)) continue;
-    const radius = m.phase >= 3 ? (m.intro ? 130 : 150) : 70;
+    const telegraph = dungeonBossTelegraph(m);
+    const radius = telegraph.radius;
     const urgent = m.tele > 0 && m.tele <= 12;
     const pulse = urgent ? 0.58 + Math.sin(frame * 0.9) * 0.18 : 0.3 + Math.sin(frame * 0.22) * 0.08;
-    const tx = Number.isFinite(m.targetX) ? m.targetX : m.x;
+    const tx = telegraph.targetX;
     ctx.globalAlpha = Math.max(0.16, pulse);
-    ctx.fillStyle = '#ff5a5a';
+    ctx.fillStyle = telegraph.color;
     ctx.beginPath(); ctx.ellipse(tx, 465, radius, 15, 0, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = urgent ? 1 : 0.76;
-    ctx.strokeStyle = urgent ? '#fff2a8' : '#ffb080'; ctx.lineWidth = urgent ? 4 : 3;
+    ctx.strokeStyle = urgent ? '#fff2a8' : telegraph.accent; ctx.lineWidth = urgent ? 4 : 3;
     ctx.setLineDash(urgent ? [] : [9, 7]);
     ctx.beginPath(); ctx.ellipse(tx, 465, radius, 15, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.textAlign = 'center';
-    ctx.fillText(m.phase >= 3 ? '落地震波' : '跳撲落點', tx, 442);
+    ctx.fillText(telegraph.label, tx, 442);
     ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   }
   // monsters
@@ -3454,9 +3533,12 @@ function render() {
       ctx.fillStyle = '#f5ede0';
       for (let tx = -20; tx <= 16; tx += 9) { ctx.fillRect(mx + tx, my - 29 - bite, 5, 6); ctx.fillRect(mx + tx + 4, my - 34, 5, 6); }
       ctx.fillStyle = '#ff5a5a'; ctx.fillRect(mx - 16, my - 38 - bite, 5, 5); ctx.fillRect(mx + 11, my - 38 - bite, 5, 5);
+    } else if (m.type === 'boss' && drawDungeonBossSprite(m)) {
+      drawDungeonBossSpecialTelegraph(m);
     } else {
       const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
-      const rc = m.type === 'boss' ? { e: bi.bcol, f: bi.bcol2 } : null;
+      const bossStyle = m.type === 'boss' ? dungeonBossDef(m.bossId) : null;
+      const rc = bossStyle ? { e:bossStyle.color, f:bossStyle.accent } : null;
       drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
     }
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
@@ -3473,8 +3555,20 @@ function render() {
   }
   // boss/孢子 彈幕(群系色)
   for (const s of espits) {
-    ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    if (s.seed) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx) + Math.PI / 2);
+      ctx.fillStyle = s.col || '#9bdd4f'; ctx.fillRect(-4, -7, 8, 14);
+      ctx.fillStyle = '#d8ef7b'; ctx.fillRect(-2, -5, 4, 8);
+      ctx.fillStyle = '#6b4b2a'; ctx.fillRect(-1, -10, 2, 4); ctx.restore();
+    } else if (s.voidBolt) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(frame * 0.16);
+      ctx.fillStyle = s.col || '#b05ae0'; ctx.fillRect(-7, -7, 14, 14);
+      ctx.fillStyle = '#d9a8ff'; ctx.fillRect(-4, -4, 8, 8);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-2, -2, 4, 4); ctx.restore();
+    } else {
+      ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    }
   }
   // player
   drawEquippedAura(p.x, p.y - p.h / 2, p.w, p.h);
@@ -3610,7 +3704,8 @@ function render() {
   drawDungeonHazardTutorial();
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
-    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, biomeOf(floor).bcol, biomeOf(floor).boss + '  第' + bossM.phase + '階段');
+    const bossDef = dungeonBossDef(bossM.bossId);
+    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, bossDef.color, bossDef.name + '  第' + bossM.phase + '階段');
     ctx.textAlign = 'left';
   }
 

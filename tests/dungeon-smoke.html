@@ -5,21 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.28.9">
+<link rel="stylesheet" href="style.css?v=0.29.6">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.28.9"></script>
-<script src="dungeon-balance.js?v=0.28.9"></script>
-<script src="dungeon.js?v=0.28.9"></script>
-<script src="dungeon-hazards.js?v=0.28.9"></script>
-<script src="dungeon-events.js?v=0.28.9"></script>
-<script src="dungeon-trials.js?v=0.28.9"></script>
-<script src="dungeon-ui.js?v=0.28.9"></script>
-<script src="game.js?v=0.28.9"></script>
+<script src="dungeon-data.js?v=0.29.6"></script>
+<script src="dungeon-bosses.js?v=0.29.6"></script>
+<script src="dungeon-balance.js?v=0.29.6"></script>
+<script src="dungeon.js?v=0.29.6"></script>
+<script src="dungeon-hazards.js?v=0.29.6"></script>
+<script src="dungeon-events.js?v=0.29.6"></script>
+<script src="dungeon-trials.js?v=0.29.6"></script>
+<script src="dungeon-ui.js?v=0.29.6"></script>
+<script src="game.js?v=0.29.6"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -63,7 +64,113 @@ function resolveFixedTrial(outcome) {
     updateFloorTrial(0);
   }
 }
-if (mode.startsWith('trial-')) {
+function seedFixedBossRecords() {
+  dungeonBalance.runs = [];
+  let bossNow = 100000;
+  for (const testCase of DUNGEON_BOSS_BENCHMARK_CASES) {
+    const target = DUNGEON_BOSS_BENCHMARK_TARGETS.find(item => item.bossId === testCase.bossId);
+    const profile = dungeonBenchmarkProfile(testCase.benchmarkId);
+    const clearSec = Math.round((target.clearSec[0] + target.clearSec[1]) / 2) + (testCase.classId === 'mage' ? 4 : 0);
+    const damage = Math.round(target.damage[1] * (testCase.classId === 'mage' ? 0.52 : 0.45));
+    startDungeonBalanceRun(testCase.seed, testCase.classId, bossNow, {
+      mode:'benchmark', benchmarkId:profile.id, benchmarkLabel:profile.label
+    });
+    const boss = createDungeonBoss(dungeonBossDef(testCase.bossId), testCase.floor, 1);
+    recordDungeonBossStart(boss, bossNow + 1000);
+    recordDungeonBossPhase(3);
+    recordDungeonDamage(boss.name + '固定測試', damage);
+    recordDungeonBossEnd('kill', null, bossNow + 1000 + clearSec * 1000);
+    finishDungeonBalanceRun({ result:'extract', floor:testCase.floor, kills:1, gained:0 }, bossNow + 2000 + clearSec * 1000);
+    bossNow += 300000;
+  }
+}
+if (mode.startsWith('boss-')) {
+  const bossFloors = { meadow:5, cavern:10, volcano:15, tundra:20, void:25 };
+  const bossParts = mode.slice(5).split('-');
+  const bossKey = bossParts[0], bossVariant = bossParts.slice(1).join('-');
+  const bossFloor = bossFloors[bossKey] || 5;
+  enterDungeonRoom(makeRoomSpec('boss', bossFloor, 0));
+  const boss = mons.find(mon => mon.type === 'boss');
+  if (boss && bossKey === 'meadow' && bossVariant) {
+    floorT = 0; boss.x = 720; boss.targetX = 720; boss.atkT = 9999;
+    if (bossVariant === 'root' || bossVariant === 'root-active' || bossVariant === 'thorns' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      if (bossVariant === 'thorns') boss.phase = 2;
+      startDungeonBossSpecialAttack(boss, player, 'root_sweep'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'root-active' || bossVariant === 'lowfx') for (const effect of dungeonBossEffects) { effect.state = 'active'; effect.timer = 9999; }
+      if (bossVariant === 'thorns') for (const effect of dungeonBossEffects) { effect.state = 'thorns'; effect.timer = 9999; }
+    } else if (bossVariant === 'seed' || bossVariant === 'seed-active') {
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'seed_burst');
+      if (bossVariant === 'seed') boss.specialAttack.timer = 9999;
+      else { boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999; }
+    }
+  } else if (boss && bossKey === 'cavern' && bossVariant) {
+    floorT = 0; boss.x = 720; boss.targetX = 720; boss.atkT = 9999;
+    if (bossVariant === 'rock' || bossVariant === 'rock-active' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = bossVariant === 'rock' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'marked_rockfall'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'rock-active' || bossVariant === 'lowfx') for (const effect of dungeonBossEffects) { effect.state = 'active'; effect.timer = 2; }
+    } else if (bossVariant === 'wave' || bossVariant === 'wave-active') {
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'cavern_shockwave');
+      if (bossVariant === 'wave') boss.specialAttack.timer = 9999;
+      else { boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999; }
+    }
+  } else if (boss && bossKey === 'volcano' && bossVariant) {
+    floorT = 0; boss.x = 820; boss.targetX = 820; boss.atkT = 9999;
+    if (bossVariant === 'charge' || bossVariant === 'charge-active') {
+      boss.phase = bossVariant === 'charge' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'magma_charge'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'charge-active') { boss.specialAttack.state = 'active'; boss.specialAttack.visualHold = true; boss.specialAttack.direction = -1; }
+    } else if (bossVariant === 'vent' || bossVariant === 'vent-active' || bossVariant === 'vent-safe' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'vent_chain'); boss.specialAttack.timer = 9999;
+      if (bossVariant !== 'vent') for (const effect of dungeonBossEffects) {
+        effect.state = bossVariant === 'vent-safe' ? 'cooldown' : 'active'; effect.timer = 9999;
+      }
+    }
+  } else if (boss && bossKey === 'tundra' && bossVariant) {
+    floorT = 0; boss.x = 820; boss.targetX = 820; boss.atkT = 9999;
+    if (bossVariant === 'lance' || bossVariant === 'lance-active' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = bossVariant === 'lance' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'ice_lance'); boss.specialAttack.timer = 9999;
+      if (bossVariant !== 'lance') for (const effect of dungeonBossEffects) { effect.state = 'active'; effect.timer = 9999; effect.hit = true; }
+    } else if (bossVariant === 'dash' || bossVariant === 'dash-active' || bossVariant === 'ice') {
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'blizzard_dash'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'dash-active' || bossVariant === 'ice') {
+        boss.specialAttack.state = 'active'; boss.specialAttack.visualHold = true; boss.specialAttack.direction = -1;
+        createTundraIceTrail(boss, boss.specialAttack);
+        if (bossVariant === 'ice') boss.specialAttack = null;
+      }
+    }
+  } else if (boss && bossKey === 'void' && bossVariant) {
+    floorT = 0; boss.x = 820; boss.targetX = 820; boss.atkT = 9999;
+    if (bossVariant === 'barrage' || bossVariant === 'barrage-active') {
+      boss.phase = bossVariant === 'barrage' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'void_barrage');
+      if (bossVariant === 'barrage') boss.specialAttack.timer = 9999;
+      else {
+        boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999;
+        for (let i = 0; i < espits.length; i++) {
+          espits[i].vx = 0; espits[i].vy = 0; espits[i].x = boss.x - 135 + i * 45; espits[i].y = 370 + (i % 2) * 28;
+        }
+      }
+    } else if (bossVariant === 'erase' || bossVariant === 'erase-active' || bossVariant === 'stable' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = bossVariant === 'erase' ? 2 : 3;
+      startDungeonBossSpecialAttack(boss, player, 'platform_erasure', plats); boss.specialAttack.timer = 9999;
+      if (bossVariant !== 'erase') for (const effect of dungeonBossEffects) {
+        effect.state = 'active'; effect.timer = 9999; effect.platform.bossVoidWarning = false;
+        effect.platform.bossVoidErased = true; effect.platform.voidDisabled = true;
+      }
+    }
+  }
+  const ok = !!boss && boss.bossId === dungeonBossDefForFloor(bossFloor).id && boss.floor === bossFloor;
+  window.__dungeonSmokeResult = { ok, bossId:boss && boss.bossId, floor:bossFloor, phase:boss && boss.phase, variant:bossVariant || 'default' };
+  document.title = ok ? 'Dungeon Boss PASS ' + bossKey + (bossVariant ? ' ' + bossVariant : '') : 'Dungeon Boss FAIL ' + bossKey;
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+} else if (mode.startsWith('trial-')) {
   const trialModes = {
     'elite':'elite_ambush', 'elite-success':'elite_ambush', 'elite-declined':'elite_ambush',
     'timed':'timed_clear', 'timed-wave2':'timed_clear', 'timed-success':'timed_clear', 'timed-failed':'timed_clear', 'timed-failed-clear':'timed_clear',
@@ -166,6 +273,22 @@ if (mode.startsWith('trial-')) {
   settingsPage = 'updates';
   settingsUpdateIndex = 0;
   document.title = 'Dungeon Settings Updates';
+} else if (mode === 'settings-boss-balance') {
+  const bossNow = Date.now();
+  const bossSample = createDungeonBoss(dungeonBossDef('meadow_lord'), 5, 1);
+  recordDungeonBossStart(bossSample, bossNow);
+  recordDungeonBossPhase(3);
+  recordDungeonBossEnd('kill', null, bossNow + 72000);
+  finishDungeonBalanceRun({ result:'extract', floor:5, kills:1, gained:8 }, bossNow + 80000);
+  openTownPanel('save');
+  settingsPage = 'balance';
+  document.title = 'Dungeon Settings Boss Balance';
+} else if (mode === 'settings-boss-records') {
+  seedFixedBossRecords();
+  openTownPanel('save');
+  settingsPage = 'bosses';
+  settingsBalanceMode = 'benchmark';
+  document.title = 'Dungeon Settings Boss Records';
 } else if (mode === 'settings-balance') {
   recordDungeonRouteOffer([makeRoomSpec('safe', 2, 0), makeRoomSpec('hazard', 2, 1)]);
   recordDungeonRouteChoice(makeRoomSpec('hazard', 2, 1));
