@@ -90,7 +90,7 @@ assert.strictEqual(benchmark.trialResults.success, 4);
 assert.strictEqual(benchmark.trialResults.failed, 2);
 
 const exported = JSON.parse(api.exportRecords());
-assert.strictEqual(exported.version, 2);
+assert.strictEqual(exported.version, 3);
 assert.strictEqual(exported.natural.summary.runs, 2);
 assert.strictEqual(exported.benchmark.summary.runs, 6);
 

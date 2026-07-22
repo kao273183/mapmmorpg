@@ -53,7 +53,7 @@ assert.strictEqual(exported.natural.calibration.basis, 'fixed-benchmark-model');
 const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
 const dungeonSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon.js'), 'utf8');
 assert.ok(gameSource.includes('DUNGEON_D3C_CALIBRATION.eliteHpMultiplier'));
-assert.ok(gameSource.includes("const GAME_VERSION = '0.28.9'"));
+assert.ok(gameSource.includes("version:'0.28.9'"));
 assert.ok(dungeonSource.includes('dungeonHazardSoulBonus(floor)'));
 
 console.log('dungeon D3-C calibration smoke test passed (3 bounded changes, before/after report, reward wiring)');

@@ -1920,20 +1920,12 @@ function genFloor(n, roomSpec) {
 }
 function genBossFloor(n) {
   clearDungeonHazards();
-  worldW = 1300;
-  plats = [{ x: 0, y: 468, w: worldW, ground: true }];
-  plats.push({ x: 170, y: 405, w: 150 });
-  plats.push({ x: worldW - 320, y: 405, w: 150 });
-  plats.push({ x: worldW / 2 - 80, y: 325, w: 160 });
+  const bossDef = dungeonBossDefForFloor(n);
+  worldW = bossDef.arena.width;
+  plats = dungeonBossArenaPlatforms(bossDef);
   const sc = (1 + 0.3 * (n - 1) + 0.02 * (n - 1) * (n - 1)) * (n >= 21 ? 1.15 : 1);
-  const introBoss = n === 5;
-  const hp = Math.round(800 * sc * (introBoss ? 1.08 : 1.35)); // 首領教學關較短，後續 Boss 維持原耐久
-  mons = [{
-    type: 'boss', x: worldW - 240, y: 468, vx: 0, vy: 0, t: 0, atkT: introBoss ? 150 : 120, tele: 0, phase: 1, phaseT:0, intro: introBoss,
-    targetX: worldW - 240, slamWarn:false,
-    hp: hp, mhp: hp, xpv: Math.round(150 * (1 + 0.15 * (n - 1))),
-    dmg: Math.round(15 * sc * (introBoss ? 0.82 : 1)), w: 84, h: 56, hitT: 0, elite: true, s: 7
-  }];
+  mons = [createDungeonBoss(bossDef, n, sc)];
+  if (typeof recordDungeonBossStart === 'function') recordDungeonBossStart(mons[0]);
   portal = null;
   floorEvent = null; eventPanel = null; floorTrial = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
@@ -2082,7 +2074,7 @@ function burst(x, y, color, n) {
 
 // ---------- combat ----------
 const MONSTER_LABEL = { slime:'史萊姆', bat:'蝙蝠', mush:'跳菇', spore:'孢子怪', bomber:'爆裂怪', charger:'衝鋒獸', icer:'冰霜怪', splitter:'分裂怪', boss:'Boss' };
-function monsterLabel(m) { return m && m.type === 'boss' ? biomeOf(floor).boss : (MONSTER_LABEL[m && m.type] || '怪物'); }
+function monsterLabel(m) { return m && m.type === 'boss' ? (m.name || dungeonBossDef(m.bossId).name) : (MONSTER_LABEL[m && m.type] || '怪物'); }
 function removeMon(m) {
   const i = mons.indexOf(m);
   if (i < 0) return;
@@ -2153,6 +2145,7 @@ function hitMon(m, d, crit, noChain) {
       });
     }
     if (m.type === 'boss') {
+      if (typeof recordDungeonBossEnd === 'function') recordDungeonBossEnd('kill', null);
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });
@@ -2273,8 +2266,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.28.9';
+const GAME_VERSION = '0.29.0';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.0', date:'2026-07-22', title:'E1-A 五群系 Boss 技術地基',
+    items:['五群系 Boss 改為獨立資料定義，保留現有難度與共用招式。','建立統一階段、招式預警、場地與環境互動介面。','平衡紀錄新增 Boss 擊殺時間、死亡招式與最終階段。']
+  },
   {
     version:'0.28.9', date:'2026-07-22', title:'D3-C 首輪數值校準',
     items:['固定基準模型首輪只調整三項，幅度維持 10～12.5%。','菁英單體 HP 係數 2.40→2.15；落石與熔岩傷害 8%→7%。','險境額外靈魂提高 10%；平衡報表保留完整調整前後值。']
@@ -2384,8 +2381,9 @@ function renderSettingsBalance(mx, my, mw, mh) {
   ctx.fillStyle = report && report.alerts.length ? '#ffb45e' : '#6f7695';
   ctx.fillText(report && report.alerts.length ? '警戒：' + report.alerts[0] : '樣本達門檻後自動檢查平衡警戒線', mx + 32, my + 366);
   const calibration = report && report.calibration;
+  const bossEncounterCount = report ? Object.values(report.bossStats || {}).reduce((sum, item) => sum + (item.encounters || 0), 0) : 0;
   ctx.fillStyle = '#7dffd6'; ctx.font = '10px "Courier New",monospace';
-  ctx.fillText(calibration ? '校準 v' + calibration.version + '　菁英 HP -10.4%　重地形傷害 -12.5%　險境靈魂 +10%' : '', mx + 32, my + 389);
+  ctx.fillText(calibration ? '校準 v' + calibration.version + '　Boss 紀錄 ' + bossEncounterCount + ' 場 · 擊殺時間／死亡招式／最終階段' : '', mx + 32, my + 389);
   if (menuMsg) {
     ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
@@ -3097,57 +3095,57 @@ function update() {
       }
     } else if (m.type === 'boss') {
       m.t++;
-      const ph = m.hp / m.mhp > 0.6 ? 1 : m.hp / m.mhp > 0.3 ? 2 : 3;
+      const bossDef = dungeonBossDef(m.bossId);
+      const ph = dungeonBossPhaseForHealth(m);
+      const phaseConfig = dungeonBossPhaseConfig(m, ph);
       if (ph > m.phase) {
         m.phase = ph; m.phaseT = 20;
-        burst(m.x, m.y - m.h / 2, '#ff5a5a', 30);
-        num(m.x, m.y - m.h - 34, '第 ' + ph + ' 階段', '#ff8a8a', { size:18, pop:4 });
+        if (typeof recordDungeonBossPhase === 'function') recordDungeonBossPhase(ph);
+        burst(m.x, m.y - m.h / 2, bossDef.color, 30);
+        num(m.x, m.y - m.h - 34, '第 ' + ph + ' 階段', bossDef.color, { size:18, pop:4 });
         beep(200, 0.3, 'sawtooth', 0.06);
-        spawnBossAdds(m.intro ? Math.max(1, ph - 1) : ph);
-      } // 第一隻 Boss 減少援軍，後續維持原數量
+        spawnBossAdds(dungeonBossAddCount(m, ph));
+      }
       if (m.phaseT > 0) m.phaseT--;
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 468 && m.vy >= 0;
       if (m.atkT > 0) {
         m.atkT--;
-        if (grounded) m.vx = dir * (ph === 1 ? 1.1 : ph === 2 ? 1.6 : 2.2); // 追著玩家走
+        if (grounded) m.vx = dir * phaseConfig.chaseSpeed; // 追著玩家走
       } else if (m.tele > 0) {
         m.tele--; m.vx = 0;
         if (m.tele === 12 || m.tele === 4) beep(m.tele === 4 ? 760 : 580, 0.05, 'square', 0.025);
         if (m.tele === 0 && grounded) {
-          m.vy = ph === 3 ? -11.5 : -9; // 跳撲
+          m.vy = phaseConfig.leapVelocity; // 跳撲
           const airTicks = Math.max(1, Math.ceil(-2 * m.vy / 0.6));
           m.vx = (m.targetX - m.x) / airTicks / Math.max(0.01, moveF);
           m.slamWarn = true;
-          { // 吐毒彈(扇形,一階段起就有,按群系微調)
-            const bb = biomeOf(floor);
-            const hot = bb.name === '熾熱熔岩' || bb.name === '虛空深淵';
-            const chill = bb.name === '冰霜凍原';
-            const nsp = Math.max(1, (ph === 1 ? 1 : ph === 2 ? 3 : 5) - (m.intro ? 1 : 0)) + (hot ? 2 : 0);
-            const vsc = hot ? 1.25 : 1; // 熔岩彈更快
+          { // 共用跳撲彈幕；專屬招式由各 Boss 後續批次接入 attackSlots。
+            const nsp = Math.max(1, phaseConfig.volleyCount - (m.intro ? 1 : 0)) + (phaseConfig.volleyBonus || 0);
+            const vsc = phaseConfig.volleySpeed || 1;
             for (let i = 0; i < nsp; i++) {
               espits.push({
                 x: m.x, y: m.y - m.h + 6,
                 vx: ((p.x - m.x) / 55 + (i - (nsp - 1) / 2) * 1.1) * vsc,
-                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7), chill: chill, col: bb.bcol,
+                vy: -6 - Math.random() * 2, dmg: Math.round(m.dmg * 0.7), chill:!!phaseConfig.projectileChill, col:bossDef.color,
                 ownerName:monsterLabel(m), heavy:ph === 3
               });
             }
             beep(320, 0.12, 'square', 0.04);
           }
-          const recovery = ph === 1 ? 100 : ph === 2 ? 74 : 54;
-          m.atkT = Math.round(recovery * (m.intro ? 1.2 : 1));
+          m.atkT = Math.round(phaseConfig.recoveryFrames * bossDef.recoveryMultiplier);
         }
       } else if (grounded) {
-        m.tele = m.intro ? 48 : 36;
-        const leap = m.intro ? 160 : 190;
-        m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - leap, Math.min(m.x + leap, p.x))));
+        beginDungeonBossAttack(m, bossDef.legacyAttackId);
+        m.tele = bossDef.warningFrames;
+        m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - bossDef.leapRange, Math.min(m.x + bossDef.leapRange, p.x))));
       }
       m.vy += 0.6; if (m.vy > 14) m.vy = 14;
       m.x += m.vx * moveF; m.y += m.vy;
       if (m.x < 60) m.x = 60;
       if (m.x > worldW - 60) m.x = worldW - 60;
       if (m.y >= 468) {
+        const completedSlam = m.slamWarn && m.vy > 0;
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
           burst(m.x, 468, '#b05ae0', 26);
           beep(90, 0.2, 'sawtooth', 0.06);
@@ -3157,7 +3155,8 @@ function update() {
             if (dmgPlayer({ amount:d, sourceName:monsterLabel(m) + '的落地震波', sourceX:m.x, heavy:true })) return;
           }
         }
-        m.y = 468; m.vy = 0; m.slamWarn = false;
+        m.y = 468; m.vy = 0;
+        if (completedSlam) finishDungeonBossAttack(m);
       }
     } else {
       m.t++;
@@ -3428,20 +3427,21 @@ function render() {
   // Boss 跳撲與落地範圍：形狀與實際判定共用同一半徑。
   for (const m of mons) {
     if (m.type !== 'boss' || (m.tele <= 0 && !m.slamWarn)) continue;
-    const radius = m.phase >= 3 ? (m.intro ? 130 : 150) : 70;
+    const telegraph = dungeonBossTelegraph(m);
+    const radius = telegraph.radius;
     const urgent = m.tele > 0 && m.tele <= 12;
     const pulse = urgent ? 0.58 + Math.sin(frame * 0.9) * 0.18 : 0.3 + Math.sin(frame * 0.22) * 0.08;
-    const tx = Number.isFinite(m.targetX) ? m.targetX : m.x;
+    const tx = telegraph.targetX;
     ctx.globalAlpha = Math.max(0.16, pulse);
-    ctx.fillStyle = '#ff5a5a';
+    ctx.fillStyle = telegraph.color;
     ctx.beginPath(); ctx.ellipse(tx, 465, radius, 15, 0, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = urgent ? 1 : 0.76;
-    ctx.strokeStyle = urgent ? '#fff2a8' : '#ffb080'; ctx.lineWidth = urgent ? 4 : 3;
+    ctx.strokeStyle = urgent ? '#fff2a8' : telegraph.accent; ctx.lineWidth = urgent ? 4 : 3;
     ctx.setLineDash(urgent ? [] : [9, 7]);
     ctx.beginPath(); ctx.ellipse(tx, 465, radius, 15, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.textAlign = 'center';
-    ctx.fillText(m.phase >= 3 ? '落地震波' : '跳撲落點', tx, 442);
+    ctx.fillText(telegraph.label, tx, 442);
     ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   }
   // monsters
@@ -3456,7 +3456,8 @@ function render() {
       ctx.fillStyle = '#ff5a5a'; ctx.fillRect(mx - 16, my - 38 - bite, 5, 5); ctx.fillRect(mx + 11, my - 38 - bite, 5, 5);
     } else {
       const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
-      const rc = m.type === 'boss' ? { e: bi.bcol, f: bi.bcol2 } : null;
+      const bossStyle = m.type === 'boss' ? dungeonBossDef(m.bossId) : null;
+      const rc = bossStyle ? { e:bossStyle.color, f:bossStyle.accent } : null;
       drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
     }
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
@@ -3610,7 +3611,8 @@ function render() {
   drawDungeonHazardTutorial();
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
-    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, biomeOf(floor).bcol, biomeOf(floor).boss + '  第' + bossM.phase + '階段');
+    const bossDef = dungeonBossDef(bossM.bossId);
+    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, bossDef.color, bossDef.name + '  第' + bossM.phase + '階段');
     ctx.textAlign = 'left';
   }
 

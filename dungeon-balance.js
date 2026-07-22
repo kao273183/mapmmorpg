@@ -33,7 +33,7 @@ function dungeonBenchmarkProfile(id) {
   return DUNGEON_BENCHMARK_PROFILES.find(profile => profile.id === id) || null;
 }
 
-let dungeonBalance = { version:2, runs:[], active:null };
+let dungeonBalance = { version:3, runs:[], active:null };
 
 function trimDungeonBalanceRuns(runs) {
   const list = Array.isArray(runs) ? runs.filter(run => run && typeof run === 'object') : [];
@@ -61,7 +61,7 @@ function loadDungeonBalance() {
 
 function saveDungeonBalance() {
   try {
-    localStorage.setItem(DUNGEON_BALANCE_KEY, JSON.stringify({ version:2, runs:trimDungeonBalanceRuns(dungeonBalance.runs) }));
+    localStorage.setItem(DUNGEON_BALANCE_KEY, JSON.stringify({ version:3, runs:trimDungeonBalanceRuns(dungeonBalance.runs) }));
   } catch (err) {}
 }
 
@@ -70,7 +70,7 @@ function startDungeonBalanceRun(seed, classId, now, options) {
   const opts = options || {};
   const mode = opts.mode === 'benchmark' ? 'benchmark' : 'natural';
   dungeonBalance.active = {
-    version:2,
+    version:3,
     startedAt,
     seed:String(seed == null ? '' : seed),
     classId:classId || 'unknown',
@@ -89,6 +89,8 @@ function startDungeonBalanceRun(seed, classId, now, options) {
     damageBySource:{},
     damageTaken:0,
     trialResults:{ success:0, failed:0, declined:0 },
+    bossEncounters:[],
+    activeBoss:null,
     highestFloor:1,
     roomStartedAt:startedAt,
     currentRoomType:null
@@ -149,10 +151,59 @@ function recordDungeonTrialResult(status) {
   run.trialResults[status]++;
 }
 
+function recordDungeonBossStart(boss, now) {
+  const run = activeDungeonBalance();
+  if (!run || !boss) return null;
+  const startedAt = Number.isFinite(now) ? now : Date.now();
+  if (run.activeBoss) recordDungeonBossEnd('abandoned', null, startedAt);
+  run.activeBoss = {
+    bossId:String(boss.bossId || 'unknown'),
+    bossName:String(boss.name || 'Boss'),
+    floor:Math.max(1, Number(floorSafeBossValue(boss.floor, boss.firstFloor)) || 1),
+    startedAt,
+    highestPhase:Math.max(1, Number(boss.phase) || 1)
+  };
+  return run.activeBoss;
+}
+
+function floorSafeBossValue(bossFloor, firstFloor) {
+  if (Number.isFinite(Number(bossFloor))) return Number(bossFloor);
+  if (Number.isFinite(Number(firstFloor))) return Number(firstFloor);
+  if (typeof floor !== 'undefined' && Number.isFinite(Number(floor))) return Number(floor);
+  return 1;
+}
+
+function recordDungeonBossPhase(phase) {
+  const run = activeDungeonBalance();
+  if (!run || !run.activeBoss) return;
+  run.activeBoss.highestPhase = Math.max(run.activeBoss.highestPhase, Math.max(1, Number(phase) || 1));
+}
+
+function recordDungeonBossEnd(status, sourceName, now) {
+  const run = activeDungeonBalance();
+  if (!run || !run.activeBoss) return null;
+  const endedAt = Number.isFinite(now) ? now : Date.now();
+  const active = run.activeBoss;
+  const result = status === 'kill' ? 'kill' : status === 'death' ? 'death' : 'abandoned';
+  const encounter = {
+    bossId:active.bossId,
+    bossName:active.bossName,
+    floor:active.floor,
+    result,
+    durationSec:Math.max(0, Math.round((endedAt - active.startedAt) / 1000)),
+    finalPhase:active.highestPhase,
+    deathSource:result === 'death' ? String(sourceName || '未知攻擊').slice(0, 48) : null
+  };
+  run.bossEncounters.push(encounter);
+  run.activeBoss = null;
+  return encounter;
+}
+
 function finishDungeonBalanceRun(result, now) {
   const run = activeDungeonBalance();
   if (!run) return null;
   const endedAt = Number.isFinite(now) ? now : Date.now();
+  if (run.activeBoss) recordDungeonBossEnd(result && result.result === 'extract' ? 'abandoned' : 'death', result && result.cause, endedAt);
   const finalRun = {
     endedAt,
     classId:run.classId,
@@ -175,7 +226,8 @@ function finishDungeonBalanceRun(result, now) {
     roomTimeMs:run.roomTimeMs,
     damageBySource:run.damageBySource,
     damageTaken:run.damageTaken,
-    trialResults:run.trialResults
+    trialResults:run.trialResults,
+    bossEncounters:run.bossEncounters.slice()
   };
   dungeonBalance.runs.push(finalRun);
   dungeonBalance.runs = trimDungeonBalanceRuns(dungeonBalance.runs);
@@ -249,6 +301,26 @@ function dungeonBalanceReport(mode) {
     for (const status of ['success','failed','declined']) out[status] += Number(run.trialResults && run.trialResults[status]) || 0;
     return out;
   }, { success:0, failed:0, declined:0 });
+  const bossIds = typeof DUNGEON_BOSS_ORDER === 'undefined' ? [] : DUNGEON_BOSS_ORDER.slice();
+  for (const run of runs) for (const encounter of run.bossEncounters || []) if (!bossIds.includes(encounter.bossId)) bossIds.push(encounter.bossId);
+  const bossStats = {};
+  for (const id of bossIds) {
+    const encounters = runs.flatMap(run => run.bossEncounters || []).filter(item => item.bossId === id);
+    const kills = encounters.filter(item => item.result === 'kill');
+    const deaths = encounters.filter(item => item.result === 'death');
+    const deathSources = {};
+    for (const item of deaths) deathSources[item.deathSource || '未知攻擊'] = (deathSources[item.deathSource || '未知攻擊'] || 0) + 1;
+    bossStats[id] = {
+      name:encounters[0] ? encounters[0].bossName : (typeof dungeonBossDef === 'function' ? dungeonBossDef(id).name : id),
+      encounters:encounters.length,
+      kills:kills.length,
+      deaths:deaths.length,
+      killRate:encounters.length ? kills.length / encounters.length : 0,
+      averageClearSec:kills.length ? kills.reduce((sum, item) => sum + (Number(item.durationSec) || 0), 0) / kills.length : 0,
+      highestPhase:encounters.reduce((highest, item) => Math.max(highest, Number(item.finalPhase) || 1), 0),
+      deathSources:Object.entries(deathSources).sort((a, b) => b[1] - a[1]).map(([source, count]) => ({ source, count }))
+    };
+  }
   const alerts = [];
   if (summary.runs >= 10 && (summary.riskyChoiceRate < 0.35 || summary.riskyChoiceRate > 0.65)) alerts.push('高風險選擇率超出 35～65%');
   if (summary.runs >= 10 && (summary.averageDurationSec < 720 || summary.averageDurationSec > 1200)) alerts.push('平均局長超出 12～20 分鐘');
@@ -261,11 +333,11 @@ function dungeonBalanceReport(mode) {
     basis:DUNGEON_D3C_CALIBRATION.basis,
     adjustments:DUNGEON_D3C_CALIBRATION.adjustments.map(item => Object.assign({}, item))
   };
-  return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, roomStats, damageShares, trialResults, alerts };
+  return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, roomStats, damageShares, trialResults, bossStats, alerts };
 }
 
 function exportDungeonBalanceRecords() {
-  return JSON.stringify({ version:2, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), runs:dungeonBalance.runs }, null, 2);
+  return JSON.stringify({ version:3, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), runs:dungeonBalance.runs }, null, 2);
 }
 
 loadDungeonBalance();

@@ -5,21 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.28.9">
+<link rel="stylesheet" href="style.css?v=0.29.0">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.28.9"></script>
-<script src="dungeon-balance.js?v=0.28.9"></script>
-<script src="dungeon.js?v=0.28.9"></script>
-<script src="dungeon-hazards.js?v=0.28.9"></script>
-<script src="dungeon-events.js?v=0.28.9"></script>
-<script src="dungeon-trials.js?v=0.28.9"></script>
-<script src="dungeon-ui.js?v=0.28.9"></script>
-<script src="game.js?v=0.28.9"></script>
+<script src="dungeon-data.js?v=0.29.0"></script>
+<script src="dungeon-bosses.js?v=0.29.0"></script>
+<script src="dungeon-balance.js?v=0.29.0"></script>
+<script src="dungeon.js?v=0.29.0"></script>
+<script src="dungeon-hazards.js?v=0.29.0"></script>
+<script src="dungeon-events.js?v=0.29.0"></script>
+<script src="dungeon-trials.js?v=0.29.0"></script>
+<script src="dungeon-ui.js?v=0.29.0"></script>
+<script src="game.js?v=0.29.0"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -63,7 +64,17 @@ function resolveFixedTrial(outcome) {
     updateFloorTrial(0);
   }
 }
-if (mode.startsWith('trial-')) {
+if (mode.startsWith('boss-')) {
+  const bossFloors = { meadow:5, cavern:10, volcano:15, tundra:20, void:25 };
+  const bossKey = mode.slice(5);
+  const bossFloor = bossFloors[bossKey] || 5;
+  enterDungeonRoom(makeRoomSpec('boss', bossFloor, 0));
+  const boss = mons.find(mon => mon.type === 'boss');
+  const ok = !!boss && boss.bossId === dungeonBossDefForFloor(bossFloor).id && boss.floor === bossFloor;
+  window.__dungeonSmokeResult = { ok, bossId:boss && boss.bossId, floor:bossFloor, phase:boss && boss.phase };
+  document.title = ok ? 'Dungeon Boss PASS ' + bossKey : 'Dungeon Boss FAIL ' + bossKey;
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+} else if (mode.startsWith('trial-')) {
   const trialModes = {
     'elite':'elite_ambush', 'elite-success':'elite_ambush', 'elite-declined':'elite_ambush',
     'timed':'timed_clear', 'timed-wave2':'timed_clear', 'timed-success':'timed_clear', 'timed-failed':'timed_clear', 'timed-failed-clear':'timed_clear',
@@ -166,6 +177,16 @@ if (mode.startsWith('trial-')) {
   settingsPage = 'updates';
   settingsUpdateIndex = 0;
   document.title = 'Dungeon Settings Updates';
+} else if (mode === 'settings-boss-balance') {
+  const bossNow = Date.now();
+  const bossSample = createDungeonBoss(dungeonBossDef('meadow_lord'), 5, 1);
+  recordDungeonBossStart(bossSample, bossNow);
+  recordDungeonBossPhase(3);
+  recordDungeonBossEnd('kill', null, bossNow + 72000);
+  finishDungeonBalanceRun({ result:'extract', floor:5, kills:1, gained:8 }, bossNow + 80000);
+  openTownPanel('save');
+  settingsPage = 'balance';
+  document.title = 'Dungeon Settings Boss Balance';
 } else if (mode === 'settings-balance') {
   recordDungeonRouteOffer([makeRoomSpec('safe', 2, 0), makeRoomSpec('hazard', 2, 1)]);
   recordDungeonRouteChoice(makeRoomSpec('hazard', 2, 1));
