@@ -162,3 +162,90 @@ html.force-touch-controls canvas{
 @media (prefers-reduced-motion:reduce){
   .rotate-phone{animation:none;transform:rotate(90deg);}
 }
+
+/* PWA 新版提示膠囊 */
+#pwaUpdateToast{
+  position:fixed;
+  top:calc(var(--safe-top) + 8px);
+  right:calc(var(--safe-right) + 8px);
+  z-index:9999;
+  padding:6px 12px;
+  font-family:"Courier New",monospace;
+  font-size:13px;
+  font-weight:bold;
+  color:#d89aff;
+  background:#14162b;
+  border:2px solid #b05ae0;
+  border-radius:999px;
+  box-shadow:0 0 0 1px #7a2fa8, 0 2px 8px rgba(0,0,0,0.5);
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  animation:pwaToastIn .35s ease-out;
+}
+@keyframes pwaToastIn{
+  from{opacity:0;transform:translateY(-8px);}
+  to{opacity:1;transform:translateY(0);}
+}
+
+/* PWA 安裝按鈕(Android/桌機) */
+#pwaInstallBtn{
+  position:fixed;
+  top:calc(var(--safe-top) + 8px);
+  left:calc(var(--safe-left) + 8px);
+  z-index:9999;
+  padding:7px 13px;
+  font-family:"Courier New",monospace;
+  font-size:13px;
+  font-weight:bold;
+  color:#fff;
+  background:#b05ae0;
+  border:2px solid #d89aff;
+  border-radius:999px;
+  box-shadow:0 0 0 1px #7a2fa8, 0 2px 8px rgba(0,0,0,0.5);
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  animation:pwaToastIn .35s ease-out;
+}
+#pwaInstallBtn:active{transform:translateY(1px);}
+#pwaInstallBtn:disabled{opacity:.6;cursor:default;}
+
+/* PWA iOS 安裝引導列(底部) */
+#pwaIosHint{
+  position:fixed;
+  left:50%;
+  bottom:calc(var(--safe-bottom) + 10px);
+  transform:translateX(-50%);
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  max-width:92vw;
+  padding:8px 10px 8px 14px;
+  font-family:"Courier New",monospace;
+  font-size:13px;
+  color:#e8e6ff;
+  background:#14162b;
+  border:2px solid #b05ae0;
+  border-radius:12px;
+  box-shadow:0 0 0 1px #7a2fa8, 0 3px 10px rgba(0,0,0,0.55);
+  animation:pwaHintIn .35s ease-out;
+}
+#pwaIosHint b{color:#d89aff;}
+#pwaIosClose{
+  flex:0 0 auto;
+  width:22px;height:22px;
+  padding:0;
+  font-family:"Courier New",monospace;
+  font-size:13px;line-height:1;
+  color:#e8e6ff;
+  background:transparent;
+  border:1px solid #7a2fa8;
+  border-radius:6px;
+  cursor:pointer;
+}
+@keyframes pwaHintIn{
+  from{opacity:0;transform:translate(-50%,8px);}
+  to{opacity:1;transform:translate(-50%,0);}
+}
