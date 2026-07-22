@@ -59,8 +59,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.15';
+const GAME_VERSION = '0.29.16';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.16', date:'2026-07-22', title:'難度模式：一般／複雜',
+    items:['設定新增「難度模式」：一般（推薦）與複雜，即時生效並記住於本瀏覽器。','一般模式移除滑冰與消失平台、減少每房陷阱與地形傷害，並降低險境房出現機率。','一般模式同步降低五群系 Boss 的生命與傷害；複雜模式維持現行完整地形與 Boss 強度。']
+  },
   {
     version:'0.29.15', date:'2026-07-22', title:'虛擬搖桿放大與 PWA',
     items:['虛擬搖桿預設放大約 1.35 倍，所有尺寸改由單一係數推導並以左下角為錨點，放大不出畫面。','設定頁新增「手機搖桿大小」：−／＋、拖曳長條、重置(80%～200%)，即時生效並記住。','新增 PWA：可加到主畫面、離線遊玩、版本自動更新(桌機／手機皆偵測)，並提供安裝提示。']
@@ -307,7 +311,7 @@ function renderSettingsBenchmark(mx, my, mw, mh) {
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 580, mh = 504, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 580, mh = 520, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
@@ -331,20 +335,26 @@ function renderSettings() {
   sm(mx + 156, my + 196, 118, '閃光 ' + (combatSettings.flashes ? '完整' : '降低'), 'flashes', combatSettings.flashes);
   sm(mx + 286, my + 196, 118, '數字 ' + (combatSettings.numbers === 'full' ? '完整' : '精簡'), 'numbers', combatSettings.numbers === 'full');
   sm(mx + 416, my + 196, 118, '觸覺 ' + (combatSettings.haptics ? '開' : '關'), 'haptics', combatSettings.haptics);
+  // 難度模式（一般：陷阱少、無滑冰／消失平台、Boss 較弱、險境較少；複雜：完整）
+  const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
+  ctx.fillStyle = '#ffb45e'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText('難度模式', W / 2, my + 238);
+  sm(mx + 64, my + 248, 210, '一般（推薦）', 'terrainNormal', terrainNormal);
+  sm(mx + 306, my + 248, 210, '複雜', 'terrainComplex', !terrainNormal);
   // 手機搖桿大小
   ctx.fillStyle = '#7dc4ff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
-  ctx.fillText('手機搖桿大小：' + Math.round(virtualJoystick.size * 100) + '%', W / 2, my + 240);
-  sm(mx + 26, my + 252, 60, '－', 'joySizeDown', false);
-  const jbX = mx + 96, jbY = my + 252, jbW = 300, jbH = 34;
+  ctx.fillText('手機搖桿大小：' + Math.round(virtualJoystick.size * 100) + '%', W / 2, my + 292);
+  sm(mx + 26, my + 302, 60, '－', 'joySizeDown', false);
+  const jbX = mx + 96, jbY = my + 302, jbW = 300, jbH = 34;
   settingsBtns.push({ x: jbX, y: jbY, w: jbW, h: jbH, act: 'joySizeBar' });
   ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(jbX, jbY, jbW, jbH);
   ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(jbX, jbY, jbW, jbH);
   const jRatio = (virtualJoystick.size - JOY_SIZE_MIN) / (JOY_SIZE_MAX - JOY_SIZE_MIN);
   ctx.fillStyle = 'rgba(125,196,255,0.35)'; ctx.fillRect(jbX, jbY, jbW * jRatio, jbH);
   ctx.fillStyle = '#cfe4ff'; ctx.fillRect(jbX + jbW * jRatio - 2, jbY - 3, 4, jbH + 6);
-  sm(mx + 406, my + 252, 60, '＋', 'joySizeUp', false);
-  sm(mx + 478, my + 252, 76, '重置', 'joySizeReset', false);
-  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 306;
+  sm(mx + 406, my + 302, 60, '＋', 'joySizeUp', false);
+  sm(mx + 478, my + 302, 76, '重置', 'joySizeReset', false);
+  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 352;
   const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
   mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
   mk(bx2, byy, '匯入存檔', 'import');
@@ -528,6 +538,8 @@ function handleTap(mx, my) {
       if (b.act === 'volDown') { changeSfxVolume(-0.1); return; }
       if (b.act === 'volUp') { changeSfxVolume(0.1); return; }
       if (b.act === 'mute') { toggleSfxMute(); return; }
+      if (b.act === 'terrainNormal') { setTerrainMode('normal'); menuMsg = { text:'難度：一般（無滑冰／消失平台，陷阱少、Boss 較弱、險境較少）', color:'#ffb45e', t:240 }; playSfx('uiSelect'); return; }
+      if (b.act === 'terrainComplex') { setTerrainMode('complex'); menuMsg = { text:'難度：複雜（完整地形、Boss 全強度、險境機率較高）', color:'#ffb45e', t:220 }; playSfx('uiSelect'); return; }
       if (b.act === 'joySizeDown') { setJoystickSize(virtualJoystick.size - 0.1); playSfx('uiSelect'); return; }
       if (b.act === 'joySizeUp') { setJoystickSize(virtualJoystick.size + 0.1); playSfx('uiSelect'); return; }
       if (b.act === 'joySizeReset') { setJoystickSize(JOY_SIZE_DEFAULT); playSfx('uiSelect'); return; }

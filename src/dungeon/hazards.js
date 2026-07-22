@@ -45,28 +45,28 @@ function thornRootLayoutValid(candidate, placed, width, eventX) {
 function generateThornRootLayout(spec, width, eventX) {
   const def = DUNGEON_HAZARD_DEFS.thorn_roots;
   return generateGroundHazardLayout(spec, width, eventX, {
-    type:'thorn_roots', prefix:'thorn', max:def.maxPerRoom, minWidth:76, maxWidth:96, minGap:120
+    type:'thorn_roots', prefix:'thorn', max:terrainHazardMaxPerRoom(def), minWidth:76, maxWidth:96, minGap:120
   });
 }
 
 function generateFallingRockLayout(spec, width, eventX) {
   const def = DUNGEON_HAZARD_DEFS.falling_rocks;
   return generateGroundHazardLayout(spec, width, eventX, {
-    type:'falling_rocks', prefix:'rock', max:def.maxPerRoom, minWidth:72, maxWidth:88, minGap:145
+    type:'falling_rocks', prefix:'rock', max:terrainHazardMaxPerRoom(def), minWidth:72, maxWidth:88, minGap:145
   });
 }
 
 function generateLavaVentLayout(spec, width, eventX) {
   const def = DUNGEON_HAZARD_DEFS.lava_vents;
   return generateGroundHazardLayout(spec, width, eventX, {
-    type:'lava_vents', prefix:'vent', max:def.maxPerRoom, minWidth:54, maxWidth:66, minGap:150
+    type:'lava_vents', prefix:'vent', max:terrainHazardMaxPerRoom(def), minWidth:54, maxWidth:66, minGap:150
   });
 }
 
 function generateIceFloorLayout(spec, width, eventX) {
   const def = DUNGEON_HAZARD_DEFS.ice_floor;
   return generateGroundHazardLayout(spec, width, eventX, {
-    type:'ice_floor', prefix:'ice', max:def.maxPerRoom, minWidth:180, maxWidth:250, minGap:96, spacing:760
+    type:'ice_floor', prefix:'ice', max:terrainHazardMaxPerRoom(def), minWidth:180, maxWidth:250, minGap:96, spacing:760
   });
 }
 
@@ -74,12 +74,13 @@ function generateVoidPlatformLayout(spec, platforms) {
   const def = DUNGEON_HAZARD_DEFS.void_platforms;
   const width = platforms.find(p => p.ground)?.w || 1600;
   const rng = dungeonRoomRng(spec, 'hazards:void-platforms');
+  const maxPerRoom = terrainHazardMaxPerRoom(def);
   const occupied = platform => typeof mons !== 'undefined' && mons.some(mon => mon.type !== 'bat'
     && Math.abs(mon.y - platform.y) < 2 && mon.x >= platform.x - 12 && mon.x <= platform.x + platform.w + 12);
   const pool = platforms.filter(platform => !platform.ground && platform.w >= 90
     && platform.x >= 180 && platform.x + platform.w <= width - 180 && !occupied(platform));
   const result = [];
-  while (pool.length && result.length < def.maxPerRoom) {
+  while (pool.length && result.length < maxPerRoom) {
     const index = (rng() * pool.length) | 0;
     const platform = pool.splice(index, 1)[0];
     if (result.some(item => Math.abs(item.x - (platform.x + platform.w / 2)) < 180)) continue;
@@ -118,7 +119,9 @@ function spawnDungeonHazards(spec, width, eventX, platforms) {
     for (const hazard of dungeonHazards) hazard.platform.voidHazard = true;
   }
 
-  if (dungeonHazards.length && dungeonRun) {
+  // 一般模式下冰面／虛空平台已中和為無害地形，不再顯示其操作教學。
+  const neutralized = terrainHazardIsMovementType(spec.hazardId) && !terrainMovementHazardsEnabled();
+  if (dungeonHazards.length && dungeonRun && !neutralized) {
     dungeonRun.hazardTutorials = dungeonRun.hazardTutorials || {};
     if (!dungeonRun.hazardTutorials[spec.hazardId]) {
       dungeonRun.hazardTutorials[spec.hazardId] = true;
@@ -150,6 +153,11 @@ function advanceThornRoot(root, def) {
 }
 
 function advanceVoidPlatform(hazard, def) {
+  // 一般模式：虛空平台維持穩定，永不消失。
+  if (!terrainMovementHazardsEnabled()) {
+    if (hazard.phase !== 'stable') { hazard.phase = 'stable'; hazard.platform.voidDisabled = false; }
+    return;
+  }
   hazard.timer--;
   if (hazard.timer > 0) return;
   if (hazard.phase === 'stable') {
@@ -196,7 +204,8 @@ function lavaVentHitsPlayer(hazard, p) {
 function damageFromDungeonHazard(hazard, def, options) {
   const o = options || {};
   hazard.hitThisCycle = true;
-  const baseDamage = Math.max(def.minDamage || 1, Math.round(player.mhp * (def.damagePct || 0)));
+  const modeMul = typeof terrainModeConfig === 'function' ? terrainModeConfig().damageMul : 1;
+  const baseDamage = Math.max(def.minDamage || 1, Math.round(player.mhp * (def.damagePct || 0) * modeMul));
   const damage = Math.round(typeof dungeonCurseHazardDamage === 'function' ? dungeonCurseHazardDamage(baseDamage) : baseDamage);
   if (o.slowFrames) player.hazardSlowT = Math.max(player.hazardSlowT || 0, o.slowFrames);
   if (o.launch) { player.vy = Math.min(player.vy, o.launch); player.onGround = false; }
@@ -205,9 +214,10 @@ function damageFromDungeonHazard(hazard, def, options) {
 
 function playerOnIceFloor(p) {
   if (!p.onGround) return false;
-  return dungeonHazards.some(hazard => hazard.type === 'ice_floor'
-    && Math.abs(p.y - hazard.y) < 3 && p.x >= hazard.x - hazard.w / 2 && p.x <= hazard.x + hazard.w / 2)
-    || (typeof playerOnDungeonBossIce === 'function' && playerOnDungeonBossIce(p));
+  // 一般模式：地形冰面不再滑行（僅保留外觀）；Boss 冰面仍屬 Boss 機制不受影響。
+  const terrainIce = terrainMovementHazardsEnabled() && dungeonHazards.some(hazard => hazard.type === 'ice_floor'
+    && Math.abs(p.y - hazard.y) < 3 && p.x >= hazard.x - hazard.w / 2 && p.x <= hazard.x + hazard.w / 2);
+  return terrainIce || (typeof playerOnDungeonBossIce === 'function' && playerOnDungeonBossIce(p));
 }
 
 function dungeonHazardMoveVelocity(p, moveDirection, speed) {
