@@ -289,7 +289,7 @@ function grantRoomClearReward(spec) {
     saveMeta();
     num(player.x, player.y - player.h - 58, '菁英房完成 · 強化石 +1', '#d9a8ff');
   } else if (spec.type === 'hazard') {
-    const soulBonus = 4 + Math.min(6, floor);
+    const soulBonus = dungeonHazardSoulBonus(floor);
     soulsRun += soulBonus;
     meta.mats.enh += 1;
     saveMeta();

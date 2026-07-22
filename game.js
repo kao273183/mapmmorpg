@@ -1870,7 +1870,7 @@ function checkFloorEventReward() {
 function promoteDungeonElite(m) {
   if (!m || m.type === 'boss' || m.elite) return;
   m.elite = true;
-  m.hp = Math.round(m.hp * 2.4); m.mhp = m.hp;
+  m.hp = Math.round(m.hp * DUNGEON_D3C_CALIBRATION.eliteHpMultiplier); m.mhp = m.hp;
   m.dmg = Math.round(m.dmg * 1.25); m.xpv = Math.round(m.xpv * 2);
   m.w = Math.round(m.w * 1.15); m.h = Math.round(m.h * 1.15);
 }
@@ -2273,8 +2273,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.28.8';
+const GAME_VERSION = '0.28.9';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.28.9', date:'2026-07-22', title:'D3-C 首輪數值校準',
+    items:['固定基準模型首輪只調整三項，幅度維持 10～12.5%。','菁英單體 HP 係數 2.40→2.15；落石與熔岩傷害 8%→7%。','險境額外靈魂提高 10%；平衡報表保留完整調整前後值。']
+  },
   {
     version:'0.28.8', date:'2026-07-22', title:'D3-B 固定基準局與報表',
     items:['劍士與法師各加入新手、第二章、第三章三組固定裝備與種子。','自然遊玩與固定基準局分開統計，不混用樣本。','報表新增職業、房型、承傷占比、試煉與警戒線比較。']
@@ -2379,6 +2383,9 @@ function renderSettingsBalance(mx, my, mw, mh) {
   ctx.fillText(damageText, mx + 32, my + 342);
   ctx.fillStyle = report && report.alerts.length ? '#ffb45e' : '#6f7695';
   ctx.fillText(report && report.alerts.length ? '警戒：' + report.alerts[0] : '樣本達門檻後自動檢查平衡警戒線', mx + 32, my + 366);
+  const calibration = report && report.calibration;
+  ctx.fillStyle = '#7dffd6'; ctx.font = '10px "Courier New",monospace';
+  ctx.fillText(calibration ? '校準 v' + calibration.version + '　菁英 HP -10.4%　重地形傷害 -12.5%　險境靈魂 +10%' : '', mx + 32, my + 389);
   if (menuMsg) {
     ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);

@@ -4,6 +4,24 @@ const DUNGEON_D2_FLAGS = {
   hazards:true
 };
 
+// D3-C：固定基準模型的首輪小幅校準。所有改動集中在這裡，方便報表與回歸測試比較前後值。
+const DUNGEON_D3C_CALIBRATION = {
+  id:'d3c-round-1', version:'0.28.9', date:'2026-07-22', basis:'fixed-benchmark-model',
+  eliteHpMultiplier:2.15,
+  heavyHazardDamagePct:0.07,
+  hazardSoulMultiplier:1.10,
+  adjustments:[
+    { id:'elite-hp', label:'菁英單體耐久', unit:'倍', before:2.40, after:2.15, deltaPct:-10.4, target:'降低菁英房單一目標拖時' },
+    { id:'heavy-hazard-damage', label:'落石／熔岩傷害', unit:'最大 HP', before:0.08, after:0.07, deltaPct:-12.5, target:'降低重地形單次失誤懲罰' },
+    { id:'hazard-soul-reward', label:'險境靈魂加成', unit:'倍率', before:1.00, after:1.10, deltaPct:10.0, target:'補足高風險路線報酬' }
+  ]
+};
+
+function dungeonHazardSoulBonus(atFloor) {
+  const base = 4 + Math.min(6, Math.max(1, Number(atFloor) || 1));
+  return Math.max(base, Math.round(base * DUNGEON_D3C_CALIBRATION.hazardSoulMultiplier));
+}
+
 const DUNGEON_BIOME_DEFS = [
   { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },
   { id:'cavern', name:'幽暗洞窟', hazardId:'falling_rocks', enemyTag:'蝙蝠、孢子怪', bossName:'洞窟領主' },
@@ -21,12 +39,12 @@ const DUNGEON_HAZARD_DEFS = {
   falling_rocks: {
     id:'falling_rocks', biomeId:'cavern', name:'落石區', previewTag:'落石區', implemented:true,
     tutorial:'留意落點框與頭頂碎屑，落石前離開框線。', warningFrames:60, activeFrames:32, cooldownFrames:135,
-    maxPerRoom:3, damagePct:0.08, minDamage:8, rewards:['靈魂加成', '強化石']
+    maxPerRoom:3, damagePct:DUNGEON_D3C_CALIBRATION.heavyHazardDamagePct, minDamage:8, rewards:['靈魂加成', '強化石']
   },
   lava_vents: {
     id:'lava_vents', biomeId:'volcano', name:'熔岩噴口', previewTag:'熔岩噴口', implemented:true,
     tutorial:'噴口發亮時先停步，熄火後再通過。', warningFrames:45, activeFrames:30, cooldownFrames:105,
-    maxPerRoom:3, damagePct:0.08, minDamage:8, rewards:['靈魂加成', '強化石']
+    maxPerRoom:3, damagePct:DUNGEON_D3C_CALIBRATION.heavyHazardDamagePct, minDamage:8, rewards:['靈魂加成', '強化石']
   },
   ice_floor: {
     id:'ice_floor', biomeId:'tundra', name:'冰面', previewTag:'冰面', implemented:true,

@@ -254,7 +254,14 @@ function dungeonBalanceReport(mode) {
   if (summary.runs >= 10 && (summary.averageDurationSec < 720 || summary.averageDurationSec > 1200)) alerts.push('平均局長超出 12～20 分鐘');
   if (classStats.warrior.runs >= 5 && classStats.mage.runs >= 5 && Math.abs(classStats.warrior.averageFloor - classStats.mage.averageFloor) > 1.5) alerts.push('職業平均樓層差超過 1.5 層');
   if (summary.runs >= 10 && damageShares[0] && damageShares[0].share > 0.35) alerts.push('單一承傷來源超過 35%');
-  return { mode:reportMode, generatedAt:new Date().toISOString(), summary, classStats, roomStats, damageShares, trialResults, alerts };
+  const calibration = typeof DUNGEON_D3C_CALIBRATION === 'undefined' ? null : {
+    id:DUNGEON_D3C_CALIBRATION.id,
+    version:DUNGEON_D3C_CALIBRATION.version,
+    date:DUNGEON_D3C_CALIBRATION.date,
+    basis:DUNGEON_D3C_CALIBRATION.basis,
+    adjustments:DUNGEON_D3C_CALIBRATION.adjustments.map(item => Object.assign({}, item))
+  };
+  return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, roomStats, damageShares, trialResults, alerts };
 }
 
 function exportDungeonBalanceRecords() {
