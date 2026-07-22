@@ -84,7 +84,8 @@ function runDungeonEventEffect(effectId, eventDef, roomSpec, state, hooks) {
     return result('done', '血之祝福 · 攻擊 +12%', '#ff8a8a');
   }
   if (effectId === 'life_spring') {
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.35));
+    const healing = p.mhp * 0.35;
+    p.hp = Math.min(p.mhp, p.hp + Math.round(typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(healing) : healing));
     p.mp = Math.min(p.mmp, p.mp + Math.round(p.mmp * 0.5));
     return result('done', '生命泉源 · HP / MP 已回復', '#7dffd6');
   }

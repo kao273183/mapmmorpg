@@ -1,10 +1,59 @@
 "use strict";
 // ---------- G1 blessings / curses foundation ----------
-// G1-A only establishes deterministic offers and run-local state. Concrete
-// effects are added in G1-B/G1-C, so these registries intentionally start empty.
+// G1-A establishes deterministic offers and run-local state. G1-B adds the
+// first 12 concrete blessings; curses remain empty until G1-C.
 const DUNGEON_MODIFIER_SCHEMA_VERSION = 1;
 const DUNGEON_MODIFIER_REROLLS_PER_RUN = 2;
-const DUNGEON_BLESSING_DEFS = {};
+const DUNGEON_BLESSING_DEFS = {
+  sunsteel_edge:{
+    id:'sunsteel_edge', kind:'blessing', category:'attack', name:'日鋼鋒芒', summary:'所有攻擊穩定提高。',
+    minChapter:1, weight:10, effect:{ type:'attack_mul', value:0.10, cap:0.10, label:'所有傷害 +10%' }
+  },
+  arcane_tide:{
+    id:'arcane_tide', kind:'blessing', category:'attack', name:'奧術潮汐', summary:'出戰技能造成更多傷害。',
+    minChapter:2, weight:8, effect:{ type:'skill_damage_mul', value:0.12, cap:0.12, label:'技能傷害 +12%' }
+  },
+  hunter_mark:{
+    id:'hunter_mark', kind:'blessing', category:'attack', name:'獵手印記', summary:'專門壓制菁英與 Boss。',
+    minChapter:3, weight:6, effect:{ type:'elite_damage_mul', value:0.15, cap:0.15, label:'對菁英與 Boss 傷害 +15%' }
+  },
+  oak_heart:{
+    id:'oak_heart', kind:'blessing', category:'defense', name:'古橡之心', summary:'提高本局最大生命。',
+    minChapter:1, weight:10, effect:{ type:'max_hp_mul', value:0.12, cap:0.12, label:'最大 HP +12%' }
+  },
+  guardian_shell:{
+    id:'guardian_shell', kind:'blessing', category:'defense', name:'守護甲殼', summary:'每次進入房間時獲得護盾。',
+    minChapter:2, weight:8, effect:{ type:'room_shield_pct', value:0.10, cap:0.10, label:'進房獲得最大 HP 10% 護盾' }
+  },
+  renewal_well:{
+    id:'renewal_well', kind:'blessing', category:'defense', name:'新生之泉', summary:'所有生命回復效果提高。',
+    minChapter:3, weight:6, effect:{ type:'healing_mul', value:0.25, cap:0.25, label:'生命回復量 +25%' }
+  },
+  wind_stride:{
+    id:'wind_stride', kind:'blessing', category:'mobility', name:'逐風步', summary:'提高地面與空中水平移動。',
+    minChapter:1, weight:10, effect:{ type:'move_flat', value:0.35, cap:0.35, label:'移動速度 +0.35' }
+  },
+  swift_dash:{
+    id:'swift_dash', kind:'blessing', category:'mobility', name:'迅捷殘影', summary:'更頻繁地使用衝刺。',
+    minChapter:2, weight:8, effect:{ type:'dash_cooldown_mul', value:0.20, cap:0.20, label:'衝刺冷卻 -20%' }
+  },
+  aerial_grace:{
+    id:'aerial_grace', kind:'blessing', category:'mobility', name:'天穹恩典', summary:'提高跳躍高度與跨越能力。',
+    minChapter:3, weight:6, effect:{ type:'jump_flat', value:1.0, cap:1.0, label:'跳躍力 +1.0' }
+  },
+  soul_bloom:{
+    id:'soul_bloom', kind:'blessing', category:'resource', name:'靈魂綻放', summary:'本局結算獲得更多靈魂。',
+    minChapter:1, weight:10, effect:{ type:'soul_gain_mul', value:0.15, cap:0.15, label:'靈魂獲取 +15%' }
+  },
+  treasure_eye:{
+    id:'treasure_eye', kind:'blessing', category:'resource', name:'尋寶之眼', summary:'怪物更容易掉落裝備。',
+    minChapter:2, weight:8, effect:{ type:'gear_drop_flat', value:0.05, cap:0.05, label:'裝備掉落率 +5%' }
+  },
+  fate_thread:{
+    id:'fate_thread', kind:'blessing', category:'resource', name:'命運絲線', summary:'本局可額外重抽一次升級卡。',
+    minChapter:3, weight:6, effect:{ type:'card_rerolls', value:1, cap:1, label:'升級選卡重抽 +1 次' }
+  }
+};
 const DUNGEON_CURSE_DEFS = {};
 
 function dungeonModifierRegistry(kind, override) {
@@ -56,8 +105,64 @@ function createDungeonModifierRunState(runSeed, options) {
     recent:{ blessing:[], curse:[] },
     offerHistory:[],
     history:[],
+    uses:{},
     pending:null
   };
+}
+
+function activeDungeonModifierState(state) {
+  if (state) return state;
+  return typeof dungeonRun !== 'undefined' && dungeonRun ? dungeonRun.modifierState : null;
+}
+
+function dungeonBlessingActive(id, state) {
+  const modifierState = activeDungeonModifierState(state);
+  return !!(modifierState && modifierState.activeBlessings && modifierState.activeBlessings.includes(id));
+}
+
+function dungeonBlessingEffect(id, state) {
+  return dungeonBlessingActive(id, state) && DUNGEON_BLESSING_DEFS[id] ? DUNGEON_BLESSING_DEFS[id].effect : null;
+}
+
+function dungeonBlessingValue(id, state) {
+  const effect = dungeonBlessingEffect(id, state);
+  return effect ? Math.min(Number(effect.cap) || Infinity, Math.max(0, Number(effect.value) || 0)) : 0;
+}
+
+function dungeonBlessingHealingAmount(amount, state) {
+  return Math.max(0, amount) * (1 + dungeonBlessingValue('renewal_well', state));
+}
+
+function dungeonBlessingDamageForTarget(amount, target, state) {
+  let result = Math.max(0, amount) * (1 + dungeonBlessingValue('sunsteel_edge', state));
+  if (target && (target.elite || target.type === 'boss')) result *= 1 + dungeonBlessingValue('hunter_mark', state);
+  return result;
+}
+
+function dungeonBlessingRoomShieldAmount(maxHp, state) {
+  return Math.max(0, Math.round(Math.max(0, maxHp) * dungeonBlessingValue('guardian_shell', state)));
+}
+
+function dungeonBlessingDashCooldown(baseCooldown, state) {
+  return Math.max(1, Math.round(Math.max(1, baseCooldown) * (1 - dungeonBlessingValue('swift_dash', state))));
+}
+
+function consumeDungeonBlessingCharge(id, state) {
+  const modifierState = activeDungeonModifierState(state);
+  const limit = dungeonBlessingValue(id, modifierState);
+  if (!modifierState || limit <= 0) return false;
+  if (!modifierState.uses) modifierState.uses = {};
+  const used = Math.max(0, modifierState.uses[id] | 0);
+  if (used >= limit) return false;
+  modifierState.uses[id] = used + 1;
+  return true;
+}
+
+function activateDungeonBlessing(id) {
+  const def = DUNGEON_BLESSING_DEFS[id];
+  if (!def) return false;
+  if (def.effect.type === 'max_hp_mul' && typeof calcStats === 'function') calcStats();
+  return true;
 }
 
 function dungeonModifierEligible(state, kind, context, registry) {
@@ -158,6 +263,7 @@ function acceptDungeonModifierOffer(state, modifierId) {
   if (!offer || offer.status !== 'offered' || !offer.options.includes(modifierId)) return { ok:false, status:'idle' };
   const active = offer.kind === 'blessing' ? state.activeBlessings : state.activeCurses;
   if (!active.includes(modifierId)) active.push(modifierId);
+  if (offer.kind === 'blessing') activateDungeonBlessing(modifierId);
   const result = { ok:true, status:'accepted', kind:offer.kind, modifierId, offerId:offer.id, floor:offer.floor, chapter:offer.chapter };
   state.history.push(result);
   state.pending = null;
@@ -184,6 +290,7 @@ function snapshotDungeonModifierState(state) {
     declines:state.declines,
     activeBlessings:state.activeBlessings.slice(),
     activeCurses:state.activeCurses.slice(),
+    uses:Object.assign({}, state.uses || {}),
     history:state.history.map(entry => Object.assign({}, entry)),
     pending:dungeonModifierOfferCopy(state.pending)
   };

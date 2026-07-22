@@ -120,6 +120,8 @@ const CARDS = [
 const pickBtns = [];
 let pickRerollBtn = null;
 function perkV(id) { return player.perk[id] || 0; }
+function blessingV(id) { return typeof dungeonBlessingValue === 'function' ? dungeonBlessingValue(id) : 0; }
+function blessingHeal(amount) { return typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(amount) : amount; }
 function cardLv(c) { return c.stat ? player.cd[c.id] : perkV(c.id); }
 const CARD_MAXLV = 5;
 function rollPick() {
@@ -142,10 +144,13 @@ function rollPick() {
   gameState = 'pick';
 }
 function rerollPickFromEvent() {
-  if (gameState !== 'pick' || player.eventRerolls <= 0) return false;
-  player.eventRerolls--;
+  if (gameState !== 'pick') return false;
+  const eventReroll = player.eventRerolls > 0;
+  const blessingReroll = !eventReroll && typeof consumeDungeonBlessingCharge === 'function' && consumeDungeonBlessingCharge('fate_thread');
+  if (!eventReroll && !blessingReroll) return false;
+  if (eventReroll) player.eventRerolls--;
   rollPick();
-  num(player.x, player.y - player.h - 12, '命運重抽', '#ffd36a');
+  num(player.x, player.y - player.h - 12, blessingReroll ? '命運絲線重抽' : '命運重抽', '#ffd36a');
   playSfx('uiSelect', 0.9, 1.12);
   return true;
 }
@@ -184,21 +189,21 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def);
 }
-function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
-function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
-function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
+function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0) + blessingV('aerial_grace'); }
+function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (1 + blessingV('arcane_tide')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
 function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
 function gearDropChance(elite, atFloor = floor) {
   const base = Math.min(0.025 + 0.0025 * atFloor + 0.01 * meta.up.treasure, 0.10);
-  return Math.min(base + affixV('gearDrop') + (elite ? 0.15 : 0), 0.50);
+  return Math.min(base + affixV('gearDrop') + blessingV('treasure_eye') + (elite ? 0.15 : 0), 0.50);
 }
-function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')) * (1 + affixV('soulGain')); }
+function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')) * (1 + affixV('soulGain')) * (1 + blessingV('soul_bloom')); }
 const SOUL_DROP_CHANCE = 0.25;
 function calcStats() {
   const p = player;
   const gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
-  p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
+  p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * (1 + blessingV('oak_heart')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
   p.mmp = 30 + (p.cls === 'mage' ? 15 : 0) + p.lv * 4 + 15 * p.cd.mp;
   if (p.hp > p.mhp) p.hp = p.mhp;
   if (p.mp > p.mmp) p.mp = p.mmp;

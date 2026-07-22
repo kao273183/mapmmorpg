@@ -283,7 +283,7 @@ function genFloor(n, roomSpec) {
     };
     if (eventDef.family === 'trial') floorTrial = createDungeonTrial(eventDef, spec, player, worldW);
   } else if (roomType === 'camp') {
-    player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.25));
+    player.hp = Math.min(player.mhp, player.hp + Math.round(blessingHeal(player.mhp * 0.25)));
     player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.25));
     num(player.x, player.y - player.h - 34, '營地休整 · HP / MP +25%', '#8aa8ff');
   }
@@ -470,11 +470,12 @@ function explodeBomber(m) {
   return dead;
 }
 function hitMon(m, d, crit, noChain) {
+  if (typeof dungeonBlessingDamageForTarget === 'function') d = Math.max(1, Math.round(dungeonBlessingDamageForTarget(d, m)));
   if (m.hp < m.mhp * 0.25 && perkV('execute') > 0) d = Math.max(1, Math.round(d * (1 + 0.1 * perkV('execute'))));
   if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
   m.hp -= d; m.hitT = 8;
   const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
-  if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + d * lifesteal); // 吸血鬼/吸血詞綴
+  if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * lifesteal)); // 吸血鬼/吸血詞綴
   const feelKind = noChain ? 'tick' : crit ? (m.type === 'boss' ? 'boss' : 'crit') : Math.abs(m.x - player.x) < 110 ? 'melee' : 'ranged';
   const feel = FEEL_PRESETS[feelKind];
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff', {
@@ -493,7 +494,7 @@ function hitMon(m, d, crit, noChain) {
     else if (m.elite) activityProgress('elites', 1);
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
     gainXp(m.xpv);
-    if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + 3 * player.cd.ls);
+    if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(3 * player.cd.ls));
     if (player.rageT > 0 && player.rageExtend > 0) {
       player.rageT = Math.min(720, player.rageT + player.rageExtend);
       num(player.x, player.y - player.h - 28, '戰意延長', '#ff8a6a');
@@ -559,7 +560,7 @@ function gainXp(n) {
     p.lv++;
     pendingPicks++;
     calcStats();
-    p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.3));
+    p.hp = Math.min(p.mhp, p.hp + Math.round(blessingHeal(p.mhp * 0.3)));
     p.mp = p.mmp;
     burst(p.x, p.y - p.h / 2, '#ffe680', 30);
     beep(523, 0.12); setTimeout(() => beep(659, 0.12), 110); setTimeout(() => beep(784, 0.2), 220);
@@ -576,7 +577,7 @@ function usePot(t) {
   p.bag[t]--; p.potCd = 30;
   activityProgress('potions', 1);
   const potMul = (1 + 0.05 * meta.up.alchemy) * (1 + 0.1 * p.cd.heal);
-  if (t === 'hp') { const heal = Math.round(60 * potMul); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
+  if (t === 'hp') { const heal = Math.round(blessingHeal(60 * potMul)); p.hp = Math.min(p.mhp, p.hp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' HP', '#7dff8a'); }
   else { const heal = Math.round(40 * potMul); p.mp = Math.min(p.mmp, p.mp + heal); num(p.x, p.y - p.h - 10, '+' + heal + ' MP', '#7f9cff'); }
   beep(1000, 0.07, 'sine', 0.04);
 }

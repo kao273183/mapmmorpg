@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const { loadGameSource } = require('./helpers/game-source');
 
 const root = path.resolve(__dirname, '..');
-const source = loadGameSource(root);
+const source = fs.readFileSync(path.join(root, 'src/dungeon/modifiers.js'), 'utf8') + '\n' + loadGameSource(root);
 const gradient = { addColorStop() {} };
 const canvasContext = new Proxy({
   setTransform() {}, drawImage() {}, fillRect() {}, strokeRect() {}, beginPath() {}, arc() {}, ellipse() {}, fill() {}, stroke() {},
@@ -36,6 +36,23 @@ const context = vm.createContext({
 
 vm.runInContext(source, context, { filename:'game.js' });
 vm.runInContext(`
+  globalThis.dungeonRun = { modifierState:{
+    activeBlessings:['sunsteel_edge','arcane_tide','hunter_mark','oak_heart','guardian_shell','renewal_well','wind_stride','swift_dash','aerial_grace','soul_bloom','treasure_eye','fate_thread'],
+    activeCurses:[], uses:{}
+  } };
+  player.eq = { weapon:null, armor:null, helmet:null, boots:null, acc:null };
+  player.cd = { atk:0, hp:0, crit:0, spd:0, aspd:0, xdmg:0, ls:0, mp:0, pot:0, def:0, heal:0, ifr:0 };
+  player.perk = {}; player.cls = 'warrior'; player.lv = 1; player.hp = 100; player.mp = player.mmp;
+  calcStats();
+  if (player.mhp !== 121) throw new Error('oak heart did not affect the real max HP calculation');
+  if (Math.abs(skillDamageMul() - 1.12) > 0.0001) throw new Error('arcane tide did not affect real skill damage');
+  if (Math.abs(moveSpd() - 2.35) > 0.0001) throw new Error('wind stride did not affect real movement speed');
+  if (Math.abs(jumpV() - 12.5) > 0.0001) throw new Error('aerial grace did not affect real jump strength');
+  if (Math.abs(soulGainMul() - 1.15) > 0.0001) throw new Error('soul bloom did not affect real soul gains');
+  if (Math.abs(gearDropChance(false, 1) - 0.0775) > 0.0001) throw new Error('treasure eye did not affect real gear drops');
+  if (Math.abs(blessingHeal(100) - 125) > 0.0001) throw new Error('renewal well did not affect real healing');
+  if (dungeonBlessingDashCooldown(120) !== 96) throw new Error('swift dash did not affect the real dash cooldown');
+
   if (GEAR_SETS.length !== 4) throw new Error('expected four launch sets');
   if (meta.mats.set !== 0) throw new Error('old saves should migrate with zero set cores');
   const originalRandom = Math.random; Math.random = () => 0; player.cls = 'warrior';

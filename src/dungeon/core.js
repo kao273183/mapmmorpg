@@ -268,12 +268,14 @@ function enterDungeonRoom(spec) {
   floor = spec.floor;
   if (floor > 1) activityProgress('floors', 1);
   const campHeal = 0.05 * perkV('camp');
-  p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * (0.15 + campHeal)));
+  const roomHealing = p.mhp * (0.15 + campHeal);
+  p.hp = Math.min(p.mhp, p.hp + Math.round(typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(roomHealing) : roomHealing));
   if (campHeal > 0) p.mp = Math.min(p.mmp, p.mp + Math.round(p.mmp * campHeal));
   p.x = 80; p.y = 468; p.vx = 0; p.vy = 0; p.onGround = true;
   camX = 0;
   genFloor(floor, spec);
   if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
+  if (typeof dungeonBlessingRoomShieldAmount === 'function') p.shieldHp = Math.max(p.shieldHp, dungeonBlessingRoomShieldAmount(p.mhp));
   num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層 · ' + DUNGEON_ROOM_DEFS[spec.type].name, DUNGEON_ROOM_DEFS[spec.type].color);
   floorT = spec.type === 'boss' ? 150 : 90;
   clearGameInputs();
