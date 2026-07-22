@@ -13,7 +13,7 @@ const context = vm.createContext({
   }
 });
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'dungeon-balance.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'balance.js'), 'utf8');
 vm.runInContext(source + `
 globalThis.balanceApi = {
   startDungeonBalanceRun,

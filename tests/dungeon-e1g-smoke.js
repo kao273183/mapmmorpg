@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const storage = new Map();
 const context = vm.createContext({
@@ -13,7 +14,7 @@ const context = vm.createContext({
   }
 });
 
-const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-balance.js'), 'utf8');
+const balanceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'balance.js'), 'utf8');
 vm.runInContext(balanceSource + `
 globalThis.e1gApi = {
   targets:DUNGEON_BOSS_BENCHMARK_TARGETS,
@@ -86,14 +87,12 @@ assert.strictEqual(exported.version, 3);
 assert.strictEqual(exported.bossBenchmark.cases.length, 10);
 assert.strictEqual(exported.benchmark.summary.runs, 10);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
+assert.ok(gameSource.includes("version:'0.29.6', date:'2026-07-22', title:'E1-G Boss 平衡與收尾'"));
 assert.ok(gameSource.includes('function renderSettingsBosses'));
 assert.ok(gameSource.includes("settingsPage === 'bosses'"));
 assert.ok(smokeHtml.includes("mode === 'settings-boss-records'"));
 assert.ok(smokeHtml.includes("mode === 'result-death' || mode === 'result-extract'"));
-assert.ok(indexHtml.includes('game.js?v=0.29.6'));
 
 console.log('dungeon E1-G balance smoke test passed (10 paired boss cases, class timing/damage report, export and record page)');

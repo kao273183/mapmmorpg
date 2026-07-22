@@ -24,4 +24,4 @@
 
 ## 素材
 
-音效檔位於 `audio/sfx/`，素材來源與授權見 [`audio/LICENSE.md`](../audio/LICENSE.md)。
+音效檔位於 `assets/runtime/audio/sfx/`，素材來源與授權見 [`assets/runtime/audio/LICENSE.md`](../assets/runtime/audio/LICENSE.md)。

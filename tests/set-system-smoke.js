@@ -4,9 +4,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'game.js'), 'utf8');
+const source = loadGameSource(root);
 const gradient = { addColorStop() {} };
 const canvasContext = new Proxy({
   setTransform() {}, drawImage() {}, fillRect() {}, strokeRect() {}, beginPath() {}, arc() {}, ellipse() {}, fill() {}, stroke() {},

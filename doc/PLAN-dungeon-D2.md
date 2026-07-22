@@ -59,7 +59,7 @@ roomSpec = {
 
 ### 3.2 地形定義
 
-`dungeon-data.js` 新增 `DUNGEON_HAZARD_DEFS`：
+`src/dungeon/data.js` 新增 `DUNGEON_HAZARD_DEFS`：
 
 ```js
 hazardDef = {
@@ -84,11 +84,11 @@ hazardDef = {
 - `drawDungeonHazards()`
 - `clearDungeonHazards()`
 
-高傷地形共用 `warn → active → cooldown` 狀態，不各自在 `game.js` 內建立獨立計時方式。
+高傷地形共用 `warn → active → cooldown` 狀態，不各自在 `src/game/` 內建立獨立計時方式。
 
 ### 3.3 事件定義與狀態
 
-`dungeon-data.js` 新增 `DUNGEON_EVENT_DEFS`：
+`src/dungeon/data.js` 新增 `DUNGEON_EVENT_DEFS`：
 
 ```js
 eventDef = {
@@ -217,13 +217,13 @@ floorTrial = {
 
 | 檔案 | 責任 |
 |---|---|
-| `dungeon-data.js` | 房型、五地形、十二事件、權重與章節限制 |
-| `dungeon.js` | `roomSpec`、seed streams、事件選擇、房間／試煉生命週期 |
-| `dungeon-ui.js` | 路線標籤、地形教學、動態事件選項、試煉 HUD |
-| `dungeon-hazards.js`（新增） | 地形生成、更新、碰撞與狀態，不把五套邏輯塞回 `game.js` |
-| `dungeon-events.js`（新增） | 八種事件效果、動態成本與選項可用狀態 |
-| `dungeon-trials.js`（新增） | 四種試煉狀態、倒數、波次、傷害追蹤與獎勵鎖 |
-| `game.js` | 只保留地形與既有移動、傷害、渲染生命週期的接點 |
+| `src/dungeon/data.js` | 房型、五地形、十二事件、權重與章節限制 |
+| `src/dungeon/core.js` | `roomSpec`、seed streams、事件選擇、房間／試煉生命週期 |
+| `src/dungeon/ui.js` | 路線標籤、地形教學、動態事件選項、試煉 HUD |
+| `src/dungeon/hazards.js` | 地形生成、更新、碰撞與狀態，不把五套邏輯塞回 `src/game/` |
+| `src/dungeon/events.js` | 八種事件效果、動態成本與選項可用狀態 |
+| `src/dungeon/trials.js` | 四種試煉狀態、倒數、波次、傷害追蹤與獎勵鎖 |
+| `src/game/` | 只保留地形與既有移動、傷害、渲染生命週期的接點 |
 | `tests/dungeon-smoke.html` | 視覺測試模式與固定情境 |
 | `tests/dungeon-d2a～d2e-smoke.js`（新增） | seed、事件輪替、規格一致性、地形配置、事件與試煉狀態 |
 | `tests/dungeon-d2-smoke.js`（新增） | D2-A～D2-E 整合回歸、1,000 組種子與五地形／十二事件覆蓋 |
@@ -257,7 +257,7 @@ floorTrial = {
 | 地形和平台組合造成無解房 | 先生成穩定主路徑，再放地形；生成後跑安全區與可達性檢查，不合法則退回無地形房 |
 | 新亂數改變既有 seed 結果 | 依用途拆分 seed stream，視覺亂數不參與內容生成 |
 | 試煉失敗後房間卡住 | 試煉使用單一狀態機，所有終止狀態都回到統一房間完成判斷 |
-| `game.js` 再次膨脹 | 地形完整邏輯放入 `dungeon-hazards.js`；`game.js` 只加入呼叫接點 |
+| `src/game/` 再次膨脹 | 地形完整邏輯放入 `src/dungeon/hazards.js`；`src/game/` 只加入呼叫接點 |
 | 手機資訊過多 | 路線卡只顯示一個地形標籤、一個敵人標籤與兩個獎勵標籤；詳細成本放事件確認面板 |
 | 12 種事件一次調試成本過高 | 先完成八個單次互動事件，再以共用試煉狀態機完成四個試煉 |
 

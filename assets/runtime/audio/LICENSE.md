@@ -1,6 +1,6 @@
 # Audio assets
 
-The sound effects in `audio/sfx/` are selected and renamed from these Kenney packs:
+The sound effects in `assets/runtime/audio/sfx/` are selected and renamed from these Kenney packs:
 
 - [RPG Audio](https://kenney.nl/assets/rpg-audio)
 - [Interface Sounds](https://kenney.nl/assets/interface-sounds)

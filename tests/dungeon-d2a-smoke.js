@@ -5,8 +5,8 @@ const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
 const source = [
-  fs.readFileSync(path.join(root, 'dungeon-data.js'), 'utf8'),
-  fs.readFileSync(path.join(root, 'dungeon.js'), 'utf8'),
+  fs.readFileSync(path.join(root, 'src', 'dungeon', 'data.js'), 'utf8'),
+  fs.readFileSync(path.join(root, 'src', 'dungeon', 'core.js'), 'utf8'),
   `
   function __setRunSeed(seed) {
     dungeonRun = {

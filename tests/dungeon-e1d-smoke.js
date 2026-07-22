@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const damageEvents = [];
 const context = vm.createContext({
@@ -14,8 +15,8 @@ const context = vm.createContext({
   dmgPlayer:event => { damageEvents.push(event); return false; }
 });
 
-const dataSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-data.js'), 'utf8');
-const bossSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-bosses.js'), 'utf8');
+const dataSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'data.js'), 'utf8');
+const bossSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'bosses.js'), 'utf8');
 vm.runInContext(dataSource + `
 function dungeonBiomeDef(atFloor) {
   return DUNGEON_BIOME_DEFS[Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5))];
@@ -86,9 +87,8 @@ finalVentBoss.phase = 3;
 assert.strictEqual(api.start(finalVentBoss, player, 'vent_chain'), true);
 assert.strictEqual(api.effects().length, 6);
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['charge-active','vent-active','vent-safe','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
 console.log('dungeon E1-D volcano boss smoke test passed (phase schedule, magma charge, vent chain, safety windows, source labels)');

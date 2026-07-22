@@ -2,11 +2,13 @@
 
 瀏覽器像素 Roguelite RPG。
 
+程式碼已集中於 `src/`；地城模組位於 `src/dungeon/`，主遊戲依責任拆分於 `src/game/`。遊戲直接載入與原始素材分別位於 `assets/runtime/`、`assets/source/`。目前的載入順序與放置規則請見 [專案結構](doc/PROJECT-STRUCTURE.md)。
+
 ## 音效
 
 首次按鍵或點擊後，遊戲會載入戰鬥、技能、拾取與介面音效。可在城鎮公告欄的設定視窗調整音量或靜音，設定會自動保存在瀏覽器。
 
-音效素材與授權資訊請見 [`audio/LICENSE.md`](audio/LICENSE.md)。
+音效素材與授權資訊請見 [`assets/runtime/audio/LICENSE.md`](assets/runtime/audio/LICENSE.md)；素材分區與維護規則請見 [`assets/README.md`](assets/README.md)。
 
 ## 戰鬥效果
 

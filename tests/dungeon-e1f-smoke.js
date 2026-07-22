@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { loadGameSource } = require('./helpers/game-source');
 
 const context = vm.createContext({
   console,
@@ -13,8 +14,8 @@ const context = vm.createContext({
   dmgPlayer:() => false
 });
 
-const dataSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-data.js'), 'utf8');
-const bossSource = fs.readFileSync(path.join(__dirname, '..', 'dungeon-bosses.js'), 'utf8');
+const dataSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'data.js'), 'utf8');
+const bossSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'dungeon', 'bosses.js'), 'utf8');
 vm.runInContext(dataSource + `
 function dungeonBiomeDef(atFloor) {
   return DUNGEON_BIOME_DEFS[Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5))];
@@ -93,9 +94,8 @@ assert.strictEqual(finalPlatforms.filter(platform => platform.voidDisabled).leng
 api.clear();
 assert.strictEqual(finalPlatforms.filter(platform => platform.voidDisabled).length, 0, 'clearing boss effects must restore erased platforms');
 
-const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
+const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 assert.ok(gameSource.includes("startDungeonBossSpecialAttack(m, p, nextAttack, plats)"));
 for (const mode of ['barrage-active','erase-active','stable','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
