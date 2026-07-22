@@ -18,8 +18,8 @@ const DUNGEON_BOSS_DEFS = {
     arena:{ width:1300, platforms:[{ x:170, y:405, w:150 }, { x:980, y:405, w:150 }, { x:570, y:325, w:160 }] },
     legacyAttackId:'leap_volley',
     attackSlots:[
-      { id:'root_sweep', name:'根鬚橫掃', implemented:false },
-      { id:'seed_burst', name:'種子彈幕', implemented:false }
+      { id:'root_sweep', name:'根鬚橫掃', implemented:true, warningFrames:45, activeFrames:18, recoveryFrames:76 },
+      { id:'seed_burst', name:'種子彈幕', implemented:true, warningFrames:42, recoveryFrames:82 }
     ]
   },
   cavern_lord: {
@@ -133,4 +133,189 @@ function dungeonBossTelegraph(boss) {
 function dungeonBossAddCount(boss, phase) {
   const def = dungeonBossDef(boss.bossId);
   return Math.max(0, Number(def.addCounts[Math.max(0, phase - 1)]) || 0);
+}
+
+let dungeonBossEffects = [];
+
+function clearDungeonBossEffects() {
+  dungeonBossEffects.length = 0;
+}
+
+function dungeonBossAttackSlot(boss, attackId) {
+  const def = dungeonBossDef(boss.bossId);
+  return def.attackSlots.find(attack => attack.id === attackId) || null;
+}
+
+function dungeonBossAttackSequence(boss) {
+  const def = dungeonBossDef(boss.bossId);
+  if (def.id !== 'meadow_lord') return [def.legacyAttackId];
+  if (boss.phase <= 1) return ['root_sweep', def.legacyAttackId];
+  if (boss.phase === 2) return ['root_sweep', def.legacyAttackId, 'seed_burst'];
+  return ['root_sweep', 'seed_burst', def.legacyAttackId];
+}
+
+function dungeonBossNextAttack(boss) {
+  const sequence = dungeonBossAttackSequence(boss);
+  return sequence[(boss.attackCycle || 0) % sequence.length];
+}
+
+function meadowRootSweepEffects(boss, target) {
+  const slot = dungeonBossAttackSlot(boss, 'root_sweep');
+  const count = boss.phase <= 1 ? 2 : boss.phase === 2 ? 3 : 4;
+  const wantedDirection = target.x < boss.x ? -1 : 1;
+  const neededWidth = 135 + (count - 1) * 165 + 70;
+  const availableWidth = wantedDirection < 0 ? boss.x : dungeonBossDef(boss.bossId).arena.width - boss.x;
+  const direction = availableWidth >= neededWidth ? wantedDirection : -wantedDirection;
+  const effects = [];
+  for (let i = 0; i < count; i++) {
+    const x = Math.max(110, Math.min(dungeonBossDef(boss.bossId).arena.width - 110, boss.x + direction * (135 + i * 165)));
+    effects.push({
+      type:'meadow_root', bossId:boss.bossId, bossName:boss.name, x, y:468, w:126,
+      state:'warning', timer:slot.warningFrames + i * 10, activeFrames:slot.activeFrames,
+      lingerFrames:boss.phase >= 2 ? (boss.phase === 3 ? 210 : 150) : 0,
+      damage:Math.max(1, Math.round(boss.dmg * 0.72)), phase:boss.phase, hit:false
+    });
+  }
+  return effects;
+}
+
+function startDungeonBossSpecialAttack(boss, target, attackId) {
+  const slot = dungeonBossAttackSlot(boss, attackId);
+  if (!slot || !slot.implemented || boss.specialAttack) return false;
+  beginDungeonBossAttack(boss, attackId);
+  if (attackId === 'root_sweep') {
+    const effects = meadowRootSweepEffects(boss, target);
+    dungeonBossEffects.push(...effects);
+    boss.specialAttack = {
+      id:attackId,
+      timer:Math.max(...effects.map(effect => effect.timer)) + slot.activeFrames,
+      recoveryFrames:slot.recoveryFrames
+    };
+  } else if (attackId === 'seed_burst') {
+    boss.specialAttack = { id:attackId, timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames, fired:false };
+  } else return false;
+  boss.vx = 0;
+  return true;
+}
+
+function fireMeadowSeedBurst(boss, target) {
+  const count = boss.phase >= 3 ? 7 : 5;
+  const centerVx = (target.x - boss.x) / 58;
+  for (let i = 0; i < count; i++) {
+    const offset = i - (count - 1) / 2;
+    espits.push({
+      x:boss.x, y:boss.y - boss.h + 8,
+      vx:centerVx + offset * 0.82,
+      vy:-7.6 - Math.abs(offset) * 0.22,
+      dmg:Math.max(1, Math.round(boss.dmg * 0.62)),
+      col:'#9bdd4f', seed:true, heavy:boss.phase >= 3,
+      ownerName:boss.name, sourceName:boss.name + '的種子彈幕'
+    });
+  }
+  beep(420, 0.14, 'square', 0.045);
+}
+
+function updateDungeonBossSpecialAttack(boss, target) {
+  const attack = boss.specialAttack;
+  if (!attack) return { handled:false, playerDied:false };
+  boss.vx = 0;
+  attack.timer--;
+  if (attack.id === 'seed_burst' && attack.timer <= 0 && !attack.fired) {
+    attack.fired = true;
+    fireMeadowSeedBurst(boss, target);
+  }
+  if (attack.timer <= 0) {
+    boss.atkT = attack.recoveryFrames;
+    boss.specialAttack = null;
+    boss.activeAttackId = null;
+  }
+  return { handled:true, playerDied:false };
+}
+
+function dungeonBossEffectHitsPlayer(effect, target) {
+  return target.x + target.w / 2 >= effect.x - effect.w / 2
+    && target.x - target.w / 2 <= effect.x + effect.w / 2
+    && target.y >= effect.y - (effect.state === 'active' ? 46 : 20)
+    && target.y - target.h <= effect.y;
+}
+
+function updateDungeonBossEffects(target) {
+  for (const effect of dungeonBossEffects.slice()) {
+    effect.timer--;
+    if (effect.state === 'warning' && effect.timer <= 0) {
+      effect.state = 'active'; effect.timer = effect.activeFrames; effect.hit = false;
+      beep(190, 0.08, 'sawtooth', 0.035);
+    } else if (effect.state === 'active') {
+      if (!effect.hit && target.inv <= 0 && dungeonBossEffectHitsPlayer(effect, target)) {
+        effect.hit = true;
+        target.hazardSlowT = Math.max(target.hazardSlowT || 0, 60);
+        const damage = Math.max(1, effect.damage - armorDef());
+        if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的根鬚橫掃', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+      }
+      if (effect.timer <= 0) {
+        if (effect.lingerFrames > 0) { effect.state = 'thorns'; effect.timer = effect.lingerFrames; }
+        else dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      }
+    } else if (effect.state === 'thorns') {
+      if (dungeonBossEffectHitsPlayer(effect, target)) target.hazardSlowT = Math.max(target.hazardSlowT || 0, 12);
+      if (effect.timer <= 0) dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+    }
+  }
+  return false;
+}
+
+function drawDungeonBossEffects() {
+  for (const effect of dungeonBossEffects) {
+    const pulse = 0.55 + Math.sin(frame * 0.28 + effect.x * 0.01) * 0.18;
+    if (effect.state === 'warning') {
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#6b4b2a'; ctx.fillRect(effect.x - effect.w / 2, effect.y - 5, effect.w, 5);
+      ctx.strokeStyle = '#d9c47a'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+      ctx.strokeRect(effect.x - effect.w / 2, effect.y - 13, effect.w, 12); ctx.setLineDash([]);
+    } else {
+      const height = effect.state === 'active' ? 44 : 18;
+      ctx.globalAlpha = effect.state === 'active' ? 1 : 0.78;
+      ctx.fillStyle = effect.state === 'active' ? '#86cf45' : '#527b32';
+      for (let x = effect.x - effect.w / 2 + 5; x < effect.x + effect.w / 2; x += 15) {
+        ctx.beginPath(); ctx.moveTo(x - 6, effect.y); ctx.lineTo(x, effect.y - height); ctx.lineTo(x + 6, effect.y); ctx.fill();
+      }
+      ctx.fillStyle = '#6b4b2a'; ctx.fillRect(effect.x - effect.w / 2, effect.y - 5, effect.w, 5);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawDungeonBossSpecialTelegraph(boss) {
+  if (!boss.specialAttack || boss.specialAttack.id !== 'seed_burst') return;
+  const def = dungeonBossDef(boss.bossId);
+  const count = boss.phase >= 3 ? 7 : 5;
+  ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 18);
+  for (let i = 0; i < count; i++) {
+    const angle = -Math.PI + (i + 1) * Math.PI / (count + 1);
+    const radius = 30 + Math.sin(frame * 0.22 + i) * 3;
+    const x = Math.cos(angle) * radius, y = Math.sin(angle) * 18;
+    ctx.fillStyle = i % 2 ? '#d8ef7b' : '#9bdd4f';
+    ctx.fillRect(x - 4, y - 6, 8, 12); ctx.fillStyle = def.accent; ctx.fillRect(x - 1, y - 8, 2, 4);
+  }
+  ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText('種子彈幕', 0, -25); ctx.restore(); ctx.textAlign = 'left';
+}
+
+function drawDungeonBossSprite(boss) {
+  if (!boss || boss.bossId !== 'meadow_lord') return false;
+  const def = dungeonBossDef(boss.bossId);
+  const flash = boss.hitT > 0;
+  ctx.save(); ctx.translate(Math.round(boss.x), Math.round(boss.y));
+  if (boss.vx < 0) ctx.scale(-1, 1);
+  ctx.fillStyle = flash ? '#fff' : '#6b4b2a';
+  ctx.fillRect(-21, -39, 42, 34); ctx.fillRect(-31, -12, 18, 8); ctx.fillRect(13, -12, 18, 8);
+  ctx.fillStyle = flash ? '#fff' : def.accent;
+  ctx.fillRect(-36, -55, 72, 24); ctx.fillRect(-28, -65, 22, 16); ctx.fillRect(5, -68, 25, 18);
+  ctx.fillStyle = flash ? '#fff' : def.color;
+  ctx.fillRect(-43, -49, 20, 18); ctx.fillRect(23, -50, 20, 18); ctx.fillRect(-15, -72, 28, 25);
+  ctx.fillStyle = '#161a18'; ctx.fillRect(-12, -34, 7, 7); ctx.fillRect(9, -34, 7, 7);
+  ctx.fillStyle = '#d9ef9c'; ctx.fillRect(-10, -32, 3, 3); ctx.fillRect(11, -32, 3, 3);
+  ctx.fillStyle = flash ? '#fff' : '#8b5a32'; ctx.fillRect(-4, -22, 15, 4);
+  ctx.restore();
+  return true;
 }

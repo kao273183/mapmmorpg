@@ -1920,6 +1920,7 @@ function genFloor(n, roomSpec) {
 }
 function genBossFloor(n) {
   clearDungeonHazards();
+  clearDungeonBossEffects();
   const bossDef = dungeonBossDefForFloor(n);
   worldW = bossDef.arena.width;
   plats = dungeonBossArenaPlatforms(bossDef);
@@ -2266,8 +2267,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.0';
+const GAME_VERSION = '0.29.1';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.1', date:'2026-07-22', title:'E1-B 翠綠草原 Boss',
+    items:['草原領主加入根鬚橫掃與種子彈幕，傷害來源可分別記錄。','第二階段起根鬚會留下減速荊棘，第三階段才與彈幕、跳撲組合。','新增草原領主專屬樹冠外觀；低特效仍保留地面框與招式名稱。']
+  },
   {
     version:'0.29.0', date:'2026-07-22', title:'E1-A 五群系 Boss 技術地基',
     items:['五群系 Boss 改為獨立資料定義，保留現有難度與共用招式。','建立統一階段、招式預警、場地與環境互動介面。','平衡紀錄新增 Boss 擊殺時間、死亡招式與最終階段。']
@@ -2917,6 +2922,7 @@ function update() {
   if (p.y > 600) { p.y = 468; p.vy = 0; p.onGround = true; p.airJumped = false; }
 
   if (updateDungeonHazards()) return;
+  if (updateDungeonBossEffects(p)) return;
 
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
@@ -3109,7 +3115,11 @@ function update() {
       if (m.phaseT > 0) m.phaseT--;
       const dir = p.x < m.x ? -1 : 1;
       const grounded = m.y >= 468 && m.vy >= 0;
-      if (m.atkT > 0) {
+      const specialAttack = updateDungeonBossSpecialAttack(m, p);
+      if (specialAttack.playerDied) return;
+      if (specialAttack.handled) {
+        m.vx = 0;
+      } else if (m.atkT > 0) {
         m.atkT--;
         if (grounded) m.vx = dir * phaseConfig.chaseSpeed; // 追著玩家走
       } else if (m.tele > 0) {
@@ -3136,15 +3146,21 @@ function update() {
           m.atkT = Math.round(phaseConfig.recoveryFrames * bossDef.recoveryMultiplier);
         }
       } else if (grounded) {
-        beginDungeonBossAttack(m, bossDef.legacyAttackId);
-        m.tele = bossDef.warningFrames;
-        m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - bossDef.leapRange, Math.min(m.x + bossDef.leapRange, p.x))));
+        const nextAttack = dungeonBossNextAttack(m);
+        if (nextAttack !== bossDef.legacyAttackId) startDungeonBossSpecialAttack(m, p, nextAttack);
+        else {
+          beginDungeonBossAttack(m, bossDef.legacyAttackId);
+          m.tele = bossDef.warningFrames;
+          m.targetX = Math.max(60, Math.min(worldW - 60, Math.max(m.x - bossDef.leapRange, Math.min(m.x + bossDef.leapRange, p.x))));
+        }
       }
-      m.vy += 0.6; if (m.vy > 14) m.vy = 14;
-      m.x += m.vx * moveF; m.y += m.vy;
-      if (m.x < 60) m.x = 60;
-      if (m.x > worldW - 60) m.x = worldW - 60;
-      if (m.y >= 468) {
+      if (!specialAttack.handled) {
+        m.vy += 0.6; if (m.vy > 14) m.vy = 14;
+        m.x += m.vx * moveF; m.y += m.vy;
+        if (m.x < 60) m.x = 60;
+        if (m.x > worldW - 60) m.x = worldW - 60;
+      }
+      if (!specialAttack.handled && m.y >= 468) {
         const completedSlam = m.slamWarn && m.vy > 0;
         if (m.vy > 3 && ph === 3) { // 狂暴期落地震波
           burst(m.x, 468, '#b05ae0', 26);
@@ -3198,7 +3214,7 @@ function update() {
       const d = Math.max(1, s.dmg - armorDef());
       if (s.chill) { p.chillT = 150; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }
       espits.splice(espits.indexOf(s), 1);
-      if (dmgPlayer({ amount:d, sourceName:(s.ownerName || '怪物') + '的彈幕', sourceX:s.x, heavy:!!s.heavy })) return;
+      if (dmgPlayer({ amount:d, sourceName:s.sourceName || (s.ownerName || '怪物') + '的彈幕', sourceX:s.x, heavy:!!s.heavy })) return;
       continue;
     }
     if (s.y > 505 || s.x < -20 || s.x > worldW + 20) {
@@ -3359,6 +3375,7 @@ function render() {
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
   drawDungeonHazards();
+  drawDungeonBossEffects();
   drawDungeonRoomWorld();
   drawFloorEventWorld();
   // Lv3/Lv5 技能區域特效（燃燒地面、餘震、龍捲與二次衝擊）
@@ -3454,6 +3471,8 @@ function render() {
       ctx.fillStyle = '#f5ede0';
       for (let tx = -20; tx <= 16; tx += 9) { ctx.fillRect(mx + tx, my - 29 - bite, 5, 6); ctx.fillRect(mx + tx + 4, my - 34, 5, 6); }
       ctx.fillStyle = '#ff5a5a'; ctx.fillRect(mx - 16, my - 38 - bite, 5, 5); ctx.fillRect(mx + 11, my - 38 - bite, 5, 5);
+    } else if (m.type === 'boss' && drawDungeonBossSprite(m)) {
+      drawDungeonBossSpecialTelegraph(m);
     } else {
       const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
       const bossStyle = m.type === 'boss' ? dungeonBossDef(m.bossId) : null;
@@ -3474,8 +3493,15 @@ function render() {
   }
   // boss/孢子 彈幕(群系色)
   for (const s of espits) {
-    ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    if (s.seed) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx) + Math.PI / 2);
+      ctx.fillStyle = s.col || '#9bdd4f'; ctx.fillRect(-4, -7, 8, 14);
+      ctx.fillStyle = '#d8ef7b'; ctx.fillRect(-2, -5, 4, 8);
+      ctx.fillStyle = '#6b4b2a'; ctx.fillRect(-1, -10, 2, 4); ctx.restore();
+    } else {
+      ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+    }
   }
   // player
   drawEquippedAura(p.x, p.y - p.h / 2, p.w, p.h);

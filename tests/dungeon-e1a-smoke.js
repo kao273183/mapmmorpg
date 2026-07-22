@@ -51,7 +51,8 @@ for (const id of api.order) {
   const def = api.defs[id];
   assert.strictEqual(def.phases.length, 3);
   assert.strictEqual(def.attackSlots.length, 2);
-  assert.ok(def.attackSlots.every(attack => attack.implemented === false));
+  if (id === 'meadow_lord') assert.ok(def.attackSlots.every(attack => attack.implemented === true));
+  else assert.ok(def.attackSlots.every(attack => attack.implemented === false));
   assert.ok(def.environmentId);
   const arena = api.arena(def);
   assert.strictEqual(arena[0].ground, true);
@@ -109,7 +110,7 @@ const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8'
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
 assert.ok(gameSource.includes('createDungeonBoss(bossDef, n, sc)'));
 assert.ok(gameSource.includes('dungeonBossTelegraph(m)'));
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.0'"));
+assert.ok(gameSource.includes("version:'0.29.0'"));
 for (const entry of ['meadow:5','cavern:10','volcano:15','tundra:20','void:25']) assert.ok(smokeHtml.includes(entry));
 assert.ok(smokeHtml.includes("mode === 'settings-boss-balance'"));
 

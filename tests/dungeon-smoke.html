@@ -5,22 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.0">
+<link rel="stylesheet" href="style.css?v=0.29.1">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.29.0"></script>
-<script src="dungeon-bosses.js?v=0.29.0"></script>
-<script src="dungeon-balance.js?v=0.29.0"></script>
-<script src="dungeon.js?v=0.29.0"></script>
-<script src="dungeon-hazards.js?v=0.29.0"></script>
-<script src="dungeon-events.js?v=0.29.0"></script>
-<script src="dungeon-trials.js?v=0.29.0"></script>
-<script src="dungeon-ui.js?v=0.29.0"></script>
-<script src="game.js?v=0.29.0"></script>
+<script src="dungeon-data.js?v=0.29.1"></script>
+<script src="dungeon-bosses.js?v=0.29.1"></script>
+<script src="dungeon-balance.js?v=0.29.1"></script>
+<script src="dungeon.js?v=0.29.1"></script>
+<script src="dungeon-hazards.js?v=0.29.1"></script>
+<script src="dungeon-events.js?v=0.29.1"></script>
+<script src="dungeon-trials.js?v=0.29.1"></script>
+<script src="dungeon-ui.js?v=0.29.1"></script>
+<script src="game.js?v=0.29.1"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -66,13 +66,28 @@ function resolveFixedTrial(outcome) {
 }
 if (mode.startsWith('boss-')) {
   const bossFloors = { meadow:5, cavern:10, volcano:15, tundra:20, void:25 };
-  const bossKey = mode.slice(5);
+  const bossParts = mode.slice(5).split('-');
+  const bossKey = bossParts[0], bossVariant = bossParts.slice(1).join('-');
   const bossFloor = bossFloors[bossKey] || 5;
   enterDungeonRoom(makeRoomSpec('boss', bossFloor, 0));
   const boss = mons.find(mon => mon.type === 'boss');
+  if (boss && bossKey === 'meadow' && bossVariant) {
+    floorT = 0; boss.x = 720; boss.targetX = 720; boss.atkT = 9999;
+    if (bossVariant === 'root' || bossVariant === 'root-active' || bossVariant === 'thorns' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      if (bossVariant === 'thorns') boss.phase = 2;
+      startDungeonBossSpecialAttack(boss, player, 'root_sweep'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'root-active' || bossVariant === 'lowfx') for (const effect of dungeonBossEffects) { effect.state = 'active'; effect.timer = 9999; }
+      if (bossVariant === 'thorns') for (const effect of dungeonBossEffects) { effect.state = 'thorns'; effect.timer = 9999; }
+    } else if (bossVariant === 'seed' || bossVariant === 'seed-active') {
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'seed_burst');
+      if (bossVariant === 'seed') boss.specialAttack.timer = 9999;
+      else { boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999; }
+    }
+  }
   const ok = !!boss && boss.bossId === dungeonBossDefForFloor(bossFloor).id && boss.floor === bossFloor;
-  window.__dungeonSmokeResult = { ok, bossId:boss && boss.bossId, floor:bossFloor, phase:boss && boss.phase };
-  document.title = ok ? 'Dungeon Boss PASS ' + bossKey : 'Dungeon Boss FAIL ' + bossKey;
+  window.__dungeonSmokeResult = { ok, bossId:boss && boss.bossId, floor:bossFloor, phase:boss && boss.phase, variant:bossVariant || 'default' };
+  document.title = ok ? 'Dungeon Boss PASS ' + bossKey + (bossVariant ? ' ' + bossVariant : '') : 'Dungeon Boss FAIL ' + bossKey;
   document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
 } else if (mode.startsWith('trial-')) {
   const trialModes = {
