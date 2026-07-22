@@ -30,7 +30,6 @@ const api = context.api;
 
 const defs = Object.values(api.defs);
 assert.strictEqual(defs.length, 12, 'G1-B must ship exactly 12 blessings');
-assert.strictEqual(Object.keys(api.curses).length, 0, 'curses remain reserved for G1-C');
 assert.strictEqual(api.validate(api.defs, api.curses).ok, true);
 assert.strictEqual(new Set(defs.map(def => def.id)).size, 12);
 assert.strictEqual(new Set(defs.map(def => def.effect.type)).size, 12, 'each blessing should own a distinct integration contract');

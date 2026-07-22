@@ -2,7 +2,8 @@
 // ---------- floor generation ----------
 function monsterHp(base, sc, n, extraMul = 1) {
   const endurance = 1.5 + Math.min(0.75, 0.025 * (n - 1));
-  return Math.round(base * sc * endurance * extraMul);
+  const hp = base * sc * endurance * extraMul;
+  return Math.round(typeof dungeonCurseBaseEnemyHp === 'function' ? dungeonCurseBaseEnemyHp(hp) : hp);
 }
 function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
   rng = rng || Math.random;
@@ -56,10 +57,15 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
     return;
   }
   const elite = rng() < eliteCh;
-  const hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
+  let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
+  let damage = 8 * sc * (elite ? 1.6 : 1);
+  if (elite && typeof dungeonCurseEliteStat === 'function') {
+    hp = Math.round(dungeonCurseEliteStat(hp));
+    damage = dungeonCurseEliteStat(damage);
+  }
   mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + rng() * 0.4) * (rng() < 0.5 ? -1 : 1),
     minx, maxx, hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
-    dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
+    dmg: Math.round(damage),
     w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3 });
 }
 function currentFloorEventDef() {
@@ -211,6 +217,7 @@ function chooseFloorEvent(choice) {
   const outcome = runDungeonEventEffect(selected.effectId, def, currentRoomSpec, floorEventState(), {
     getSouls:() => soulsRun,
     spendSouls:amount => { soulsRun -= amount; },
+    gainSouls:amount => { soulsRun += amount; },
     dropGear:dropFloorEventGear,
     spawnMimic:spawnEventMimic,
     startTrial:startFloorTrial,
@@ -245,6 +252,10 @@ function promoteDungeonElite(m) {
   m.elite = true;
   m.hp = Math.round(m.hp * DUNGEON_D3C_CALIBRATION.eliteHpMultiplier); m.mhp = m.hp;
   m.dmg = Math.round(m.dmg * 1.25); m.xpv = Math.round(m.xpv * 2);
+  if (typeof dungeonCurseEliteStat === 'function') {
+    m.hp = Math.round(dungeonCurseEliteStat(m.hp)); m.mhp = m.hp;
+    m.dmg = Math.round(dungeonCurseEliteStat(m.dmg));
+  }
   m.w = Math.round(m.w * 1.15); m.h = Math.round(m.h * 1.15);
 }
 function genFloor(n, roomSpec) {
@@ -471,6 +482,7 @@ function explodeBomber(m) {
 }
 function hitMon(m, d, crit, noChain) {
   if (typeof dungeonBlessingDamageForTarget === 'function') d = Math.max(1, Math.round(dungeonBlessingDamageForTarget(d, m)));
+  if (typeof dungeonCurseOutgoingDamage === 'function') d = Math.max(1, Math.round(dungeonCurseOutgoingDamage(d)));
   if (m.hp < m.mhp * 0.25 && perkV('execute') > 0) d = Math.max(1, Math.round(d * (1 + 0.1 * perkV('execute'))));
   if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
   m.hp -= d; m.hitT = 8;

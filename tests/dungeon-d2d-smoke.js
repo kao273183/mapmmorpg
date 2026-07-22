@@ -46,8 +46,9 @@ const api = context.__d2d;
 
 const nonTrialIds = Object.values(api.defs).filter(def => def.family !== 'trial').map(def => def.id).sort();
 assert.deepStrictEqual(Array.from(nonTrialIds), [
-  'arcane_spring', 'blood_blessing', 'fate_altar', 'life_spring',
-  'mimic_chest', 'sealed_chest', 'supply_crate', 'traveler_chest'
+  'ancient_cache', 'arcane_spring', 'blood_blessing', 'echoing_archive', 'fate_altar',
+  'forgotten_forge', 'life_spring', 'lost_caravan', 'mimic_chest', 'sealed_chest',
+  'supply_crate', 'traveler_chest', 'wandering_alchemist'
 ]);
 for (const id of nonTrialIds) {
   const def = api.defs[id];
@@ -60,7 +61,10 @@ const chapterOne = new Set([
   ...api.candidates('treasure', 1),
   ...api.candidates('event', 1)
 ].map(def => def.id));
-assert.deepStrictEqual(Array.from(chapterOne).sort(), ['elite_ambush', 'life_spring', 'supply_crate', 'traveler_chest']);
+assert.deepStrictEqual(Array.from(chapterOne).sort(), [
+  'elite_ambush', 'forgotten_forge', 'life_spring', 'lost_caravan',
+  'supply_crate', 'traveler_chest', 'wandering_alchemist'
+]);
 
 assert.strictEqual(api.historyMultiplier('a', ['x', 'a']), 0, '最近一次事件權重應為 0');
 assert.strictEqual(api.historyMultiplier('a', ['a', 'x']), 0, '最近兩次事件權重應為 0');
@@ -99,6 +103,7 @@ function makeHooks(state) {
     hooks:{
       getSouls:() => state.souls,
       spendSouls:amount => { state.souls -= amount; },
+      gainSouls:amount => { state.souls += amount; },
       dropGear:(rarity, source) => calls.drops.push([rarity, source]),
       spawnMimic:() => { calls.mimic++; },
       spawnAmbush:() => { calls.ambush++; },

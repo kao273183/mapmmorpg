@@ -59,7 +59,10 @@ vm.createContext(context);
 vm.runInContext(source, context, { filename:'dungeon-d2-integrated-bundle.js' });
 const api = context.__d2;
 const lowRisk = new Set(['safe', 'camp', 'treasure']);
-const firstChapterEvents = new Set(['traveler_chest', 'supply_crate', 'life_spring', 'elite_ambush']);
+const firstChapterEvents = new Set([
+  'traveler_chest', 'supply_crate', 'lost_caravan', 'life_spring',
+  'forgotten_forge', 'wandering_alchemist', 'elite_ambush'
+]);
 
 function plainSpec(spec) {
   return {
@@ -86,7 +89,7 @@ function validateSpec(spec) {
     assert.deepStrictEqual(Array.from(spec.rewardTags), Array.from(roomDef.rewards));
   }
   if (spec.eventId === 'hazard_trial') assert.ok(spec.hazardId, '地形試煉預覽必須同時公開地形');
-  if (spec.chapter === 1 && spec.eventId) assert.ok(firstChapterEvents.has(spec.eventId), '第一章只能出現四個教學事件');
+  if (spec.chapter === 1 && spec.eventId) assert.ok(firstChapterEvents.has(spec.eventId), '第一章只能出現七個低複雜度教學事件');
 }
 
 function runSequence(seed) {
@@ -154,6 +157,6 @@ for (const type of ['safe', 'elite', 'treasure', 'event', 'camp', 'hazard', 'bos
 for (const id of Object.keys(api.hazardDefs)) assert.ok(hazards.has(id), id + ' 應出現在 1,000 seed 樣本');
 for (const id of Object.keys(api.eventDefs)) assert.ok(events.has(id), id + ' 應出現在 1,000 seed 樣本');
 assert.strictEqual(Object.keys(api.hazardDefs).length, 5);
-assert.strictEqual(Object.keys(api.eventDefs).length, 12);
+assert.strictEqual(Object.keys(api.eventDefs).length, 17);
 
-console.log('dungeon D2 integrated smoke test passed (1000 seeds, 5 hazards, 12 events)');
+console.log('dungeon D2 integrated smoke test passed (1000 seeds, 5 hazards, 17 events)');

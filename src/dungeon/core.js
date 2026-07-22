@@ -276,6 +276,7 @@ function enterDungeonRoom(spec) {
   genFloor(floor, spec);
   if (perkV('barrier') > 0) p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.05 * perkV('barrier')));
   if (typeof dungeonBlessingRoomShieldAmount === 'function') p.shieldHp = Math.max(p.shieldHp, dungeonBlessingRoomShieldAmount(p.mhp));
+  if (typeof dungeonCurseRoomShieldAmount === 'function') p.shieldHp = Math.max(p.shieldHp, dungeonCurseRoomShieldAmount(p.mhp));
   num(p.x, p.y - p.h - 20, '第 ' + floor + ' 層 · ' + DUNGEON_ROOM_DEFS[spec.type].name, DUNGEON_ROOM_DEFS[spec.type].color);
   floorT = spec.type === 'boss' ? 150 : 90;
   clearGameInputs();
@@ -292,7 +293,8 @@ function grantRoomClearReward(spec) {
     saveMeta();
     num(player.x, player.y - player.h - 58, '菁英房完成 · 強化石 +1', '#d9a8ff');
   } else if (spec.type === 'hazard') {
-    const soulBonus = dungeonHazardSoulBonus(floor);
+    const curseBonus = typeof dungeonCurseValue === 'function' ? dungeonCurseValue('hazard_wager', 'reward') : 0;
+    const soulBonus = Math.round(dungeonHazardSoulBonus(floor) * (1 + curseBonus));
     soulsRun += soulBonus;
     meta.mats.enh += 1;
     saveMeta();
@@ -316,8 +318,9 @@ function grantChapterReward() {
   if (!dungeonRun) return null;
   if (dungeonRun.chapterReward && dungeonRun.chapterReward.floor === floor) return dungeonRun.chapterReward;
   const score = dungeonRun.explorationScore;
-  const rarity = score >= 6 ? 2 : 1;
-  const mats = score >= 6 ? 2 : 1;
+  const curseBonus = typeof dungeonCurseValue === 'function' ? dungeonCurseValue('boss_oath', 'reward') : 0;
+  const rarity = Math.min(4, (score >= 6 ? 2 : 1) + curseBonus);
+  const mats = (score >= 6 ? 2 : 1) + curseBonus;
   addGear(genGear(floor, rarity));
   meta.mats.enh += mats;
   saveMeta();

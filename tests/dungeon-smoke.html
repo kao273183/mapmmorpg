@@ -5,31 +5,31 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.9">
+<link rel="stylesheet" href="style.css?v=0.29.11">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="src/data/tiles.js?v=1"></script>
 <script src="src/data/items.js?v=1"></script>
-<script src="src/dungeon/data.js?v=0.29.9"></script>
-<script src="src/dungeon/bosses.js?v=0.29.9"></script>
-<script src="src/dungeon/balance.js?v=0.29.9"></script>
-<script src="src/dungeon/core.js?v=0.29.9"></script>
-<script src="src/dungeon/modifiers.js?v=0.29.9"></script>
-<script src="src/dungeon/hazards.js?v=0.29.9"></script>
-<script src="src/dungeon/events.js?v=0.29.9"></script>
-<script src="src/dungeon/trials.js?v=0.29.9"></script>
-<script src="src/dungeon/ui.js?v=0.29.9"></script>
-<script src="src/game/bootstrap.js?v=0.29.9"></script>
-<script src="src/game/progression.js?v=0.29.9"></script>
-<script src="src/game/systems.js?v=0.29.9"></script>
-<script src="src/game/run.js?v=0.29.9"></script>
-<script src="src/game/interface.js?v=0.29.9"></script>
-<script src="src/game/update.js?v=0.29.9"></script>
-<script src="src/game/render.js?v=0.29.9"></script>
-<script src="src/game/town.js?v=0.29.9"></script>
-<script src="src/game/main.js?v=0.29.9"></script>
+<script src="src/dungeon/data.js?v=0.29.11"></script>
+<script src="src/dungeon/bosses.js?v=0.29.11"></script>
+<script src="src/dungeon/balance.js?v=0.29.11"></script>
+<script src="src/dungeon/core.js?v=0.29.11"></script>
+<script src="src/dungeon/modifiers.js?v=0.29.11"></script>
+<script src="src/dungeon/hazards.js?v=0.29.11"></script>
+<script src="src/dungeon/events.js?v=0.29.11"></script>
+<script src="src/dungeon/trials.js?v=0.29.11"></script>
+<script src="src/dungeon/ui.js?v=0.29.11"></script>
+<script src="src/game/bootstrap.js?v=0.29.11"></script>
+<script src="src/game/progression.js?v=0.29.11"></script>
+<script src="src/game/systems.js?v=0.29.11"></script>
+<script src="src/game/run.js?v=0.29.11"></script>
+<script src="src/game/interface.js?v=0.29.11"></script>
+<script src="src/game/update.js?v=0.29.11"></script>
+<script src="src/game/render.js?v=0.29.11"></script>
+<script src="src/game/town.js?v=0.29.11"></script>
+<script src="src/game/main.js?v=0.29.11"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -297,6 +297,33 @@ if (mode.startsWith('boss-')) {
     dungeonBlessingRoomShieldAmount(100) === 10 && dungeonBlessingDashCooldown(120) === 96;
   window.__dungeonSmokeResult = { ok, count:blessingIds.length, categories, shield:dungeonBlessingRoomShieldAmount(100), dashCooldown:dungeonBlessingDashCooldown(120) };
   document.title = ok ? 'Dungeon Blessings PASS' : 'Dungeon Blessings FAIL';
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+} else if (mode === 'curse-state') {
+  const state = dungeonRun && dungeonRun.modifierState;
+  const curseIds = Object.keys(DUNGEON_CURSE_DEFS);
+  if (state) state.activeCurses.push(...curseIds);
+  const categories = curseIds.reduce((counts, id) => {
+    const category = DUNGEON_CURSE_DEFS[id].category;
+    counts[category] = (counts[category] || 0) + 1;
+    return counts;
+  }, {});
+  const disclosed = curseIds.every(id => DUNGEON_CURSE_DEFS[id].risk.label && DUNGEON_CURSE_DEFS[id].reward.label);
+  const ok = !!state && curseIds.length === 12 && disclosed && Object.values(categories).every(count => count === 3) &&
+    dungeonCurseIncomingDamage(100) === 115 && dungeonCurseRoomShieldAmount(100) === 15;
+  window.__dungeonSmokeResult = { ok, count:curseIds.length, categories, disclosed, incoming:dungeonCurseIncomingDamage(100), shield:dungeonCurseRoomShieldAmount(100) };
+  document.title = ok ? 'Dungeon Curses PASS' : 'Dungeon Curses FAIL';
+  document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
+} else if (mode === 'event-results') {
+  const ignoredResults = new Set(['decline', 'start_trial', 'elite_ambush']);
+  const resultIds = new Set();
+  for (const def of Object.values(DUNGEON_EVENT_DEFS)) {
+    for (const choice of def.choices || []) if (!ignoredResults.has(choice.effectId)) resultIds.add(choice.effectId);
+  }
+  const newEventIds = ['forgotten_forge','wandering_alchemist','echoing_archive','lost_caravan','ancient_cache'];
+  const safeDeclines = newEventIds.every(id => DUNGEON_EVENT_DEFS[id].choices.some(choice => choice.effectId === 'decline'));
+  const ok = Object.keys(DUNGEON_EVENT_DEFS).length === 17 && resultIds.size === 20 && safeDeclines;
+  window.__dungeonSmokeResult = { ok, events:Object.keys(DUNGEON_EVENT_DEFS).length, results:resultIds.size, safeDeclines };
+  document.title = ok ? 'Dungeon Event Results PASS' : 'Dungeon Event Results FAIL';
   document.getElementById('hint').textContent = JSON.stringify(window.__dungeonSmokeResult);
 } else if (mode === 'settings-updates') {
   openTownPanel('save');
