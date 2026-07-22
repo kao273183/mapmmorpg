@@ -943,7 +943,7 @@ const CLASSES = { warrior: { name: '劍士', col: '#c84a4a' }, mage: { name: '�
 let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
 let portal = null;
-let floorEvent = null, eventPanel = null;
+let floorEvent = null, eventPanel = null, floorTrial = null;
 const eventChoiceBtns = [];
 let lastRun = null;
 let pendingPicks = 0, pickOpts = [];
@@ -1005,8 +1005,8 @@ const player = {
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
   dashT: 0, dashCd: 0, dashDir: 1,
   slashT: 0, spinT: 0, potCd: 0, rageT: 0, rageAtk: 0, rageSpd: 0, rageLifesteal: 0, rageExtend: 0, rageBlood: false, rageUltimate: false,
-  shieldHp: 0, shieldT: 0, shieldReflect: 0, shieldBreakMp: 0, shieldBurst: false, chillT: 0, cls: 'warrior', skillCasts: {},
-  perk: {}, revives: 0, affixDeathUsed: false, eventAtk: 0, aegisCd: 0, airJumped: false,
+  shieldHp: 0, shieldT: 0, shieldReflect: 0, shieldBreakMp: 0, shieldBurst: false, chillT: 0, hazardSlowT:0, cls: 'warrior', skillCasts: {},
+  perk: {}, revives: 0, affixDeathUsed: false, eventAtk: 0, eventRerolls:0, aegisCd: 0, airJumped: false,
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
   bag: { hp: 0, mp: 0 }, eq: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
   items: [], itemWin: false,
@@ -1052,6 +1052,7 @@ const CARDS = [
   { id:'echo',       r:2, name:'技能迴響', desc:'施放技能有 4%機率立即冷卻' }
 ];
 const pickBtns = [];
+let pickRerollBtn = null;
 function perkV(id) { return player.perk[id] || 0; }
 function cardLv(c) { return c.stat ? player.cd[c.id] : perkV(c.id); }
 const CARD_MAXLV = 5;
@@ -1073,6 +1074,14 @@ function rollPick() {
     pickOpts.push(pool.splice(idx, 1)[0]);
   }
   gameState = 'pick';
+}
+function rerollPickFromEvent() {
+  if (gameState !== 'pick' || player.eventRerolls <= 0) return false;
+  player.eventRerolls--;
+  rollPick();
+  num(player.x, player.y - player.h - 12, '命運重抽', '#ffd36a');
+  playSfx('uiSelect', 0.9, 1.12);
+  return true;
 }
 function applyCard(c) {
   const p = player;
@@ -1109,7 +1118,7 @@ function critRate() { return 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def);
 }
-function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste); }
@@ -1147,12 +1156,13 @@ function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→�
   const sourceName = event.sourceName || '未知攻擊';
   d = Math.max(1, Math.round(d * (1 + 0.25 * perkV('glass')) * (1 - 0.01 * meta.up.guard))); // 玻璃大砲／永久防禦本能
   const thorns = 0.4 * perkV('thorns') + affixV('thorns');
-  if (thorns > 0) { // 荊棘護甲/荊棘詞綴:反彈周圍敵人
+  const retaliate = () => { // 先完成護盾／無傷判定，再結算荊棘，避免同幀擊殺誤判無傷成功。
+    if (thorns <= 0) return;
     const td = Math.max(1, Math.round(atkPow() * thorns));
     for (const o of mons.slice()) {
       if (o.type !== 'boss' && Math.abs(o.x - p.x) < 90 && Math.abs((o.y - o.h / 2) - (p.y - p.h / 2)) < 80) hitMon(o, td, false, true);
     }
-  }
+  };
   if (p.shieldHp > 0) {
     const ab = Math.min(p.shieldHp, d);
     p.shieldHp -= ab; d -= ab;
@@ -1170,6 +1180,7 @@ function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→�
       p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false;
     }
     if (d <= 0) {
+      retaliate();
       p.inv = 30 + 3 * p.cd.ifr;
       num(p.x, p.y - p.h - 10, '吸收', '#7dcfff', { kind:'absorb', size:14, pop:2 });
       triggerCombatFeel('absorb');
@@ -1180,6 +1191,9 @@ function dmgPlayer(hit) { // 玩家受傷統一入口(護盾吸收→扣血→�
   }
   lastDamageSource = sourceName;
   p.hp -= d; p.inv = 60 + 6 * p.cd.ifr;
+  if (typeof recordDungeonDamage === 'function') recordDungeonDamage(sourceName, d);
+  recordFloorTrialDamage(d);
+  retaliate();
   num(p.x, p.y - p.h - 10, '-' + d, '#ff6b6b', { kind:'hurt', size:18, pop:4, vy:0.9 });
   triggerCombatFeel(event.heavy ? 'boss' : 'hurt');
   playerFlashT = Math.max(playerFlashT, combatSettings.flashes ? 6 : 2);
@@ -1614,29 +1628,30 @@ function monsterHp(base, sc, n, extraMul = 1) {
   const endurance = 1.5 + Math.min(0.75, 0.025 * (n - 1));
   return Math.round(base * sc * endurance * extraMul);
 }
-function spawnMon(type, n, sc, xpSc, eliteCh) {
+function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
+  rng = rng || Math.random;
   if (type === 'bat') {
-    const bx = 350 + Math.random() * (worldW - 550);
-    const by = 170 + Math.random() * 140;
+    const bx = 350 + rng() * (worldW - 550);
+    const by = 170 + rng() * 140;
     const hp = monsterHp(20, sc, n);
-    mons.push({ type:'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 200,
+    mons.push({ type:'bat', x: bx, y: by, ax: bx, ay: by, t: rng() * 200,
       hp, mhp: hp, xpv: Math.round(16 * xpSc),
       dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   const wide = plats.filter(q => !q.ground && q.w > 120);
-  const pl = (Math.random() < 0.62 || wide.length === 0) ? plats[0] : wide[(Math.random() * wide.length) | 0]; // 6 成生在地面,其餘上平台
-  const sx = pl.ground ? 200 + Math.random() * (worldW - 350) : pl.x + 30 + Math.random() * (pl.w - 60);
+  const pl = (rng() < 0.62 || wide.length === 0) ? plats[0] : wide[(rng() * wide.length) | 0]; // 6 成生在地面,其餘上平台
+  const sx = pl.ground ? 200 + rng() * (worldW - 350) : pl.x + 30 + rng() * (pl.w - 60);
   const minx = Math.max(pl.x + 20, sx - 140), maxx = Math.min(pl.x + pl.w - 20, sx + 140);
   if (type === 'mush') {
     const hp = monsterHp(30, sc, n);
-    mons.push({ type:'mush', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), vy: 0, onG: true, jt: 30 + Math.random() * 60,
+    mons.push({ type:'mush', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + rng() * 0.3) * (rng() < 0.5 ? -1 : 1), vy: 0, onG: true, jt: 30 + rng() * 60,
       minx, maxx, hp, mhp: hp, xpv: Math.round(14 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'spore') {
     const hp = monsterHp(22, sc, n);
-    mons.push({ type:'spore', x: sx, y: pl.y, vx: (0.3 + Math.random() * 0.25) * (Math.random() < 0.5 ? -1 : 1), st: 60 + Math.random() * 60,
+    mons.push({ type:'spore', x: sx, y: pl.y, vx: (0.3 + rng() * 0.25) * (rng() < 0.5 ? -1 : 1), st: 60 + rng() * 60,
       minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
@@ -1648,102 +1663,205 @@ function spawnMon(type, n, sc, xpSc, eliteCh) {
   }
   if (type === 'charger') {
     const hp = monsterHp(34, sc, n);
-    mons.push({ type:'charger', x: sx, y: pl.y, vx: (0.4 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), chg: 0, tel: 0, dir: 1,
+    mons.push({ type:'charger', x: sx, y: pl.y, vx: (0.4 + rng() * 0.3) * (rng() < 0.5 ? -1 : 1), chg: 0, tel: 0, dir: 1,
       minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(9 * sc), w: 36, h: 20, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'icer') {
     const hp = monsterHp(28, sc, n);
-    mons.push({ type:'icer', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
+    mons.push({ type:'icer', x: sx, y: pl.y, vx: (0.5 + rng() * 0.4) * (rng() < 0.5 ? -1 : 1),
       minx, maxx, hp, mhp: hp, xpv: Math.round(13 * xpSc), dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'splitter') {
     const hp = monsterHp(30, sc, n);
-    mons.push({ type:'splitter', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1), gen: 0,
+    mons.push({ type:'splitter', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + rng() * 0.35) * (rng() < 0.5 ? -1 : 1), gen: 0,
       minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * sc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
     return;
   }
-  const elite = Math.random() < eliteCh;
+  const elite = rng() < eliteCh;
   const hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
-  mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1),
+  mons.push({ type:'slime', x: sx, y: pl.y, vx: (0.5 + rng() * 0.4) * (rng() < 0.5 ? -1 : 1),
     minx, maxx, hp, mhp: hp, xpv: Math.round(12 * xpSc * (elite ? 3 : 1)),
     dmg: Math.round(8 * sc * (elite ? 1.6 : 1)),
     w: elite ? 46 : 34, h: elite ? 30 : 22, hitT: 0, elite: elite, s: elite ? 4 : 3 });
 }
-const FLOOR_EVENT_DEFS = {
-  chest: { name:'寶箱房', color:'#ffd36a', title:'旅行者的寶箱', desc:'找到一只尚未開啟的寶箱。', choices:['開啟寶箱', '暫時離開'] },
-  shrine: { name:'祭壇房', color:'#d9a8ff', title:'古老祭壇', desc:'祭壇回應你的意志，只能接受一種祝福。', choices:['血之祝福：失去20% HP，攻擊+12%', '生命祝福：回復35% HP與50% MP'] },
-  challenge: { name:'事件房', color:'#ff8a6a', title:'封印的試煉', desc:'解除封印會喚醒三名菁英守衛。', choices:['接受試煉', '暫時離開'] }
-};
-function spawnFloorEvent(n) {
-  floorEvent = null; eventPanel = null;
-  if (n < 2 || n % 5 === 0 || Math.random() >= 0.45) return;
-  const types = ['chest', 'shrine', 'challenge'];
-  const type = types[(Math.random() * types.length) | 0];
-  floorEvent = { type: type, x: Math.round(worldW * (0.46 + Math.random() * 0.24)), y: 468, status:'idle' };
+function currentFloorEventDef() {
+  return floorEvent && DUNGEON_EVENT_DEFS[floorEvent.eventId] || null;
+}
+function floorEventState() {
+  return { player, meta, souls:soulsRun, status:floorEvent ? floorEvent.status : 'idle' };
 }
 function openFloorEvent() {
-  if (!floorEvent || floorEvent.status !== 'idle') return false;
+  if (!floorEvent) return false;
   if (Math.abs(player.x - floorEvent.x) > 54 || Math.abs(player.y - floorEvent.y) > 52) return false;
-  eventPanel = { type: floorEvent.type };
+  if (floorEvent.status !== 'idle') {
+    if (!floorEvent.feedbackFrame || frame - floorEvent.feedbackFrame > 60) {
+      const used = floorEvent.status === 'declined' ? '已拒絕，本房不再互動' : floorEvent.status === 'combat' || floorEvent.status === 'challenge' ? '事件戰鬥進行中' : '事件已完成，獎勵不會重複發放';
+      num(floorEvent.x, floorEvent.y - 92, used, floorEvent.status === 'declined' ? '#9299b9' : '#ffd36a');
+      floorEvent.feedbackFrame = frame;
+      playSfx('uiError', 0.45, 0.9);
+    }
+    keys.space = false;
+    return false;
+  }
+  eventPanel = { eventId:floorEvent.eventId };
   player.itemWin = false; keys.space = false;
   beep(620, 0.08, 'sine', 0.035);
   return true;
 }
-function spawnEventAmbush() {
+function spawnEventMimic() {
   const sc = (1 + 0.3 * (floor - 1) + 0.02 * (floor - 1) * (floor - 1)) * (floor >= 21 ? 1.15 : 1);
-  const hp = monsterHp(32, sc, floor, 2.4);
-  for (let i = 0; i < 3; i++) {
-    const x = Math.max(100, Math.min(worldW - 100, floorEvent.x + (i - 1) * 110));
-    mons.push({ type:'slime', x:x, y:468, vx:(i === 1 ? 1 : i ? -1 : 1) * 0.9,
-      minx:Math.max(20, x - 150), maxx:Math.min(worldW - 20, x + 150), hp:hp, mhp:hp,
-      xpv:Math.round(22 * (1 + 0.15 * (floor - 1))), dmg:Math.round(11 * sc), w:46, h:30,
-      hitT:0, elite:true, eventMon:true, s:4 });
+  const hp = monsterHp(52, sc, floor, 2.1);
+  const x = floorEvent.x;
+  mons.push({ type:'slime', mimic:true, x, y:468, vx:0.85, minx:Math.max(20, x - 210), maxx:Math.min(worldW - 20, x + 210),
+    hp, mhp:hp, xpv:Math.round(30 * (1 + 0.15 * (floor - 1))), dmg:Math.round(12 * sc), w:52, h:34,
+    hitT:0, elite:true, eventMon:true, s:4 });
+  portal = null;
+  burst(x, floorEvent.y - 30, '#ff8a6a', 28);
+  beep(125, 0.24, 'sawtooth', 0.06);
+}
+function floorTrialEnemyCount() {
+  return mons.filter(m => m.trialMon).length;
+}
+function spawnFloorTrialWave(count, wave) {
+  const def = currentFloorEventDef();
+  if (!def || !floorTrial || floorTrial.status !== 'active') return;
+  const sc = (1 + 0.3 * (floor - 1) + 0.02 * (floor - 1) * (floor - 1)) * (floor >= 21 ? 1.15 : 1);
+  const xpSc = 1 + 0.15 * (floor - 1);
+  const rng = dungeonRoomRng(currentRoomSpec, 'trial-wave-' + wave);
+  const pool = biomeOf(floor).pool.filter(type => type !== 'splitter');
+  for (let i = 0; i < count; i++) {
+    const before = mons.length;
+    spawnMon(pool[(rng() * pool.length) | 0] || 'slime', floor, sc, xpSc, 0, rng);
+    const m = mons[before];
+    if (!m) continue;
+    m.eventMon = true; m.trialMon = true; m.trialWave = wave;
+    const elite = def.trialType === 'elite' || (def.trialType === 'hazard' && i === count - 1) || (def.trialType === 'timed' && wave === 2 && i === count - 1);
+    if (elite) promoteDungeonElite(m);
   }
   portal = null;
-  burst(floorEvent.x, floorEvent.y - 30, '#ff6b5a', 30);
-  num(floorEvent.x, floorEvent.y - 78, '試煉開始!', '#ff8a6a');
-  beep(150, 0.22, 'sawtooth', 0.055);
+  burst(floorEvent.x, floorEvent.y - 36, def.color, 24);
+  num(floorEvent.x, floorEvent.y - 82, def.trialType === 'timed' ? '第 ' + wave + ' 波！' : '守衛現身！', def.color);
+  beep(155, 0.18, 'sawtooth', 0.05);
+}
+function reopenDungeonRoomForTrial() {
+  portal = null;
+  if (dungeonRun && dungeonRun.completedFloor === floor) dungeonRun.completedFloor = 0;
+}
+function startFloorTrial() {
+  const def = currentFloorEventDef();
+  if (!def || def.family !== 'trial') return false;
+  if (!floorTrial) floorTrial = createDungeonTrial(def, currentRoomSpec, player, worldW);
+  if (!startDungeonTrial(floorTrial, def, player)) return false;
+  reopenDungeonRoomForTrial();
+  spawnFloorTrialWave(floorTrial.waves[0], 1);
+  return true;
+}
+function declineFloorTrial() {
+  if (!floorTrial) return false;
+  const declined = declineDungeonTrial(floorTrial);
+  if (declined && typeof recordDungeonTrialResult === 'function') recordDungeonTrialResult('declined');
+  if (declined && mons.length === 0) completeDungeonRoom();
+  return declined;
+}
+function releaseFloorTrialEnemies() {
+  for (const m of mons) {
+    if (!m.trialMon) continue;
+    m.trialMon = false;
+    m.eventMon = false;
+  }
+}
+function grantFloorTrialReward() {
+  if (!claimDungeonTrialReward(floorTrial)) return false;
+  const dust = 2 + Math.floor(floor / 10);
+  meta.mats.ench += dust;
+  if (dungeonRun) dungeonRun.explorationScore += 2;
+  saveMeta();
+  dropFloorEventGear(floor >= 15 ? 3 : 2, 'event');
+  burst(floorEvent.x, floorEvent.y - 38, '#ffd36a', 36);
+  num(floorEvent.x, floorEvent.y - 88, '試煉成功！稀有裝備＋附魔塵 ×' + dust, '#ffd36a');
+  playSfx('enhanceSuccess', 0.85, 1.08);
+  return true;
+}
+function finishFloorTrial(transition) {
+  if (!floorTrial || !transition) return;
+  if (transition.action === 'success') {
+    if (typeof recordDungeonTrialResult === 'function') recordDungeonTrialResult('success');
+    if (floorEvent) floorEvent.status = 'done';
+    grantFloorTrialReward();
+  } else if (transition.action === 'failed') {
+    if (typeof recordDungeonTrialResult === 'function') recordDungeonTrialResult('failed');
+    if (floorEvent) floorEvent.status = 'done';
+    releaseFloorTrialEnemies();
+    const message = transition.reason === 'timeout' ? '時間到！轉為普通清房' : '無傷失敗！守衛仍需清除';
+    num(floorEvent.x, floorEvent.y - 84, message, '#ff8a8a');
+    playSfx('uiError', 0.8, 0.85);
+  }
+  if (mons.length === 0) completeDungeonRoom();
+}
+function updateFloorTrial(tickFrames) {
+  if (!floorTrial || floorTrial.status !== 'active') return null;
+  const transition = updateDungeonTrialState(floorTrial, {
+    tickFrames:tickFrames == null ? 1 : tickFrames,
+    remainingTrialEnemies:floorTrialEnemyCount(),
+    playerX:player.x
+  });
+  if (!transition) return null;
+  if (transition.action === 'spawn_wave') spawnFloorTrialWave(transition.count, transition.wave);
+  else finishFloorTrial(transition);
+  return transition;
+}
+function recordFloorTrialDamage(amount) {
+  const transition = recordDungeonTrialDamage(floorTrial, amount);
+  if (transition) finishFloorTrial(transition);
+}
+function dropFloorEventGear(minRarity, source) {
+  const rarity = Math.max(minRarity || 0, rollRarity(floor));
+  gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0,
+    it:genGear(floor, rarity, source || 'event'), t:1800, ground:468 });
 }
 function chooseFloorEvent(choice) {
   if (!eventPanel || !floorEvent || floorEvent.status !== 'idle') { eventPanel = null; return; }
-  const type = floorEvent.type;
-  if (choice === 1 && type !== 'shrine') { eventPanel = null; return; }
-  if (type === 'chest') {
-    floorEvent.status = 'done';
-    const rarity = Math.max(1, rollRarity(floor));
-    gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4, vx:0, it:genGear(floor, rarity, 'event'), t:1500, ground:468 });
-    meta.mats.ench += 1; saveMeta();
-    burst(floorEvent.x, floorEvent.y - 30, '#ffd36a', 24);
-    num(floorEvent.x, floorEvent.y - 76, '裝備 + 附魔塵×1', '#ffd36a');
-    playSfx('chest');
-  } else if (type === 'shrine') {
-    floorEvent.status = 'done';
-    if (choice === 0) {
-      const cost = Math.min(Math.max(0, player.hp - 1), Math.round(player.mhp * 0.2));
-      player.hp -= cost; player.eventAtk = (player.eventAtk || 0) + 0.12;
-      num(player.x, player.y - player.h - 18, '血之祝福 攻擊+12%', '#ff8a8a');
-    } else {
-      player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.35));
-      player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.5));
-      num(player.x, player.y - player.h - 18, '生命祝福', '#7dffd6');
-    }
-    burst(floorEvent.x, floorEvent.y - 42, '#d9a8ff', 28); playSfx('uiConfirm', 0.9, 1.08);
-  } else if (type === 'challenge') {
-    floorEvent.status = 'challenge'; spawnEventAmbush();
+  const def = currentFloorEventDef();
+  const options = dungeonEventOptionViews(def, currentRoomSpec, floorEventState());
+  const selected = options[choice];
+  if (!selected) return;
+  if (!selected.enabled) {
+    num(player.x, player.y - player.h - 18, selected.costType === 'souls' ? '靈魂不足' : 'HP 不足', '#ff8a8a');
+    playSfx('uiError');
+    return;
   }
+  const outcome = runDungeonEventEffect(selected.effectId, def, currentRoomSpec, floorEventState(), {
+    getSouls:() => soulsRun,
+    spendSouls:amount => { soulsRun -= amount; },
+    dropGear:dropFloorEventGear,
+    spawnMimic:spawnEventMimic,
+    startTrial:startFloorTrial,
+    declineTrial:declineFloorTrial,
+    save:saveMeta
+  });
+  if (!outcome.ok) {
+    num(player.x, player.y - player.h - 18, outcome.message, outcome.color);
+    playSfx('uiError');
+    return;
+  }
+  floorEvent.status = outcome.status;
+  burst(floorEvent.x, floorEvent.y - 42, outcome.color, outcome.status === 'declined' ? 10 : 28);
+  num(floorEvent.x, floorEvent.y - 82, outcome.message, outcome.color);
+  playSfx(outcome.status === 'done' && def.family === 'chest' ? 'chest' : 'uiConfirm', 0.9, 1.08);
   eventPanel = null;
 }
 function checkFloorEventReward() {
-  if (!floorEvent || floorEvent.status !== 'challenge' || mons.some(m => m.eventMon)) return;
+  if (floorTrial && floorTrial.status === 'active') {
+    updateFloorTrial(0);
+    return;
+  }
+  if (!floorEvent || floorEvent.status !== 'combat' || mons.some(m => m.eventMon)) return;
   floorEvent.status = 'done';
-  const dust = 2 + Math.floor(floor / 10);
-  meta.mats.ench += dust; saveMeta();
-  const rarity = floor >= 15 ? 3 : 2;
-  gearDrops.push({ x:floorEvent.x, y:floorEvent.y - 34, vy:-4.5, vx:0, it:genGear(floor, rarity, 'event'), t:1800, ground:468 });
+  dropFloorEventGear(floor >= 15 ? 3 : 2, 'event');
   burst(floorEvent.x, floorEvent.y - 38, '#ffd36a', 36);
-  num(floorEvent.x, floorEvent.y - 84, '試煉完成! 稀有裝 + 附魔塵×' + dust, '#ffd36a');
+  num(floorEvent.x, floorEvent.y - 84, '寶箱怪擊敗！稀有裝備已掉落', '#ffd36a');
   playSfx('enhanceSuccess', 0.85, 1.08);
 }
 function promoteDungeonElite(m) {
@@ -1758,29 +1876,7 @@ function genFloor(n, roomSpec) {
   const spec = roomSpec || currentRoomSpec || makeRoomSpec('safe', n, 0);
   const roomType = spec.type || 'safe';
   worldW = Math.min(1600 + n * 120, 2600);
-  plats = [{ x: 0, y: 468, w: worldW, ground: true }];
-  const rowsY = [405, 325, 250];
-  let px = 150;
-  while (px < worldW - 260) {
-    const pw = 140 + Math.random() * 120;
-    if (Math.random() < 0.82) {
-      const ri = (Math.random() * 3) | 0;
-      plats.push({ x: px, y: rowsY[ri], w: pw });
-      // 高層平台在下方補墊腳平台,確保一路跳得上去
-      let ux = px, uw = pw;
-      for (let r = ri - 1; r >= 0; r--) {
-        const near = plats.some(q => !q.ground && q.y === rowsY[r] && q.x < ux + uw + 40 && q.x + q.w > ux - 40);
-        if (!near) {
-          const sw = 90 + Math.random() * 50;
-          const dir = Math.random() < 0.5 ? -1 : 1;
-          const sx = Math.max(20, Math.min(worldW - sw - 20, dir < 0 ? ux - sw + 34 : ux + uw - 34));
-          plats.push({ x: sx, y: rowsY[r], w: sw });
-          ux = sx; uw = sw;
-        }
-      }
-    }
-    px += pw + 60 + Math.random() * 130;
-  }
+  plats = generateDungeonPlatforms(spec, worldW);
   mons = [];
   const baseCount = Math.min(6 + n * 2, 22);
   const countMul = roomType === 'camp' ? 0 : roomType === 'treasure' ? 0.4 : roomType === 'event' ? 0.6 : roomType === 'elite' ? 0.65 : 1;
@@ -1789,9 +1885,9 @@ function genFloor(n, roomSpec) {
   const xpSc = 1 + 0.15 * (n - 1);
   const eliteCh = roomType === 'safe' ? Math.min(0.05 + 0.015 * n, 0.25) : 0;
   const pool = biomeOf(n).pool;
-  for (let i = 0; i < count; i++) {
-    spawnMon(pool[(Math.random() * pool.length) | 0], n, sc, xpSc, eliteCh);
-  }
+  const enemyTypes = generateDungeonEnemyTypes(spec, pool, count);
+  const enemyRng = dungeonRoomRng(spec, 'enemy-spawns');
+  for (const type of enemyTypes) spawnMon(type, n, sc, xpSc, eliteCh, enemyRng);
   if (roomType === 'elite') {
     const candidates = mons.filter(m => m.type !== 'bat').slice(0, 2);
     while (candidates.length < Math.min(2, mons.length)) {
@@ -1801,21 +1897,26 @@ function genFloor(n, roomSpec) {
   }
   portal = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
-  floorEvent = null; eventPanel = null;
-  if (roomType === 'treasure') {
-    floorEvent = { type:'chest', x:Math.round(worldW * 0.62), y:468, status:'idle' };
-  } else if (roomType === 'event') {
-    const rng = dungeonRng(spec.seed + ':event');
-    floorEvent = { type:rng() < 0.5 ? 'shrine' : 'challenge', x:Math.round(worldW * 0.62), y:468, status:'idle' };
+  floorEvent = null; eventPanel = null; floorTrial = null;
+  if (spec.eventId && DUNGEON_EVENT_DEFS[spec.eventId]) {
+    const eventDef = DUNGEON_EVENT_DEFS[spec.eventId];
+    floorEvent = {
+      type:eventDef.worldType,
+      eventId:spec.eventId,
+      x:dungeonEventPosition(spec, worldW), y:468, status:'idle'
+    };
+    if (eventDef.family === 'trial') floorTrial = createDungeonTrial(eventDef, spec, player, worldW);
   } else if (roomType === 'camp') {
     player.hp = Math.min(player.mhp, player.hp + Math.round(player.mhp * 0.25));
     player.mp = Math.min(player.mmp, player.mp + Math.round(player.mmp * 0.25));
     num(player.x, player.y - player.h - 34, '營地休整 · HP / MP +25%', '#8aa8ff');
   }
+  spawnDungeonHazards(spec, worldW, floorEvent ? floorEvent.x : null, plats);
   floorT = 90;
   if (mons.length === 0) completeDungeonRoom();
 }
 function genBossFloor(n) {
+  clearDungeonHazards();
   worldW = 1300;
   plats = [{ x: 0, y: 468, w: worldW, ground: true }];
   plats.push({ x: 170, y: 405, w: 150 });
@@ -1831,7 +1932,7 @@ function genBossFloor(n) {
     dmg: Math.round(15 * sc * (introBoss ? 0.82 : 1)), w: 84, h: 56, hitT: 0, elite: true, s: 7
   }];
   portal = null;
-  floorEvent = null; eventPanel = null;
+  floorEvent = null; eventPanel = null; floorTrial = null;
   projs.length = 0; drops.length = 0; gearDrops.length = 0; orbs.length = 0; bolts.length = 0; espits.length = 0; meteors.length = 0; skillZones.length = 0; skillAnims.length = 0;
   floorT = 150;
 }
@@ -1864,9 +1965,9 @@ function resetRun() {
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.dashT = 0; p.dashCd = 0; p.dashDir = 1;
   p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
-  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0;
+  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0;
   p.skillCasts = {};
-  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.eventAtk = 0; p.aegisCd = 0; p.airJumped = false;
+  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.eventAtk = 0; p.eventRerolls = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;
   hitStopT = 0; shakeT = 0; shakeMaxT = 0; shakeAmp = 0; playerFlashT = 0; hurtVignetteT = 0;
   lastDamageSource = '未知攻擊';
@@ -1890,6 +1991,7 @@ function endRun(result) {
   let stashed = 0;
   for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
   lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource, result:result === 'extract' ? 'extract' : 'death' };
+  if (typeof finishDungeonBalanceRun === 'function') finishDungeonBalanceRun(lastRun);
   if (floor > bestFloor) bestFloor = floor;
   saveMeta();
   gameState = 'dead';
@@ -1927,6 +2029,7 @@ function monsterLabel(m) { return m && m.type === 'boss' ? biomeOf(floor).boss :
 function removeMon(m) {
   const i = mons.indexOf(m);
   if (i < 0) return;
+  if (m.trialMon) recordDungeonTrialEnemyDefeat(floorTrial);
   mons.splice(i, 1);
   if (mons.length === 0) { checkFloorEventReward(); completeDungeonRoom(); }
 }
@@ -2004,6 +2107,7 @@ function hitMon(m, d, crit, noChain) {
         });
       }
     }
+    if (m.trialMon) recordDungeonTrialEnemyDefeat(floorTrial);
     mons.splice(mons.indexOf(m), 1);
     checkFloorEventReward();
     beep(220, 0.15, 'sawtooth');
@@ -2112,7 +2216,23 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
+const GAME_VERSION = '0.28.7';
+const GAME_UPDATE_NOTES = [
+  {
+    version:'0.28.7', date:'2026-07-22', title:'D3 平衡紀錄與遊戲內更新紀錄',
+    items:['記錄最近 60 局的路線、房型、耗時、承傷與撤退結果。','設定新增平衡紀錄摘要，可複製完整 JSON 供測試比較。','設定新增更新紀錄頁，可直接查看最近版本內容。']
+  },
+  {
+    version:'0.28.6', date:'2026-07-22', title:'地城 D2 完整交付',
+    items:['五種群系地形與十二種事件完整接入地城路線。','1,000 組種子、手機觸控、死亡與撤退保存完成回歸。','正式頁與測試頁資源版本完成統一。']
+  },
+  {
+    version:'0.28.5', date:'2026-07-22', title:'四種試煉與房間完成狀態',
+    items:['加入菁英、限時、無傷與地形四種試煉。','成功、失敗與拒絕都能正常解除房門。','試煉獎勵改為單次發放並加入 HUD 狀態。']
+  }
+];
 let settingsOpen = false, settingsMode = null; // 'import' | 'rename' | null
+let settingsPage = 'main', settingsUpdateIndex = 0;
 const settingsBtns = [];
 let saveInput = null;
 function getSaveInput() {
@@ -2142,14 +2262,75 @@ function applySaveInput() {
   }
   closeSaveEdit();
 }
+function drawSettingsButton(x, y, w, h, label, act, color) {
+  const b = { x, y, w, h, act };
+  settingsBtns.push(b);
+  ctx.fillStyle = color || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 5);
+  return b;
+}
+function renderSettingsUpdates(mx, my, mw, mh) {
+  const note = GAME_UPDATE_NOTES[settingsUpdateIndex] || GAME_UPDATE_NOTES[0];
+  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText('v' + note.version + '　' + note.date, W / 2, my + 78);
+  ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px "Courier New",monospace';
+  ctx.fillText(note.title, W / 2, my + 108);
+  for (let i = 0; i < note.items.length; i++) {
+    const y = my + 150 + i * 62;
+    ctx.fillStyle = '#b98cff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.textAlign = 'left';
+    ctx.fillText('◆', mx + 42, y);
+    ctx.fillStyle = '#c8cdec'; ctx.font = '13px "Courier New",monospace'; ctx.textAlign = 'center';
+    wrapText(note.items[i], W / 2 + 10, y, mw - 112, 18);
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#777e9f'; ctx.font = '11px "Courier New",monospace';
+  ctx.fillText((settingsUpdateIndex + 1) + ' / ' + GAME_UPDATE_NOTES.length, W / 2, my + mh - 76);
+  if (settingsUpdateIndex < GAME_UPDATE_NOTES.length - 1) drawSettingsButton(mx + 28, my + mh - 58, 150, 38, '← 較舊版本', 'updatesOlder');
+  if (settingsUpdateIndex > 0) drawSettingsButton(mx + 188, my + mh - 58, 150, 38, '較新版本 →', 'updatesNewer');
+  drawSettingsButton(mx + mw - 188, my + mh - 58, 160, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+}
+function renderSettingsBalance(mx, my, mw, mh) {
+  const summary = typeof dungeonBalanceSummary === 'function' ? dungeonBalanceSummary() : { runs:0, extractRate:0, averageFloor:0, averageDurationSec:0, riskyChoiceRate:0, averageDamage:0, topDamage:[] };
+  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
+  ctx.fillText('最近 ' + summary.runs + ' / 60 局（只保存在此瀏覽器）', W / 2, my + 78);
+  const rows = [
+    ['平均到達', summary.runs ? summary.averageFloor.toFixed(1) + ' 層' : '尚無資料'],
+    ['平均局長', summary.runs ? Math.round(summary.averageDurationSec / 60) + ' 分鐘' : '—'],
+    ['撤退率', summary.runs ? Math.round(summary.extractRate * 100) + '%' : '—'],
+    ['高風險選擇', summary.runs ? Math.round(summary.riskyChoiceRate * 100) + '%' : '—'],
+    ['平均承傷', summary.runs ? Math.round(summary.averageDamage) : '—']
+  ];
+  for (let i = 0; i < rows.length; i++) {
+    const x = mx + 32 + (i % 2) * 258, y = my + 104 + Math.floor(i / 2) * 62;
+    ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(x, y, 244, 48);
+    ctx.strokeStyle = '#343850'; ctx.strokeRect(x, y, 244, 48);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#7f86a7'; ctx.font = '11px "Courier New",monospace'; ctx.fillText(rows[i][0], x + 12, y + 18);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(String(rows[i][1]), x + 232, y + 33);
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = '#b98cff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.fillText('主要承傷來源', mx + 32, my + 302);
+  ctx.fillStyle = '#aeb4d0'; ctx.font = '11px "Courier New",monospace';
+  const damageText = summary.topDamage.length ? summary.topDamage.map(([name, value]) => name + ' ' + Math.round(value)).join('　·　') : '完成地城後會顯示排行';
+  ctx.fillText(damageText, mx + 32, my + 324);
+  if (menuMsg) {
+    ctx.textAlign = 'center'; ctx.fillStyle = menuMsg.color; ctx.font = 'bold 12px "Courier New",monospace';
+    ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
+    if (--menuMsg.t <= 0) menuMsg = null;
+  }
+  drawSettingsButton(mx + 28, my + mh - 58, 250, 38, '複製完整測試紀錄', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + mw - 268, my + mh - 58, 240, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+}
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 560, mh = 420, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 580, mh = 470, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace'; ctx.fillText('設 定', W / 2, my + 38);
+  ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace';
+  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 紀 錄' : '設 定', W / 2, my + 38);
+  if (settingsPage === 'updates') { renderSettingsUpdates(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
+  if (settingsPage === 'balance') { renderSettingsBalance(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
   ctx.fillStyle = audioSettings.muted ? '#ff8a8a' : '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
@@ -2169,7 +2350,9 @@ function renderSettings() {
   mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
   mk(bx2, byy, '匯入存檔', 'import');
   mk(bx1, byy + 52, '改名', 'rename');
-  mk(bx2, byy + 52, '關閉', 'close', 'rgba(226,59,59,0.2)');
+  mk(bx2, byy + 52, '更新紀錄 v' + GAME_VERSION, 'updates', 'rgba(185,140,255,0.16)');
+  mk(bx1, byy + 104, 'D3 平衡紀錄', 'balance', 'rgba(125,255,214,0.12)');
+  mk(bx2, byy + 104, '關閉', 'close', 'rgba(226,59,59,0.2)');
   if (settingsMode) { ctx.fillStyle = '#ffe680'; ctx.font = '12px "Courier New",monospace'; ctx.fillText('（下方輸入框輸入後按 Enter,Esc 取消）', W / 2, my + mh - 12); }
   if (menuMsg) { ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(menuMsg.text, W / 2, my + mh + 22); if (--menuMsg.t <= 0) menuMsg = null; }
   ctx.textAlign = 'left';
@@ -2237,7 +2420,13 @@ window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
   setGameKey(e.key, true);
   const k = e.key.toLowerCase();
-  if (settingsOpen) { if (k === 'escape' && !settingsMode) { settingsOpen = false; closeSaveEdit(); clearGameInputs(); } return; }
+  if (settingsOpen) {
+    if (k === 'escape' && !settingsMode) {
+      if (settingsPage !== 'main') settingsPage = 'main';
+      else { settingsOpen = false; closeSaveEdit(); clearGameInputs(); }
+    }
+    return;
+  }
   if (statsOpen) { if (k === 'p' || k === 'escape') { statsOpen = false; clearGameInputs(); } return; }
   if (handleDungeonPanelKey(k)) return;
   if (gameState === 'town') {
@@ -2265,12 +2454,13 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (gameState === 'pick') {
+    if (k === 'r') { rerollPickFromEvent(); return; }
     const n = parseInt(k, 10);
     if (n >= 1 && n <= 3) applyCard(pickOpts[n - 1]);
     return;
   }
   if (eventPanel) {
-    if (k === '1' || k === '2') chooseFloorEvent(parseInt(k, 10) - 1);
+    if (k === '1' || k === '2' || k === '3') chooseFloorEvent(parseInt(k, 10) - 1);
     else if (k === 'escape') eventPanel = null;
     return;
   }
@@ -2312,6 +2502,17 @@ function handleTap(mx, my) {
       }
       if (b.act === 'import') { startSaveEdit('import'); return; }
       if (b.act === 'rename') { startSaveEdit('rename'); return; }
+      if (b.act === 'updates') { settingsPage = 'updates'; settingsUpdateIndex = 0; playSfx('uiSelect'); return; }
+      if (b.act === 'updatesOlder') { settingsUpdateIndex = Math.min(GAME_UPDATE_NOTES.length - 1, settingsUpdateIndex + 1); playSfx('uiSelect'); return; }
+      if (b.act === 'updatesNewer') { settingsUpdateIndex = Math.max(0, settingsUpdateIndex - 1); playSfx('uiSelect'); return; }
+      if (b.act === 'balance') { settingsPage = 'balance'; playSfx('uiSelect'); return; }
+      if (b.act === 'settingsBack') { settingsPage = 'main'; playSfx('uiSelect'); return; }
+      if (b.act === 'copyBalance') {
+        const records = typeof exportDungeonBalanceRecords === 'function' ? exportDungeonBalanceRecords() : '{}';
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(records).then(() => { menuMsg = { text:'測試紀錄已複製', color:'#7dffd6', t:180 }; }).catch(() => { menuMsg = { text:'複製失敗', color:'#ff5a5a', t:180 }; });
+        else menuMsg = { text:'此環境不支援自動複製', color:'#ff5a5a', t:180 };
+        return;
+      }
       if (b.act === 'volDown') { changeSfxVolume(-0.1); return; }
       if (b.act === 'volUp') { changeSfxVolume(0.1); return; }
       if (b.act === 'mute') { toggleSfxMute(); return; }
@@ -2322,7 +2523,7 @@ function handleTap(mx, my) {
       if (b.act === 'flashes') { combatSettings.flashes = !combatSettings.flashes; saveCombatSettings(); playSfx('uiSelect'); return; }
       if (b.act === 'numbers') { combatSettings.numbers = combatSettings.numbers === 'full' ? 'compact' : 'full'; saveCombatSettings(); playSfx('uiSelect'); return; }
       if (b.act === 'haptics') { combatSettings.haptics = !combatSettings.haptics; saveCombatSettings(); if (combatSettings.haptics) combatVibrate(15); playSfx('uiSelect'); return; }
-      if (b.act === 'close') { settingsOpen = false; closeSaveEdit(); clearGameInputs(); return; }
+      if (b.act === 'close') { settingsOpen = false; settingsPage = 'main'; closeSaveEdit(); clearGameInputs(); return; }
     }
     return; // 設定視窗吃掉所有點擊
   }
@@ -2405,6 +2606,7 @@ function handleTap(mx, my) {
   }
   if (gameState === 'dead') { gameState = 'town'; setHint(HINT_TOWN); fromTown = false; return; }
   if (gameState === 'pick') {
+    if (pickRerollBtn && inside(pickRerollBtn)) { rerollPickFromEvent(); return; }
     for (const b of pickBtns) if (inside(b)) { applyCard(b.c); return; }
     return;
   }
@@ -2535,6 +2737,7 @@ function update() {
     if (p.rageT === 0) { p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false; }
   }
   if (p.chillT > 0) p.chillT--;
+  if (p.hazardSlowT > 0) p.hazardSlowT--;
   if (p.shieldT > 0) {
     p.shieldT--;
     if (p.shieldT === 0) { p.shieldHp = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; }
@@ -2552,6 +2755,7 @@ function update() {
   if (p.slashT > 0) p.slashT--;
   if (p.spinT > 0) p.spinT--;
   if (floorT > 0) floorT--;
+  updateFloorTrial(1);
 
   if (keys['space'] && openFloorEvent()) { inputBuffer.jump = 0; return; }
 
@@ -2572,14 +2776,14 @@ function update() {
   if (p.dashT > 0) {
     p.vx = p.dashDir * DASH_SPEED;
     if (p.dashT % 2 === 0) parts.push({ x:p.x - p.dashDir * 10, y:p.y - 22, vx:-p.dashDir * 0.8, vy:-0.25, t:12, color:'#bdefff' });
-  } else p.vx = mv * moveSpd();
+  } else p.vx = dungeonHazardMoveVelocity(p, mv, moveSpd());
   if (p.onGround) coyoteT = 6;
   else if (coyoteT > 0) coyoteT--;
   if (inputBuffer.jump > 0) {
     if (p.onGround || coyoteT > 0) {
       p.airJumped = false;
       if (p.onGround && keys['arrowdown']) {
-        const cur = plats.find(q => !q.ground && Math.abs(p.y - q.y) < 2 && p.x > q.x - 5 && p.x < q.x + q.w + 5);
+        const cur = plats.find(q => !q.ground && !q.voidDisabled && Math.abs(p.y - q.y) < 2 && p.x > q.x - 5 && p.x < q.x + q.w + 5);
         if (cur) { p.dropT = 18; p.onGround = false; p.vy = 2; }
         else { p.vy = -jumpV(); p.onGround = false; beep(300, 0.06, 'triangle', 0.02); }
       } else { p.vy = -jumpV(); p.onGround = false; beep(300, 0.06, 'triangle', 0.02); }
@@ -2599,6 +2803,7 @@ function update() {
   p.onGround = false;
   if (p.vy >= 0) {
     for (const q of plats) {
+      if (q.voidDisabled) continue;
       if (oldY <= q.y + 0.01 && p.y >= q.y && p.x > q.x - 6 && p.x < q.x + q.w + 6) {
         if (!q.ground && p.dropT > 0) continue;
         p.y = q.y; p.vy = 0; p.onGround = true; p.airJumped = false;
@@ -2607,6 +2812,8 @@ function update() {
     }
   }
   if (p.y > 600) { p.y = 468; p.vy = 0; p.onGround = true; p.airJumped = false; }
+
+  if (updateDungeonHazards()) return;
 
   // portal
   if (portal && Math.abs(p.x - portal.x) < 26 && p.y > 440) {
@@ -2949,7 +3156,8 @@ function update() {
 let camX = 0;
 function drawFloorEventWorld() {
   if (!floorEvent) return;
-  const e = floorEvent, d = FLOOR_EVENT_DEFS[e.type], x = e.x, y = e.y;
+  const e = floorEvent, d = currentFloorEventDef(), x = e.x, y = e.y;
+  if (!d) return;
   ctx.save();
   ctx.globalAlpha = e.status === 'done' ? 0.45 : 1;
   const bob = Math.sin(frame * 0.08) * 2;
@@ -2969,35 +3177,42 @@ function drawFloorEventWorld() {
     ctx.fillStyle = '#ff8a6a'; ctx.fillRect(x - 3, y - 44, 6, 12);
   }
   ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.font = 'bold 12px ' + STAT_FONT;
-  ctx.fillStyle = e.status === 'done' ? '#777' : d.color;
+  ctx.fillStyle = ['done', 'declined'].includes(e.status) ? '#777' : d.color;
   const near = Math.abs(player.x - e.x) <= 72 && Math.abs(player.y - e.y) <= 60;
-  const label = e.status === 'done' ? '已使用' : e.status === 'challenge' ? '試煉進行中' : near ? '[Space] 互動' : d.name;
+  const label = e.status === 'done' ? '已使用' : e.status === 'declined' ? '已拒絕' : ['challenge', 'combat'].includes(e.status) ? '事件戰鬥進行中' : near ? '[Space] 互動' : d.name;
   ctx.fillText(label, x, y - 84);
   ctx.restore();
 }
 function drawEventPanel() {
   if (!eventPanel || !floorEvent) return;
-  const d = FLOOR_EVENT_DEFS[eventPanel.type];
+  const d = DUNGEON_EVENT_DEFS[eventPanel.eventId];
+  if (!d) return;
+  const options = dungeonEventOptionViews(d, currentRoomSpec, floorEventState());
   eventChoiceBtns.length = 0;
   ctx.fillStyle = 'rgba(5,6,16,0.76)'; ctx.fillRect(0, 0, W, H);
-  const x = 190, y = 112, w = 580, h = 306;
+  const x = 140, y = 66, w = 680, h = 420;
   ctx.fillStyle = 'rgba(24,25,46,0.99)'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = d.color; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
   ctx.textAlign = 'center'; ctx.fillStyle = d.color; ctx.font = 'bold 25px ' + STAT_FONT;
-  ctx.fillText(d.title, W / 2, y + 44);
+  ctx.fillText(d.name, W / 2, y + 42);
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px ' + STAT_FONT;
-  ctx.fillText(d.desc, W / 2, y + 78);
-  const note = eventPanel.type === 'chest' ? '獎勵：精良以上裝備＋附魔塵' : eventPanel.type === 'challenge' ? '完成獎勵：稀有以上裝備＋附魔塵' : '祝福效果持續至本次冒險結束';
-  ctx.fillStyle = '#9299b9'; ctx.font = '12px ' + STAT_FONT; ctx.fillText(note, W / 2, y + 105);
-  for (let i = 0; i < 2; i++) {
-    const b = { x:x + 55, y:y + 128 + i * 62, w:w - 110, h:46, choice:i };
+  ctx.fillText(d.desc, W / 2, y + 72);
+  ctx.fillStyle = '#9299b9'; ctx.font = '12px ' + STAT_FONT;
+  wrapText(d.note, W / 2, y + 98, w - 90, 16);
+  const optionY = y + 130;
+  const optionGap = options.length === 3 ? 72 : 82;
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i];
+    const b = { x:x + 50, y:optionY + i * optionGap, w:w - 100, h:58, choice:i };
     eventChoiceBtns.push(b);
-    ctx.fillStyle = i === 0 ? 'rgba(176,90,224,0.25)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = i === 0 ? d.color : '#4a4d66'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px ' + STAT_FONT;
-    ctx.fillText('[' + (i + 1) + '] ' + d.choices[i], W / 2, b.y + 29);
+    ctx.fillStyle = !option.enabled ? 'rgba(255,90,90,0.08)' : i === 0 ? 'rgba(176,90,224,0.22)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = !option.enabled ? '#8a4a55' : i === 0 ? d.color : '#4a4d66'; ctx.lineWidth = 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = option.enabled ? '#fff' : '#aa7a82'; ctx.font = 'bold 14px ' + STAT_FONT;
+    ctx.fillText('[' + (i + 1) + '] ' + option.label + (option.enabled ? '' : '（條件不足）'), W / 2, b.y + 22);
+    ctx.fillStyle = option.enabled ? '#aeb4d0' : '#936b73'; ctx.font = '11px ' + STAT_FONT;
+    ctx.fillText(option.detail, W / 2, b.y + 43);
   }
-  ctx.fillStyle = '#737a9a'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('按 1 / 2 選擇　·　Esc 關閉', W / 2, y + h - 18);
+  ctx.fillStyle = '#737a9a'; ctx.font = '11px ' + STAT_FONT; ctx.fillText('按 1～' + options.length + ' 選擇　·　Esc 關閉', W / 2, y + h - 18);
   ctx.textAlign = 'left';
 }
 function render() {
@@ -3031,6 +3246,7 @@ function render() {
 
   // platforms(群系配色)
   for (const q of plats) {
+    if (q.voidDisabled) continue;
     const hgt = q.ground ? H - q.y : 14;
     ctx.fillStyle = bi.ground; ctx.fillRect(q.x, q.y, q.w, hgt);
     ctx.fillStyle = bi.grass; ctx.fillRect(q.x, q.y, q.w, 6);
@@ -3038,6 +3254,7 @@ function render() {
     for (let x = q.x; x < q.x + q.w; x += 18) ctx.fillRect(x + 6, q.y + 4, 6, 3);
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(q.x, q.y + 6, q.w, 3);
   }
+  drawDungeonHazards();
   drawDungeonRoomWorld();
   drawFloorEventWorld();
   // Lv3/Lv5 技能區域特效（燃燒地面、餘震、龍捲與二次衝擊）
@@ -3124,9 +3341,19 @@ function render() {
   }
   // monsters
   for (const m of mons) {
-    const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
-    const rc = m.type === 'boss' ? { e: bi.bcol, f: bi.bcol2 } : null;
-    drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
+    if (m.mimic) {
+      const mx = m.x, my = m.y, bite = 4 + Math.abs(Math.sin(frame * 0.18)) * 5;
+      ctx.fillStyle = m.hitT > 0 ? '#fff' : '#6b3f20'; ctx.fillRect(mx - 27, my - 28, 54, 28);
+      ctx.fillStyle = m.hitT > 0 ? '#fff' : '#b96b2f'; ctx.fillRect(mx - 29, my - 43 - bite, 58, 16);
+      ctx.fillStyle = '#ffd36a'; ctx.fillRect(mx - 5, my - 25, 10, 14); ctx.fillRect(mx - 22, my - 39 - bite, 44, 3);
+      ctx.fillStyle = '#f5ede0';
+      for (let tx = -20; tx <= 16; tx += 9) { ctx.fillRect(mx + tx, my - 29 - bite, 5, 6); ctx.fillRect(mx + tx + 4, my - 34, 5, 6); }
+      ctx.fillStyle = '#ff5a5a'; ctx.fillRect(mx - 16, my - 38 - bite, 5, 5); ctx.fillRect(mx + 11, my - 38 - bite, 5, 5);
+    } else {
+      const rows = MON_SPRITE[m.type] || (m.elite ? ESLIME : SLIME);
+      const rc = m.type === 'boss' ? { e: bi.bcol, f: bi.bcol2 } : null;
+      drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
+    }
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
       ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
       ctx.fillText('!', m.x, m.y - m.h - 18);
@@ -3274,6 +3501,8 @@ function render() {
   ctx.fillStyle = '#c8cdec';
   ctx.fillText(portal ? '前往傳送門 →' : '殘存 ' + mons.length, 244, 20);
   drawDungeonHud();
+  drawDungeonTrialHud();
+  drawDungeonHazardTutorial();
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
     bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, biomeOf(floor).bcol, biomeOf(floor).boss + '  第' + bossM.phase + '階段');
@@ -3348,7 +3577,7 @@ function render() {
     ctx.fillText('第 ' + floor + ' 層' + (floor % 5 === 0 ? '  ⚠ BOSS' : ''), W / 2, 180);
     ctx.font = 'bold 22px "Courier New",monospace';
     ctx.fillStyle = '#ffe680';
-    ctx.fillText('— ' + biomeOf(floor).name + (floorEvent ? ' · ' + FLOOR_EVENT_DEFS[floorEvent.type].name : '') + ' —', W / 2, 214);
+    ctx.fillText('— ' + biomeOf(floor).name + (floorEvent && currentFloorEventDef() ? ' · ' + currentFloorEventDef().name : '') + ' —', W / 2, 214);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
   }
@@ -3584,6 +3813,7 @@ function wrapText(text, cx, y, maxW, lh) {
 function drawPick() {
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
   pickBtns.length = 0;
+  pickRerollBtn = null;
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe680'; ctx.font = 'bold 26px "Courier New",monospace';
   ctx.fillText('LEVEL UP!  選擇一項強化', W / 2, 130);
@@ -3608,6 +3838,13 @@ function drawPick() {
     ctx.fillText(lvNow > 0 ? ('Lv.' + lvNow + ' → ' + (lvNow + 1) + ' / ' + CARD_MAXLV + (lvNow + 1 >= CARD_MAXLV ? '  滿級!' : '')) : ('取得 → Lv.1 / ' + CARD_MAXLV), cx + cw / 2, cy + 138);
     ctx.fillStyle = '#ffe680'; ctx.font = 'bold 14px "Courier New",monospace';
     ctx.fillText('[' + (i + 1) + '] 或點擊', cx + cw / 2, cy + ch - 20);
+  }
+  if (player.eventRerolls > 0) {
+    pickRerollBtn = { x:W / 2 - 130, y:382, w:260, h:42 };
+    ctx.fillStyle = 'rgba(255,211,106,0.16)'; ctx.fillRect(pickRerollBtn.x, pickRerollBtn.y, pickRerollBtn.w, pickRerollBtn.h);
+    ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 2; ctx.strokeRect(pickRerollBtn.x, pickRerollBtn.y, pickRerollBtn.w, pickRerollBtn.h);
+    ctx.fillStyle = '#ffd36a'; ctx.font = 'bold 13px ' + STAT_FONT;
+    ctx.fillText('[R] 命運重抽　剩餘 ' + player.eventRerolls + ' 次', W / 2, pickRerollBtn.y + 26);
   }
   ctx.textAlign = 'left';
 }
@@ -3662,7 +3899,7 @@ function sendChat(text) {
   beep(700, 0.05, 'sine', 0.03);
 }
 function openTownPanel(panel) {
-  if (panel === 'save') { settingsOpen = true; settingsMode = null; clearGameInputs(); beep(600, 0.08, 'sine', 0.04); return; }
+  if (panel === 'save') { settingsOpen = true; settingsMode = null; settingsPage = 'main'; settingsUpdateIndex = 0; clearGameInputs(); beep(600, 0.08, 'sine', 0.04); return; }
   gameState = 'select'; menuTab = panel; fromTown = true;
   beep(600, 0.08, 'sine', 0.04);
 }

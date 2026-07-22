@@ -1,4 +1,163 @@
-// ---------- dungeon room data (v0.26 D1) ----------
+// ---------- dungeon room data (v0.26 D2-A) ----------
+const DUNGEON_D2_FLAGS = {
+  // 只有標記 implemented 的地形會進入正式路線池。
+  hazards:true
+};
+
+const DUNGEON_BIOME_DEFS = [
+  { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },
+  { id:'cavern', name:'幽暗洞窟', hazardId:'falling_rocks', enemyTag:'蝙蝠、孢子怪', bossName:'洞窟領主' },
+  { id:'volcano', name:'熾熱熔岩', hazardId:'lava_vents', enemyTag:'爆裂怪、衝鋒獸', bossName:'熔岩魔王' },
+  { id:'tundra', name:'冰霜凍原', hazardId:'ice_floor', enemyTag:'冰霜怪、分裂怪', bossName:'冰霜領主' },
+  { id:'void', name:'虛空深淵', hazardId:'void_platforms', enemyTag:'深淵混合怪群', bossName:'深淵魔王' }
+];
+
+const DUNGEON_HAZARD_DEFS = {
+  thorn_roots: {
+    id:'thorn_roots', biomeId:'meadow', name:'荊棘根鬚', previewTag:'荊棘根鬚', implemented:true,
+    tutorial:'地面出現土痕時，跳躍或衝刺離開。', warningFrames:45, activeFrames:18, cooldownFrames:150,
+    maxPerRoom:3, damagePct:0.06, minDamage:6, slowFrames:60, rewards:['靈魂加成', '強化石']
+  },
+  falling_rocks: {
+    id:'falling_rocks', biomeId:'cavern', name:'落石區', previewTag:'落石區', implemented:true,
+    tutorial:'留意落點框與頭頂碎屑，落石前離開框線。', warningFrames:60, activeFrames:32, cooldownFrames:135,
+    maxPerRoom:3, damagePct:0.08, minDamage:8, rewards:['靈魂加成', '強化石']
+  },
+  lava_vents: {
+    id:'lava_vents', biomeId:'volcano', name:'熔岩噴口', previewTag:'熔岩噴口', implemented:true,
+    tutorial:'噴口發亮時先停步，熄火後再通過。', warningFrames:45, activeFrames:30, cooldownFrames:105,
+    maxPerRoom:3, damagePct:0.08, minDamage:8, rewards:['靈魂加成', '強化石']
+  },
+  ice_floor: {
+    id:'ice_floor', biomeId:'tundra', name:'冰面', previewTag:'冰面', implemented:true,
+    tutorial:'冰面會保留滑行慣性；反方向可煞車，衝刺仍可修正。', maxPerRoom:3,
+    acceleration:0.22, coast:0.985, rewards:['靈魂加成', '強化石']
+  },
+  void_platforms: {
+    id:'void_platforms', biomeId:'void', name:'虛空平台', previewTag:'虛空平台', implemented:true,
+    tutorial:'平台閃爍兩次後會消失；地面永遠保留穩定路線。', warningFrames:60, activeFrames:90, cooldownFrames:120,
+    maxPerRoom:2, rewards:['靈魂加成', '強化石']
+  }
+};
+
+// D2-D：事件定義只描述預覽、章節限制、選項與 effectId；實際效果集中在 dungeon-events.js。
+const DUNGEON_EVENT_DEFS = {
+  traveler_chest: {
+    id:'traveler_chest', family:'chest', name:'旅行者寶箱', previewTag:'旅行者寶箱',
+    worldType:'chest', minChapter:1, weight:4, threat:1, color:'#ffd36a',
+    desc:'旅行者留下的補給，鎖扣仍完好。', note:'開啟後獲得精良以上裝備與附魔塵 ×1。', rewards:['精良裝備', '附魔塵'],
+    choices:[
+      { label:'開啟寶箱', detail:'獲得精良以上裝備＋附魔塵 ×1', effectId:'traveler_reward' },
+      { label:'暫時離開', detail:'不消耗任何資源，也不影響探索評價', effectId:'decline' }
+    ]
+  },
+  mimic_chest: {
+    id:'mimic_chest', family:'chest', name:'寶箱怪', previewTag:'寶箱怪',
+    worldType:'chest', minChapter:2, weight:2, threat:2, color:'#ff8a6a',
+    desc:'箱蓋縫隙傳出低沉呼吸聲。', note:'接受戰鬥後擊敗寶箱怪，保證獲得稀有裝備。', rewards:['稀有裝備', '事件戰鬥'],
+    choices:[
+      { label:'喚醒寶箱怪', detail:'立即進入戰鬥；勝利保證稀有裝備', effectId:'mimic_fight' },
+      { label:'保持距離', detail:'安全離開，不影響清房與探索評價', effectId:'decline' }
+    ]
+  },
+  supply_crate: {
+    id:'supply_crate', family:'chest', name:'補給箱', previewTag:'補給三選一',
+    worldType:'chest', minChapter:1, weight:4, threat:1, color:'#7dffd6',
+    desc:'箱內三格補給仍可使用，只能取走一格。', note:'三選一；選擇後立刻加入背包或掉落裝備。', rewards:['藥水', '隨機裝備'],
+    choices:[
+      { label:'紅色藥水', detail:'紅色藥水 ×1，加入背包', effectId:'supply_hp' },
+      { label:'藍色藥水', detail:'藍色藥水 ×1，加入背包', effectId:'supply_mp' },
+      { label:'隨機裝備', detail:'掉落一件與目前樓層相符的裝備', effectId:'supply_gear' }
+    ]
+  },
+  sealed_chest: {
+    id:'sealed_chest', family:'chest', name:'封印寶箱', previewTag:'封印寶箱',
+    worldType:'chest', minChapter:2, weight:2, threat:1, color:'#d9a8ff',
+    soulCostBase:12, soulCostPerChapter:4,
+    desc:'靈魂封印正等待等價的供品。', note:'支付顯示的靈魂後，獲得稀有以上裝備。', rewards:['高品質裝備', '靈魂成本'],
+    choices:[
+      { label:'支付靈魂並解封', detail:'支付靈魂；獲得稀有以上裝備', effectId:'sealed_reward', costType:'souls' },
+      { label:'拒絕交易', detail:'保留靈魂，不影響清房與探索評價', effectId:'decline' }
+    ]
+  },
+  blood_blessing: {
+    id:'blood_blessing', family:'shrine', name:'血之祝福', previewTag:'血之祝福',
+    worldType:'shrine', minChapter:2, weight:3, threat:2, color:'#ff8a8a',
+    desc:'祭壇要求鮮血，並承諾整場冒險的力量。', note:'必須保有足夠 HP；祝福持續至本次冒險結束。', rewards:['攻擊 +12%', 'HP 成本'],
+    choices:[
+      { label:'獻上鮮血', detail:'失去 20% 最大 HP；本局攻擊永久 +12%', effectId:'blood_blessing', costType:'max_hp' },
+      { label:'拒絕祝福', detail:'不失去 HP，也不影響探索評價', effectId:'decline' }
+    ]
+  },
+  life_spring: {
+    id:'life_spring', family:'shrine', name:'生命泉源', previewTag:'生命泉源',
+    worldType:'shrine', minChapter:1, weight:4, threat:1, color:'#7dffd6',
+    desc:'清澈泉水散發溫暖生命力。', note:'飲用後回復 35% 最大 HP 與 50% 最大 MP。', rewards:['HP 回復', 'MP 回復'],
+    choices:[
+      { label:'飲用泉水', detail:'回復 35% 最大 HP＋50% 最大 MP', effectId:'life_spring' },
+      { label:'保留泉水', detail:'不消耗泉水以外的資源；本房不再使用', effectId:'decline' }
+    ]
+  },
+  arcane_spring: {
+    id:'arcane_spring', family:'shrine', name:'奧術泉源', previewTag:'奧術泉源',
+    worldType:'shrine', minChapter:2, weight:3, threat:1, color:'#8aa8ff',
+    desc:'泉面映出三個技能符印，魔力正在回流。', note:'回滿 MP，三個技能的剩餘冷卻各減少 25%。', rewards:['MP 全滿', '冷卻縮減'],
+    choices:[
+      { label:'引導奧術', detail:'MP 回滿；三技能剩餘冷卻各減少 25%', effectId:'arcane_spring' },
+      { label:'離開泉源', detail:'保留現況，不影響探索評價', effectId:'decline' }
+    ]
+  },
+  fate_altar: {
+    id:'fate_altar', family:'shrine', name:'命運祭壇', previewTag:'命運重抽',
+    worldType:'shrine', minChapter:2, weight:2, threat:1, color:'#ffd36a',
+    desc:'三枚命運硬幣懸浮於祭壇上方。', note:'下一次升級選卡可額外重抽一次；可累積。', rewards:['升級重抽', '無成本'],
+    choices:[
+      { label:'接受命運硬幣', detail:'下一次升級選卡獲得額外重抽 ×1', effectId:'fate_altar' },
+      { label:'維持原命運', detail:'不取得重抽，也不影響探索評價', effectId:'decline' }
+    ]
+  },
+  elite_ambush: {
+    id:'elite_ambush', family:'trial', name:'菁英伏擊', previewTag:'菁英伏擊',
+    worldType:'challenge', minChapter:1, weight:3, threat:3, color:'#ff8a6a',
+    trialType:'elite', targetCount:3,
+    desc:'解除封印會喚醒三名菁英守衛。', note:'成功：稀有裝備＋附魔塵；拒絕：安全離開，不影響清房。', rewards:['稀有裝備', '附魔塵'],
+    choices:[
+      { label:'接受試煉', detail:'擊敗 3 名事件菁英；成功取得稀有裝備＋附魔塵', effectId:'start_trial' },
+      { label:'暫時離開', detail:'不影響清房與探索評價', effectId:'decline' }
+    ]
+  },
+  timed_clear: {
+    id:'timed_clear', family:'trial', name:'限時殲滅', previewTag:'35 秒殲滅',
+    worldType:'challenge', minChapter:2, weight:2, threat:3, color:'#ffb45e',
+    trialType:'timed', durationFrames:2100, waves:[3, 4], targetCount:7,
+    desc:'封印會連續喚醒兩波守衛。', note:'35 秒內清除兩波可得額外獎勵；逾時後守衛保留，但只算普通清房。', rewards:['稀有裝備', '限時材料'],
+    choices:[
+      { label:'開始計時', detail:'35 秒內清除 2 波共 7 名守衛；逾時失去額外獎勵', effectId:'start_trial' },
+      { label:'拒絕試煉', detail:'不啟動波次，不影響清房與探索評價', effectId:'decline' }
+    ]
+  },
+  flawless_wave: {
+    id:'flawless_wave', family:'trial', name:'無傷試煉', previewTag:'無傷一波',
+    worldType:'challenge', minChapter:2, weight:2, threat:3, color:'#8aa8ff',
+    trialType:'flawless', targetCount:4,
+    desc:'四名守衛將同時現身，護盾吸收不算受傷。', note:'生命值一旦實際降低即失敗；守衛仍需清除，既有物品不會被扣除。', rewards:['稀有裝備', '無傷材料'],
+    choices:[
+      { label:'接受無傷試煉', detail:'無傷擊敗 4 名守衛；受傷後轉為普通清房', effectId:'start_trial' },
+      { label:'拒絕試煉', detail:'不召喚守衛，不影響清房與探索評價', effectId:'decline' }
+    ]
+  },
+  hazard_trial: {
+    id:'hazard_trial', family:'trial', name:'地形試煉', previewTag:'地形＋守衛',
+    worldType:'challenge', minChapter:2, weight:2, threat:3, color:'#ffb45e',
+    trialType:'hazard', targetCount:3,
+    desc:'穿越目前群系的危險地形，並擊敗三名守衛。', note:'成功條件：抵達出口檢查線＋清除守衛；失敗或拒絕都不會卡住出口。', rewards:['稀有裝備', '附魔塵'],
+    choices:[
+      { label:'接受地形試煉', detail:'通過群系地形並擊敗 3 名守衛；成功取得額外獎勵', effectId:'start_trial' },
+      { label:'拒絕試煉', detail:'不召喚守衛；仍可正常清房離開', effectId:'decline' }
+    ]
+  }
+};
+
 const DUNGEON_ROOM_DEFS = {
   safe: {
     name:'安全戰鬥', short:'戰鬥', threat:1, score:1, color:'#7dffd6', icon:'⚔',
@@ -20,6 +179,10 @@ const DUNGEON_ROOM_DEFS = {
     name:'休整營地', short:'營地', threat:0, score:0, color:'#8aa8ff', icon:'✚',
     desc:'沒有敵人，立即回復 25% HP 與 MP。', rewards:['回復']
   },
+  hazard: {
+    name:'群系險境', short:'險境', threat:2, score:2, color:'#ffb45e', icon:'▲',
+    desc:'標準怪群加上可預警的群系專屬地形。', rewards:['靈魂加成', '材料']
+  },
   boss: {
     name:'首領房', short:'BOSS', threat:3, score:0, color:'#ff6b6b', icon:'☠',
     desc:'章節最終首領，擊敗後可撤退或繼續深入。', rewards:['Boss 裝備', '章節寶箱']
@@ -31,5 +194,6 @@ const DUNGEON_ROUTE_WEIGHTS = {
   elite:3,
   treasure:2,
   event:2,
-  camp:1
+  camp:1,
+  hazard:2
 };

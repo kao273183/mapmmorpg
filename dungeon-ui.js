@@ -1,4 +1,4 @@
-// ---------- dungeon route UI (v0.26 D1) ----------
+// ---------- dungeon route UI (v0.26 D2-A) ----------
 const routeChoiceBtns = [];
 const chapterChoiceBtns = [];
 
@@ -62,6 +62,24 @@ function drawDungeonHud() {
   ctx.textAlign = 'left';
 }
 
+function drawDungeonTrialHud() {
+  if (typeof floorTrial === 'undefined' || !floorTrial || floorTrial.status !== 'active') return;
+  const def = DUNGEON_EVENT_DEFS[floorTrial.eventId];
+  if (!def) return;
+  const x = W / 2 - 190, y = 34, w = 380, h = 34;
+  let detail = '擊敗守衛 ' + floorTrial.defeatedCount + ' / ' + floorTrial.targetCount;
+  if (floorTrial.type === 'timed') detail = '剩餘 ' + dungeonTrialSeconds(floorTrial) + ' 秒　·　第 ' + floorTrial.wave + ' / ' + floorTrial.waves.length + ' 波　·　' + floorTrial.defeatedCount + ' / ' + floorTrial.targetCount;
+  else if (floorTrial.type === 'flawless') detail = '保持無傷　·　守衛 ' + floorTrial.defeatedCount + ' / ' + floorTrial.targetCount;
+  else if (floorTrial.type === 'hazard') detail = '守衛 ' + floorTrial.defeatedCount + ' / ' + floorTrial.targetCount + '　·　通過地形 ' + (floorTrial.crossed ? '✓' : '…');
+  ctx.fillStyle = 'rgba(18,19,38,0.9)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = def.color; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillStyle = def.color;
+  ctx.fillText(def.name, x + 10, y + 21);
+  ctx.textAlign = 'right'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillStyle = '#f2f3ff';
+  ctx.fillText(detail, x + w - 10, y + 21);
+  ctx.textAlign = 'left';
+}
+
 function drawRoutePanel() {
   if (!routePanel) return;
   routeChoiceBtns.length = 0;
@@ -74,21 +92,33 @@ function drawRoutePanel() {
 
   for (let i = 0; i < routePanel.choices.length; i++) {
     const spec = routePanel.choices[i], def = DUNGEON_ROOM_DEFS[spec.type];
+    const eventDef = spec.eventId ? DUNGEON_EVENT_DEFS[spec.eventId] : null;
+    const hazardDef = spec.hazardId ? DUNGEON_HAZARD_DEFS[spec.hazardId] : null;
     const b = { x:110 + i * 380, y:142, w:360, h:270, index:i };
     routeChoiceBtns.push(b);
     ctx.fillStyle = 'rgba(24,25,46,0.98)'; ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.strokeStyle = def.color; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = def.color; ctx.font = 'bold 34px ' + STAT_FONT; ctx.fillText(def.icon, b.x + b.w / 2, b.y + 53);
-    ctx.font = 'bold 22px ' + STAT_FONT; ctx.fillText(def.name, b.x + b.w / 2, b.y + 90);
+    ctx.fillStyle = def.color; ctx.font = 'bold 30px ' + STAT_FONT; ctx.fillText(def.icon, b.x + b.w / 2, b.y + 43);
+    ctx.font = 'bold 20px ' + STAT_FONT; ctx.fillText(def.name, b.x + b.w / 2, b.y + 75);
     ctx.fillStyle = '#ff9f7a'; ctx.font = 'bold 13px ' + STAT_FONT;
-    ctx.fillText('危險度 ' + '◆'.repeat(def.threat) + '◇'.repeat(3 - def.threat), b.x + b.w / 2, b.y + 121);
+    ctx.fillText('危險度 ' + '◆'.repeat(spec.threat) + '◇'.repeat(3 - spec.threat), b.x + b.w / 2, b.y + 103);
     ctx.fillStyle = '#c8cdec'; ctx.font = '13px ' + STAT_FONT;
-    ctx.fillText(def.desc, b.x + b.w / 2, b.y + 158);
+    ctx.fillText(def.desc, b.x + b.w / 2, b.y + 131);
+    ctx.fillStyle = '#aeb4d0'; ctx.font = '12px ' + STAT_FONT;
+    ctx.fillText('敵人：' + spec.enemyTags.join(' · '), b.x + b.w / 2, b.y + 158);
+    if (eventDef) {
+      ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 12px ' + STAT_FONT;
+      ctx.fillText('事件：' + eventDef.previewTag, b.x + b.w / 2, b.y + (hazardDef ? 176 : 181));
+    }
+    if (hazardDef) {
+      ctx.fillStyle = '#ffb45e'; ctx.font = 'bold 12px ' + STAT_FONT;
+      ctx.fillText('地形：' + hazardDef.previewTag, b.x + b.w / 2, b.y + (eventDef ? 193 : 181));
+    }
     ctx.fillStyle = '#ffd36a'; ctx.font = 'bold 13px ' + STAT_FONT;
-    ctx.fillText('獎勵：' + def.rewards.join(' · '), b.x + b.w / 2, b.y + 196);
-    ctx.fillStyle = '#7dffd6'; ctx.fillRect(b.x + 45, b.y + 220, b.w - 90, 34);
+    ctx.fillText('獎勵：' + spec.rewardTags.join(' · '), b.x + b.w / 2, b.y + (eventDef && hazardDef ? 214 : 207));
+    ctx.fillStyle = '#7dffd6'; ctx.fillRect(b.x + 45, b.y + 224, b.w - 90, 32);
     ctx.fillStyle = '#14162b'; ctx.font = 'bold 14px ' + STAT_FONT;
-    ctx.fillText('[' + (i + 1) + '] 進入', b.x + b.w / 2, b.y + 243);
+    ctx.fillText('[' + (i + 1) + '] 進入', b.x + b.w / 2, b.y + 246);
   }
   ctx.fillStyle = '#737a9a'; ctx.font = '11px ' + STAT_FONT;
   ctx.fillText('本章探索評價：' + dungeonRun.explorationScore + '　·　Boss 前會保留低風險路線', W / 2, 450);
