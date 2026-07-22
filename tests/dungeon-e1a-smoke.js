@@ -51,7 +51,7 @@ for (const id of api.order) {
   const def = api.defs[id];
   assert.strictEqual(def.phases.length, 3);
   assert.strictEqual(def.attackSlots.length, 2);
-  if (id === 'meadow_lord' || id === 'cavern_lord') assert.ok(def.attackSlots.every(attack => attack.implemented === true));
+  if (id === 'meadow_lord' || id === 'cavern_lord' || id === 'volcano_lord') assert.ok(def.attackSlots.every(attack => attack.implemented === true));
   else assert.ok(def.attackSlots.every(attack => attack.implemented === false));
   assert.ok(def.environmentId);
   const arena = api.arena(def);

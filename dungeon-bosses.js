@@ -40,8 +40,8 @@ const DUNGEON_BOSS_DEFS = {
     arena:{ width:1300, platforms:[{ x:170, y:405, w:150 }, { x:980, y:405, w:150 }, { x:570, y:325, w:160 }] },
     legacyAttackId:'leap_volley',
     attackSlots:[
-      { id:'magma_charge', name:'熔岩衝鋒', implemented:false },
-      { id:'vent_chain', name:'連鎖噴發', implemented:false }
+      { id:'magma_charge', name:'熔岩衝鋒', implemented:true, warningFrames:48, recoveryFrames:78 },
+      { id:'vent_chain', name:'連鎖噴發', implemented:true, warningFrames:45, activeFrames:30, cooldownFrames:96, recoveryFrames:84 }
     ]
   },
   tundra_lord: {
@@ -158,6 +158,11 @@ function dungeonBossAttackSequence(boss) {
     if (boss.phase === 2) return ['marked_rockfall', def.legacyAttackId, 'cavern_shockwave'];
     return ['marked_rockfall', 'cavern_shockwave', def.legacyAttackId];
   }
+  if (def.id === 'volcano_lord') {
+    if (boss.phase <= 1) return ['magma_charge', def.legacyAttackId];
+    if (boss.phase === 2) return ['magma_charge', def.legacyAttackId, 'vent_chain'];
+    return ['magma_charge', 'vent_chain', def.legacyAttackId];
+  }
   return [def.legacyAttackId];
 }
 
@@ -219,6 +224,33 @@ function fireCavernShockwave(boss) {
   beep(125, 0.18, 'sawtooth', 0.05);
 }
 
+function volcanoChargePlan(boss, target) {
+  const arenaWidth = dungeonBossDef(boss.bossId).arena.width;
+  const desiredDirection = target.x < boss.x ? -1 : 1;
+  const distance = boss.phase >= 3 ? 520 : boss.phase === 2 ? 450 : 380;
+  let endX = Math.max(70, Math.min(arenaWidth - 70, boss.x + desiredDirection * distance));
+  let direction = endX < boss.x ? -1 : 1;
+  if (Math.abs(endX - boss.x) < 210) {
+    endX = Math.max(70, Math.min(arenaWidth - 70, boss.x - desiredDirection * distance));
+    direction = endX < boss.x ? -1 : 1;
+  }
+  return { direction, endX, speed:boss.phase >= 3 ? 10.5 : boss.phase === 2 ? 9.4 : 8.5 };
+}
+
+function volcanoVentChainEffects(boss, target) {
+  const slot = dungeonBossAttackSlot(boss, 'vent_chain');
+  const count = boss.phase >= 3 ? 6 : 4;
+  const lanes = [150, 350, 550, 750, 950, 1150];
+  const ordered = lanes.slice().sort((a, b) => Math.abs(a - target.x) - Math.abs(b - target.x));
+  const selected = ordered.slice(0, count).sort((a, b) => boss.x > target.x ? a - b : b - a);
+  return selected.map((x, i) => ({
+    type:'volcano_vent', bossId:boss.bossId, bossName:boss.name,
+    x, y:468, w:108, state:'warning', timer:slot.warningFrames + i * 16,
+    activeFrames:slot.activeFrames, cooldownFrames:slot.cooldownFrames,
+    damage:Math.max(1, Math.round(boss.dmg * 0.76)), phase:boss.phase, hit:false
+  }));
+}
+
 function startDungeonBossSpecialAttack(boss, target, attackId) {
   const slot = dungeonBossAttackSlot(boss, attackId);
   if (!slot || !slot.implemented || boss.specialAttack) return false;
@@ -243,6 +275,20 @@ function startDungeonBossSpecialAttack(boss, target, attackId) {
     };
   } else if (attackId === 'cavern_shockwave') {
     boss.specialAttack = { id:attackId, timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames, fired:false };
+  } else if (attackId === 'magma_charge') {
+    const plan = volcanoChargePlan(boss, target);
+    boss.specialAttack = Object.assign({
+      id:attackId, state:'warning', timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames,
+      startX:boss.x, hit:false
+    }, plan);
+  } else if (attackId === 'vent_chain') {
+    const effects = volcanoVentChainEffects(boss, target);
+    dungeonBossEffects.push(...effects);
+    boss.specialAttack = {
+      id:attackId,
+      timer:Math.max(...effects.map(effect => effect.timer)) + slot.activeFrames,
+      recoveryFrames:slot.recoveryFrames
+    };
   } else return false;
   boss.vx = 0;
   return true;
@@ -265,11 +311,42 @@ function fireMeadowSeedBurst(boss, target) {
   beep(420, 0.14, 'square', 0.045);
 }
 
+function volcanoChargeHitsPlayer(boss, target) {
+  return target.x + target.w / 2 >= boss.x - boss.w / 2
+    && target.x - target.w / 2 <= boss.x + boss.w / 2
+    && target.y >= boss.y - boss.h && target.y - target.h <= boss.y;
+}
+
+function updateVolcanoMagmaCharge(boss, target, attack) {
+  if (attack.visualHold) return false;
+  attack.timer--;
+  if (attack.state === 'warning' && attack.timer <= 0) {
+    attack.state = 'active';
+    attack.timer = Math.max(1, Math.ceil(Math.abs(attack.endX - boss.x) / attack.speed));
+    beep(155, 0.16, 'sawtooth', 0.055);
+    return false;
+  }
+  if (attack.state !== 'active') return false;
+  boss.x += attack.direction * attack.speed;
+  if ((attack.direction < 0 && boss.x <= attack.endX) || (attack.direction > 0 && boss.x >= attack.endX)) {
+    boss.x = attack.endX; attack.timer = 0;
+  }
+  if (!attack.hit && target.inv <= 0 && volcanoChargeHitsPlayer(boss, target)) {
+    attack.hit = true;
+    target.vx = attack.direction * 7; target.vy = -5; target.onGround = false;
+    const damage = Math.max(1, Math.round(boss.dmg * 0.92) - armorDef());
+    return dmgPlayer({ amount:damage, sourceName:boss.name + '的熔岩衝鋒', sourceX:boss.x, heavy:true });
+  }
+  return false;
+}
+
 function updateDungeonBossSpecialAttack(boss, target) {
   const attack = boss.specialAttack;
   if (!attack) return { handled:false, playerDied:false };
   boss.vx = 0;
-  attack.timer--;
+  let playerDied = false;
+  if (attack.id === 'magma_charge') playerDied = updateVolcanoMagmaCharge(boss, target, attack);
+  else attack.timer--;
   if (attack.id === 'seed_burst' && attack.timer <= 0 && !attack.fired) {
     attack.fired = true;
     fireMeadowSeedBurst(boss, target);
@@ -283,7 +360,7 @@ function updateDungeonBossSpecialAttack(boss, target) {
     boss.specialAttack = null;
     boss.activeAttackId = null;
   }
-  return { handled:true, playerDied:false };
+  return { handled:true, playerDied };
 }
 
 function dungeonBossEffectHitsPlayer(effect, target) {
@@ -300,9 +377,31 @@ function cavernBossEffectHitsPlayer(effect, target) {
     && target.y >= effect.y - 54 && target.y - target.h <= effect.y;
 }
 
+function volcanoVentHitsPlayer(effect, target) {
+  return target.x + target.w / 2 >= effect.x - effect.w / 2
+    && target.x - target.w / 2 <= effect.x + effect.w / 2
+    && target.y >= effect.y - 78 && target.y - target.h <= effect.y;
+}
+
 function updateDungeonBossEffects(target) {
   for (const effect of dungeonBossEffects.slice()) {
     effect.timer--;
+    if (effect.type === 'volcano_vent') {
+      if (effect.state === 'warning' && effect.timer <= 0) {
+        effect.state = 'active'; effect.timer = effect.activeFrames; effect.hit = false;
+        beep(220, 0.09, 'square', 0.04);
+      } else if (effect.state === 'active') {
+        if (!effect.hit && target.inv <= 0 && volcanoVentHitsPlayer(effect, target)) {
+          effect.hit = true; target.vy = -4; target.onGround = false;
+          const damage = Math.max(1, effect.damage - armorDef());
+          if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的連鎖噴發', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+        }
+        if (effect.timer <= 0) { effect.state = 'cooldown'; effect.timer = effect.cooldownFrames; }
+      } else if (effect.state === 'cooldown' && effect.timer <= 0) {
+        dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      }
+      continue;
+    }
     if (effect.type === 'cavern_wave') {
       effect.x += effect.vx;
       if (!effect.hit && target.inv <= 0 && cavernBossEffectHitsPlayer(effect, target)) {
@@ -359,7 +458,24 @@ function drawDungeonBossEffects() {
   if (cavernActive) drawCavernSafeShelves();
   for (const effect of dungeonBossEffects) {
     const pulse = 0.55 + Math.sin(frame * 0.28 + effect.x * 0.01) * 0.18;
-    if (effect.type === 'cavern_rockfall') {
+    if (effect.type === 'volcano_vent') {
+      const left = effect.x - effect.w / 2;
+      ctx.fillStyle = '#4b2520'; ctx.fillRect(left, effect.y - 8, effect.w, 8);
+      if (effect.state === 'warning') {
+        ctx.globalAlpha = pulse; ctx.fillStyle = '#ff8a2b'; ctx.fillRect(left + 5, effect.y - 15, effect.w - 10, 12);
+        ctx.globalAlpha = 1; ctx.strokeStyle = '#fff2a8'; ctx.lineWidth = 3; ctx.setLineDash([8, 5]);
+        ctx.strokeRect(left, effect.y - 17, effect.w, 16); ctx.setLineDash([]);
+      } else if (effect.state === 'active') {
+        ctx.globalAlpha = 0.95; ctx.fillStyle = '#ff4b1f'; ctx.fillRect(left + 7, effect.y - 62, effect.w - 14, 58);
+        ctx.fillStyle = '#ffd45f'; ctx.fillRect(left + 22, effect.y - 80, effect.w - 44, 76);
+        ctx.fillStyle = '#fff2a8'; ctx.fillRect(effect.x - 6, effect.y - 68, 12, 64);
+      } else {
+        ctx.globalAlpha = 0.7; ctx.fillStyle = '#312f3a'; ctx.fillRect(left + 5, effect.y - 12, effect.w - 10, 8);
+        ctx.strokeStyle = '#b9f3ff'; ctx.lineWidth = 2; ctx.strokeRect(left, effect.y - 15, effect.w, 14);
+        ctx.fillStyle = '#d6f6ff'; ctx.font = 'bold 10px "Courier New",monospace'; ctx.textAlign = 'center';
+        ctx.fillText('安全窗', effect.x, effect.y - 21); ctx.textAlign = 'left';
+      }
+    } else if (effect.type === 'cavern_rockfall') {
       if (effect.state === 'warning') {
         ctx.globalAlpha = pulse; ctx.fillStyle = '#d8b76a';
         ctx.beginPath(); ctx.ellipse(effect.x, effect.y - 3, effect.w / 2, 10, 0, 0, Math.PI * 2); ctx.fill();
@@ -398,6 +514,25 @@ function drawDungeonBossEffects() {
 function drawDungeonBossSpecialTelegraph(boss) {
   if (!boss.specialAttack) return;
   const def = dungeonBossDef(boss.bossId);
+  if (boss.specialAttack.id === 'magma_charge') {
+    const attack = boss.specialAttack;
+    ctx.save();
+    if (attack.state === 'warning') {
+      const left = Math.min(boss.x, attack.endX), width = Math.abs(attack.endX - boss.x);
+      ctx.globalAlpha = 0.24 + Math.sin(frame * 0.4) * 0.08; ctx.fillStyle = '#ff6b2e';
+      ctx.fillRect(left, 438, width, 30); ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#fff2a8'; ctx.lineWidth = 3; ctx.setLineDash([10, 7]); ctx.strokeRect(left, 438, width, 28); ctx.setLineDash([]);
+      ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText('熔岩衝鋒', left + width / 2, 430); ctx.textAlign = 'left';
+    } else {
+      ctx.globalAlpha = 0.76; ctx.fillStyle = '#ff5a24';
+      for (let i = 1; i <= 4; i++) {
+        const x = boss.x - attack.direction * (28 + i * 20);
+        ctx.beginPath(); ctx.moveTo(x - 10, 466); ctx.lineTo(x, 438 + i * 3); ctx.lineTo(x + 10, 466); ctx.fill();
+      }
+    }
+    ctx.restore(); return;
+  }
   if (boss.specialAttack.id === 'cavern_shockwave') {
     drawCavernSafeShelves();
     ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 20);
@@ -425,11 +560,22 @@ function drawDungeonBossSpecialTelegraph(boss) {
 }
 
 function drawDungeonBossSprite(boss) {
-  if (!boss || (boss.bossId !== 'meadow_lord' && boss.bossId !== 'cavern_lord')) return false;
+  if (!boss || !['meadow_lord','cavern_lord','volcano_lord'].includes(boss.bossId)) return false;
   const def = dungeonBossDef(boss.bossId);
   const flash = boss.hitT > 0;
   ctx.save(); ctx.translate(Math.round(boss.x), Math.round(boss.y));
   if (boss.vx < 0) ctx.scale(-1, 1);
+  if (boss.bossId === 'volcano_lord') {
+    ctx.fillStyle = flash ? '#fff' : '#4a201c';
+    ctx.fillRect(-34, -35, 68, 30); ctx.fillRect(-46, -25, 20, 17); ctx.fillRect(26, -25, 20, 17);
+    ctx.fillStyle = flash ? '#fff' : def.accent;
+    ctx.fillRect(-30, -57, 60, 29); ctx.fillRect(-38, -62, 17, 22); ctx.fillRect(21, -62, 17, 22);
+    ctx.fillStyle = flash ? '#fff' : def.color;
+    ctx.fillRect(-21, -68, 42, 19); ctx.fillRect(-34, -74, 12, 18); ctx.fillRect(22, -74, 12, 18);
+    ctx.fillStyle = '#ffd45f'; ctx.fillRect(-16, -48, 9, 8); ctx.fillRect(8, -48, 9, 8); ctx.fillRect(-8, -28, 20, 5);
+    ctx.fillStyle = '#fff2a8'; ctx.fillRect(-13, -46, 4, 4); ctx.fillRect(11, -46, 4, 4);
+    ctx.restore(); return true;
+  }
   if (boss.bossId === 'cavern_lord') {
     ctx.fillStyle = flash ? '#fff' : '#3f3948';
     ctx.fillRect(-34, -34, 68, 29); ctx.fillRect(-45, -24, 18, 16); ctx.fillRect(27, -24, 18, 16);
