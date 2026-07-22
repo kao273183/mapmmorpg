@@ -5,22 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.5">
+<link rel="stylesheet" href="style.css?v=0.29.6">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.29.5"></script>
-<script src="dungeon-bosses.js?v=0.29.5"></script>
-<script src="dungeon-balance.js?v=0.29.5"></script>
-<script src="dungeon.js?v=0.29.5"></script>
-<script src="dungeon-hazards.js?v=0.29.5"></script>
-<script src="dungeon-events.js?v=0.29.5"></script>
-<script src="dungeon-trials.js?v=0.29.5"></script>
-<script src="dungeon-ui.js?v=0.29.5"></script>
-<script src="game.js?v=0.29.5"></script>
+<script src="dungeon-data.js?v=0.29.6"></script>
+<script src="dungeon-bosses.js?v=0.29.6"></script>
+<script src="dungeon-balance.js?v=0.29.6"></script>
+<script src="dungeon.js?v=0.29.6"></script>
+<script src="dungeon-hazards.js?v=0.29.6"></script>
+<script src="dungeon-events.js?v=0.29.6"></script>
+<script src="dungeon-trials.js?v=0.29.6"></script>
+<script src="dungeon-ui.js?v=0.29.6"></script>
+<script src="game.js?v=0.29.6"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -62,6 +62,26 @@ function resolveFixedTrial(outcome) {
     mons = mons.filter(mon => !mon.trialMon);
     if (floorTrial.type === 'hazard') player.x = floorTrial.targetX;
     updateFloorTrial(0);
+  }
+}
+function seedFixedBossRecords() {
+  dungeonBalance.runs = [];
+  let bossNow = 100000;
+  for (const testCase of DUNGEON_BOSS_BENCHMARK_CASES) {
+    const target = DUNGEON_BOSS_BENCHMARK_TARGETS.find(item => item.bossId === testCase.bossId);
+    const profile = dungeonBenchmarkProfile(testCase.benchmarkId);
+    const clearSec = Math.round((target.clearSec[0] + target.clearSec[1]) / 2) + (testCase.classId === 'mage' ? 4 : 0);
+    const damage = Math.round(target.damage[1] * (testCase.classId === 'mage' ? 0.52 : 0.45));
+    startDungeonBalanceRun(testCase.seed, testCase.classId, bossNow, {
+      mode:'benchmark', benchmarkId:profile.id, benchmarkLabel:profile.label
+    });
+    const boss = createDungeonBoss(dungeonBossDef(testCase.bossId), testCase.floor, 1);
+    recordDungeonBossStart(boss, bossNow + 1000);
+    recordDungeonBossPhase(3);
+    recordDungeonDamage(boss.name + '固定測試', damage);
+    recordDungeonBossEnd('kill', null, bossNow + 1000 + clearSec * 1000);
+    finishDungeonBalanceRun({ result:'extract', floor:testCase.floor, kills:1, gained:0 }, bossNow + 2000 + clearSec * 1000);
+    bossNow += 300000;
   }
 }
 if (mode.startsWith('boss-')) {
@@ -263,6 +283,12 @@ if (mode.startsWith('boss-')) {
   openTownPanel('save');
   settingsPage = 'balance';
   document.title = 'Dungeon Settings Boss Balance';
+} else if (mode === 'settings-boss-records') {
+  seedFixedBossRecords();
+  openTownPanel('save');
+  settingsPage = 'bosses';
+  settingsBalanceMode = 'benchmark';
+  document.title = 'Dungeon Settings Boss Records';
 } else if (mode === 'settings-balance') {
   recordDungeonRouteOffer([makeRoomSpec('safe', 2, 0), makeRoomSpec('hazard', 2, 1)]);
   recordDungeonRouteChoice(makeRoomSpec('hazard', 2, 1));

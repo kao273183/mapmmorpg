@@ -95,7 +95,7 @@ assert.strictEqual(finalPlatforms.filter(platform => platform.voidDisabled).leng
 
 const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.5'"));
+assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 assert.ok(gameSource.includes("startDungeonBossSpecialAttack(m, p, nextAttack, plats)"));
 for (const mode of ['barrage-active','erase-active','stable','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 

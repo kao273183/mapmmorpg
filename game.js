@@ -2267,8 +2267,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.5';
+const GAME_VERSION = '0.29.6';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.6', date:'2026-07-22', title:'E1-G Boss 平衡與收尾',
+    items:['五隻 Boss 各加入劍士／法師固定配對基準，統計擊殺時間與承傷。','設定新增 Boss 測試紀錄頁，顯示目標區間與超過 15% 的職業差警戒。','完成手機、低特效、死亡／撤退、掉落、舊存檔與完整 smoke 回歸。']
+  },
   {
     version:'0.29.5', date:'2026-07-22', title:'E1-F 虛空深淵 Boss',
     items:['深淵魔王加入虛空彈幕與平台消除，彈幕死亡來源可獨立記錄。','平台消除只作用於浮空平台；第三階段最多消除兩座，仍保留一座浮台。','地面主路徑永不消除，招式期間以穩定地面標線提示安全保底。']
@@ -2410,9 +2414,48 @@ function renderSettingsBalance(mx, my, mw, mh) {
     ctx.fillText(menuMsg.text, W / 2, my + mh - 72);
     if (--menuMsg.t <= 0) menuMsg = null;
   }
-  drawSettingsButton(mx + 20, my + mh - 58, 190, 38, '複製完整報表', 'copyBalance', 'rgba(185,140,255,0.16)');
-  drawSettingsButton(mx + 220, my + mh - 58, 160, 38, '基準設定', 'benchmarkSetup', 'rgba(255,180,94,0.12)');
-  drawSettingsButton(mx + 390, my + mh - 58, 170, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+  drawSettingsButton(mx + 20, my + mh - 58, 135, 38, '複製報表', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + 165, my + mh - 58, 120, 38, 'Boss 紀錄', 'bossRecords', 'rgba(185,140,255,0.14)');
+  drawSettingsButton(mx + 295, my + mh - 58, 120, 38, '基準設定', 'benchmarkSetup', 'rgba(255,180,94,0.12)');
+  drawSettingsButton(mx + 425, my + mh - 58, 135, 38, '返回設定', 'settingsBack', 'rgba(125,255,214,0.14)');
+}
+function renderSettingsBosses(mx, my, mw, mh) {
+  const report = typeof dungeonBalanceReport === 'function' ? dungeonBalanceReport(settingsBalanceMode) : null;
+  const comparison = settingsBalanceMode === 'benchmark' && typeof dungeonBossBenchmarkComparison === 'function' ? dungeonBossBenchmarkComparison() : null;
+  const bossIds = typeof DUNGEON_BOSS_ORDER !== 'undefined' ? DUNGEON_BOSS_ORDER : [];
+  ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText(settingsBalanceMode === 'benchmark' ? '固定基準 · 配對裝備與種子' : '自然遊玩 · 最近 60 局', W / 2, my + 66);
+  ctx.fillStyle = '#777e9f'; ctx.font = '10px "Courier New",monospace';
+  ctx.fillText('擊殺時間目標與承傷只作警戒；每職業至少 3 場後再判斷', W / 2, my + 84);
+  for (let i = 0; i < bossIds.length; i++) {
+    const id = bossIds[i], stat = report && report.bossStats[id];
+    const compared = comparison && comparison.bosses[id];
+    const target = compared ? compared.target : (typeof DUNGEON_BOSS_BENCHMARK_TARGETS !== 'undefined' ? DUNGEON_BOSS_BENCHMARK_TARGETS.find(item => item.bossId === id) : null);
+    const warrior = compared ? compared.warrior : stat && stat.classStats.warrior;
+    const mage = compared ? compared.mage : stat && stat.classStats.mage;
+    const paired = compared ? compared.paired : !!(warrior && mage && warrior.kills && mage.kills);
+    const meanClear = paired ? (warrior.averageClearSec + mage.averageClearSec) / 2 : 0;
+    const classGapPct = compared ? compared.classGapPct : paired && meanClear ? Math.abs(warrior.averageClearSec - mage.averageClearSec) / meanClear : 0;
+    const ready = compared ? compared.ready : !!(warrior && mage && warrior.encounters >= 3 && mage.encounters >= 3);
+    const x = mx + 22, y = my + 96 + i * 58, w = mw - 44;
+    ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(x, y, w, 50);
+    ctx.strokeStyle = ready && paired && classGapPct > 0.15 ? '#ffb45e' : '#343850'; ctx.strokeRect(x, y, w, 50);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 13px "Courier New",monospace';
+    ctx.fillText((stat && stat.name) || (target && target.bossName) || id, x + 12, y + 19);
+    ctx.fillStyle = '#7f86a7'; ctx.font = '10px "Courier New",monospace';
+    const encounters = stat ? stat.encounters : 0, kills = stat ? stat.kills : 0;
+    ctx.fillText('場次 ' + encounters + ' · 擊殺 ' + kills + (target ? ' · 目標 ' + target.clearSec[0] + '～' + target.clearSec[1] + '秒' : ''), x + 12, y + 39);
+    const fmtClass = (label, item) => label + ' ' + (item && item.kills ? Math.round(item.averageClearSec) + '秒／傷' + Math.round(item.averageDamage) : '—');
+    ctx.textAlign = 'right'; ctx.fillStyle = '#d9a8ff'; ctx.font = 'bold 11px "Courier New",monospace';
+    ctx.fillText(fmtClass('劍', warrior) + '　' + fmtClass('法', mage), x + w - 12, y + 20);
+    ctx.fillStyle = ready && paired ? (classGapPct <= 0.15 ? '#7dffd6' : '#ffb45e') : '#6f7695'; ctx.font = '10px "Courier New",monospace';
+    ctx.fillText(paired ? '職業差 ' + Math.round(classGapPct * 100) + '%' + (ready ? '' : ' · 待各3場') : '等待配對樣本', x + w - 12, y + 39);
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = comparison && comparison.alerts.length ? '#ffb45e' : '#6f7695'; ctx.font = '10px "Courier New",monospace';
+  const readyCount = comparison ? Object.values(comparison.bosses).filter(item => item.ready).length : 0;
+  ctx.fillText(comparison && comparison.alerts.length ? comparison.alerts[0] : readyCount ? '目前沒有超過 15% 的已配對職業警戒' : '每職業累積 3 場後啟用 15% 職業差警戒', W / 2, my + mh - 72);
+  drawSettingsButton(mx + 24, my + mh - 58, 250, 38, '複製完整報表', 'copyBalance', 'rgba(185,140,255,0.16)');
+  drawSettingsButton(mx + mw - 274, my + mh - 58, 250, 38, '返回平衡報表', 'bossRecordsBack', 'rgba(125,255,214,0.14)');
 }
 function renderSettingsBenchmark(mx, my, mw, mh) {
   const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];
@@ -2440,9 +2483,10 @@ function renderSettings() {
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#b05ae0'; ctx.font = 'bold 22px "Courier New",monospace';
-  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 報 表' : settingsPage === 'benchmark' ? '固 定 基 準 局' : '設 定', W / 2, my + 38);
+  ctx.fillText(settingsPage === 'updates' ? '更 新 紀 錄' : settingsPage === 'balance' ? 'D3 平 衡 報 表' : settingsPage === 'bosses' ? 'BOSS 測 試 紀 錄' : settingsPage === 'benchmark' ? '固 定 基 準 局' : '設 定', W / 2, my + 38);
   if (settingsPage === 'updates') { renderSettingsUpdates(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'balance') { renderSettingsBalance(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
+  if (settingsPage === 'bosses') { renderSettingsBosses(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'benchmark') { renderSettingsBenchmark(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
@@ -2535,7 +2579,7 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (settingsOpen) {
     if (k === 'escape' && !settingsMode) {
-      if (settingsPage === 'benchmark') settingsPage = 'balance';
+      if (settingsPage === 'benchmark' || settingsPage === 'bosses') settingsPage = 'balance';
       else if (settingsPage !== 'main') settingsPage = 'main';
       else { settingsOpen = false; closeSaveEdit(); clearGameInputs(); }
     }
@@ -2623,6 +2667,8 @@ function handleTap(mx, my) {
       if (b.act === 'balanceNatural') { settingsBalanceMode = 'natural'; playSfx('uiSelect'); return; }
       if (b.act === 'balanceBenchmark') { settingsBalanceMode = 'benchmark'; playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkSetup') { settingsPage = 'benchmark'; playSfx('uiSelect'); return; }
+      if (b.act === 'bossRecords') { settingsPage = 'bosses'; playSfx('uiSelect'); return; }
+      if (b.act === 'bossRecordsBack') { settingsPage = 'balance'; playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkSelect') { settingsBenchmarkIndex = Math.max(0, b.index | 0); playSfx('uiSelect'); return; }
       if (b.act === 'benchmarkStart') {
         const profiles = typeof DUNGEON_BENCHMARK_PROFILES !== 'undefined' ? DUNGEON_BENCHMARK_PROFILES : [];

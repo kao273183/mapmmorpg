@@ -29,6 +29,27 @@ const DUNGEON_BENCHMARK_PROFILES = [
   { id:'mage-chapter3', classId:'mage', tier:'chapter3', label:'法師 · 第三章', gearLabel:'史詩全套', seed:123011 }
 ].map(profile => Object.assign(profile, { gear:fixedDungeonBenchmarkGear(profile.classId, profile.tier) }));
 
+const DUNGEON_BOSS_BENCHMARK_TARGETS = [
+  { bossId:'meadow_lord', bossName:'草原領主', floor:5, tier:'starter', seed:31001, clearSec:[60,110], damage:[0,50] },
+  { bossId:'cavern_lord', bossName:'洞窟領主', floor:10, tier:'chapter2', seed:72007, clearSec:[70,125], damage:[0,65] },
+  { bossId:'volcano_lord', bossName:'熔岩魔王', floor:15, tier:'chapter3', seed:123011, clearSec:[80,140], damage:[0,80] },
+  { bossId:'tundra_lord', bossName:'冰霜領主', floor:20, tier:'chapter3', seed:123011, clearSec:[90,155], damage:[0,90] },
+  { bossId:'void_lord', bossName:'深淵魔王', floor:25, tier:'chapter3', seed:123011, clearSec:[100,170], damage:[0,105] }
+];
+
+const DUNGEON_BOSS_BENCHMARK_CASES = DUNGEON_BOSS_BENCHMARK_TARGETS.flatMap(target => ['warrior','mage'].map(classId => ({
+  id:classId + '-' + target.bossId,
+  classId,
+  benchmarkId:classId + '-' + target.tier,
+  bossId:target.bossId,
+  bossName:target.bossName,
+  floor:target.floor,
+  tier:target.tier,
+  seed:target.seed,
+  clearSec:target.clearSec.slice(),
+  damage:target.damage.slice()
+})));
+
 function dungeonBenchmarkProfile(id) {
   return DUNGEON_BENCHMARK_PROFILES.find(profile => profile.id === id) || null;
 }
@@ -143,6 +164,7 @@ function recordDungeonDamage(source, amount) {
   const key = String(source || '未知攻擊').slice(0, 32);
   run.damageTaken += value;
   run.damageBySource[key] = (run.damageBySource[key] || 0) + value;
+  if (run.activeBoss) run.activeBoss.damageTaken = (Number(run.activeBoss.damageTaken) || 0) + value;
 }
 
 function recordDungeonTrialResult(status) {
@@ -161,7 +183,8 @@ function recordDungeonBossStart(boss, now) {
     bossName:String(boss.name || 'Boss'),
     floor:Math.max(1, Number(floorSafeBossValue(boss.floor, boss.firstFloor)) || 1),
     startedAt,
-    highestPhase:Math.max(1, Number(boss.phase) || 1)
+    highestPhase:Math.max(1, Number(boss.phase) || 1),
+    damageTaken:0
   };
   return run.activeBoss;
 }
@@ -190,7 +213,9 @@ function recordDungeonBossEnd(status, sourceName, now) {
     bossName:active.bossName,
     floor:active.floor,
     result,
+    classId:run.classId || 'unknown',
     durationSec:Math.max(0, Math.round((endedAt - active.startedAt) / 1000)),
+    damageTaken:Math.max(0, Number(active.damageTaken) || 0),
     finalPhase:active.highestPhase,
     deathSource:result === 'death' ? String(sourceName || '未知攻擊').slice(0, 48) : null
   };
@@ -305,11 +330,24 @@ function dungeonBalanceReport(mode) {
   for (const run of runs) for (const encounter of run.bossEncounters || []) if (!bossIds.includes(encounter.bossId)) bossIds.push(encounter.bossId);
   const bossStats = {};
   for (const id of bossIds) {
-    const encounters = runs.flatMap(run => run.bossEncounters || []).filter(item => item.bossId === id);
+    const encounters = runs.flatMap(run => (run.bossEncounters || []).map(item => Object.assign({ classId:run.classId || 'unknown', damageTaken:0 }, item))).filter(item => item.bossId === id);
     const kills = encounters.filter(item => item.result === 'kill');
     const deaths = encounters.filter(item => item.result === 'death');
     const deathSources = {};
     for (const item of deaths) deathSources[item.deathSource || '未知攻擊'] = (deathSources[item.deathSource || '未知攻擊'] || 0) + 1;
+    const bossClassStats = {};
+    for (const classId of ['warrior','mage']) {
+      const classEncounters = encounters.filter(item => item.classId === classId);
+      const classKills = classEncounters.filter(item => item.result === 'kill');
+      bossClassStats[classId] = {
+        encounters:classEncounters.length,
+        kills:classKills.length,
+        deaths:classEncounters.filter(item => item.result === 'death').length,
+        killRate:classEncounters.length ? classKills.length / classEncounters.length : 0,
+        averageClearSec:classKills.length ? classKills.reduce((sum, item) => sum + (Number(item.durationSec) || 0), 0) / classKills.length : 0,
+        averageDamage:classEncounters.length ? classEncounters.reduce((sum, item) => sum + (Number(item.damageTaken) || 0), 0) / classEncounters.length : 0
+      };
+    }
     bossStats[id] = {
       name:encounters[0] ? encounters[0].bossName : (typeof dungeonBossDef === 'function' ? dungeonBossDef(id).name : id),
       encounters:encounters.length,
@@ -317,8 +355,10 @@ function dungeonBalanceReport(mode) {
       deaths:deaths.length,
       killRate:encounters.length ? kills.length / encounters.length : 0,
       averageClearSec:kills.length ? kills.reduce((sum, item) => sum + (Number(item.durationSec) || 0), 0) / kills.length : 0,
+      averageDamage:encounters.length ? encounters.reduce((sum, item) => sum + (Number(item.damageTaken) || 0), 0) / encounters.length : 0,
       highestPhase:encounters.reduce((highest, item) => Math.max(highest, Number(item.finalPhase) || 1), 0),
-      deathSources:Object.entries(deathSources).sort((a, b) => b[1] - a[1]).map(([source, count]) => ({ source, count }))
+      deathSources:Object.entries(deathSources).sort((a, b) => b[1] - a[1]).map(([source, count]) => ({ source, count })),
+      classStats:bossClassStats
     };
   }
   const alerts = [];
@@ -336,8 +376,53 @@ function dungeonBalanceReport(mode) {
   return { mode:reportMode, generatedAt:new Date().toISOString(), calibration, summary, classStats, roomStats, damageShares, trialResults, bossStats, alerts };
 }
 
+function dungeonBossBenchmarkComparison() {
+  const runs = dungeonBalanceRuns('benchmark');
+  const cases = DUNGEON_BOSS_BENCHMARK_CASES.map(definition => {
+    const encounters = runs
+      .filter(run => run.classId === definition.classId && run.benchmarkId === definition.benchmarkId)
+      .flatMap(run => run.bossEncounters || [])
+      .filter(item => item.bossId === definition.bossId);
+    const kills = encounters.filter(item => item.result === 'kill');
+    const averageClearSec = kills.length ? kills.reduce((sum, item) => sum + (Number(item.durationSec) || 0), 0) / kills.length : 0;
+    const averageDamage = encounters.length ? encounters.reduce((sum, item) => sum + (Number(item.damageTaken) || 0), 0) / encounters.length : 0;
+    const clearWithin = kills.length > 0 && averageClearSec >= definition.clearSec[0] && averageClearSec <= definition.clearSec[1];
+    const damageWithin = encounters.length > 0 && averageDamage >= definition.damage[0] && averageDamage <= definition.damage[1];
+    return Object.assign({}, definition, {
+      encounters:encounters.length,
+      kills:kills.length,
+      deaths:encounters.filter(item => item.result === 'death').length,
+      averageClearSec,
+      averageDamage,
+      clearWithin,
+      damageWithin,
+      status:!encounters.length ? 'no-data' : clearWithin && damageWithin ? 'within' : 'review'
+    });
+  });
+  const bosses = {};
+  for (const target of DUNGEON_BOSS_BENCHMARK_TARGETS) {
+    const warrior = cases.find(item => item.bossId === target.bossId && item.classId === 'warrior');
+    const mage = cases.find(item => item.bossId === target.bossId && item.classId === 'mage');
+    const paired = warrior.kills > 0 && mage.kills > 0;
+    const mean = paired ? (warrior.averageClearSec + mage.averageClearSec) / 2 : 0;
+    bosses[target.bossId] = {
+      bossName:target.bossName,
+      target:target,
+      warrior,
+      mage,
+      classGapPct:paired && mean ? Math.abs(warrior.averageClearSec - mage.averageClearSec) / mean : 0,
+      paired,
+      ready:warrior.encounters >= 3 && mage.encounters >= 3
+    };
+  }
+  const alerts = Object.values(bosses)
+    .filter(item => item.ready && item.paired && item.classGapPct > 0.15)
+    .map(item => item.bossName + '職業擊殺時間差超過 15%');
+  return { generatedAt:new Date().toISOString(), cases, bosses, alerts };
+}
+
 function exportDungeonBalanceRecords() {
-  return JSON.stringify({ version:3, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), runs:dungeonBalance.runs }, null, 2);
+  return JSON.stringify({ version:3, exportedAt:new Date().toISOString(), natural:dungeonBalanceReport('natural'), benchmark:dungeonBalanceReport('benchmark'), bossBenchmark:dungeonBossBenchmarkComparison(), runs:dungeonBalance.runs }, null, 2);
 }
 
 loadDungeonBalance();
