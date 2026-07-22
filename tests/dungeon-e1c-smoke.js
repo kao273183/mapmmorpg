@@ -96,7 +96,7 @@ assert.strictEqual(damageEvents.length, 0, 'rock shelves must protect against th
 
 const gameSource = fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8');
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.4'"));
+assert.ok(gameSource.includes("const GAME_VERSION = '0.29.5'"));
 for (const mode of ['rock-active','wave-active','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
 console.log('dungeon E1-C cavern boss smoke test passed (phase schedule, marked rockfall, shelf safety, shockwave, source labels)');

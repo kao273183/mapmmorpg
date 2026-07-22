@@ -2267,8 +2267,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.4';
+const GAME_VERSION = '0.29.5';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.5', date:'2026-07-22', title:'E1-F 虛空深淵 Boss',
+    items:['深淵魔王加入虛空彈幕與平台消除，彈幕死亡來源可獨立記錄。','平台消除只作用於浮空平台；第三階段最多消除兩座，仍保留一座浮台。','地面主路徑永不消除，招式期間以穩定地面標線提示安全保底。']
+  },
   {
     version:'0.29.4', date:'2026-07-22', title:'E1-E 冰霜凍原 Boss',
     items:['冰霜領主加入寒冰槍陣與暴風突進，兩種死亡來源分開記錄。','暴風突進會留下冰面並沿用滑行慣性；持續反方向輸入可煞車與反向。','第一階段先教槍陣，第二階段起才加入突進與冰面，第三階段擴大槍陣。']
@@ -3159,7 +3163,7 @@ function update() {
         }
       } else if (grounded) {
         const nextAttack = dungeonBossNextAttack(m);
-        if (nextAttack !== bossDef.legacyAttackId) startDungeonBossSpecialAttack(m, p, nextAttack);
+        if (nextAttack !== bossDef.legacyAttackId) startDungeonBossSpecialAttack(m, p, nextAttack, plats);
         else {
           beginDungeonBossAttack(m, bossDef.legacyAttackId);
           m.tele = bossDef.warningFrames;
@@ -3510,6 +3514,11 @@ function render() {
       ctx.fillStyle = s.col || '#9bdd4f'; ctx.fillRect(-4, -7, 8, 14);
       ctx.fillStyle = '#d8ef7b'; ctx.fillRect(-2, -5, 4, 8);
       ctx.fillStyle = '#6b4b2a'; ctx.fillRect(-1, -10, 2, 4); ctx.restore();
+    } else if (s.voidBolt) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(frame * 0.16);
+      ctx.fillStyle = s.col || '#b05ae0'; ctx.fillRect(-7, -7, 14, 14);
+      ctx.fillStyle = '#d9a8ff'; ctx.fillRect(-4, -4, 8, 8);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-2, -2, 4, 4); ctx.restore();
     } else {
       ctx.fillStyle = s.col || '#8a5adf'; ctx.fillRect(s.x - 5, s.y - 5, 10, 10);
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(s.x - 2, s.y - 2, 4, 4);

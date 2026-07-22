@@ -5,22 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.4">
+<link rel="stylesheet" href="style.css?v=0.29.5">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.29.4"></script>
-<script src="dungeon-bosses.js?v=0.29.4"></script>
-<script src="dungeon-balance.js?v=0.29.4"></script>
-<script src="dungeon.js?v=0.29.4"></script>
-<script src="dungeon-hazards.js?v=0.29.4"></script>
-<script src="dungeon-events.js?v=0.29.4"></script>
-<script src="dungeon-trials.js?v=0.29.4"></script>
-<script src="dungeon-ui.js?v=0.29.4"></script>
-<script src="game.js?v=0.29.4"></script>
+<script src="dungeon-data.js?v=0.29.5"></script>
+<script src="dungeon-bosses.js?v=0.29.5"></script>
+<script src="dungeon-balance.js?v=0.29.5"></script>
+<script src="dungeon.js?v=0.29.5"></script>
+<script src="dungeon-hazards.js?v=0.29.5"></script>
+<script src="dungeon-events.js?v=0.29.5"></script>
+<script src="dungeon-trials.js?v=0.29.5"></script>
+<script src="dungeon-ui.js?v=0.29.5"></script>
+<script src="game.js?v=0.29.5"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -122,6 +122,27 @@ if (mode.startsWith('boss-')) {
         boss.specialAttack.state = 'active'; boss.specialAttack.visualHold = true; boss.specialAttack.direction = -1;
         createTundraIceTrail(boss, boss.specialAttack);
         if (bossVariant === 'ice') boss.specialAttack = null;
+      }
+    }
+  } else if (boss && bossKey === 'void' && bossVariant) {
+    floorT = 0; boss.x = 820; boss.targetX = 820; boss.atkT = 9999;
+    if (bossVariant === 'barrage' || bossVariant === 'barrage-active') {
+      boss.phase = bossVariant === 'barrage' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'void_barrage');
+      if (bossVariant === 'barrage') boss.specialAttack.timer = 9999;
+      else {
+        boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999;
+        for (let i = 0; i < espits.length; i++) {
+          espits[i].vx = 0; espits[i].vy = 0; espits[i].x = boss.x - 135 + i * 45; espits[i].y = 370 + (i % 2) * 28;
+        }
+      }
+    } else if (bossVariant === 'erase' || bossVariant === 'erase-active' || bossVariant === 'stable' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = bossVariant === 'erase' ? 2 : 3;
+      startDungeonBossSpecialAttack(boss, player, 'platform_erasure', plats); boss.specialAttack.timer = 9999;
+      if (bossVariant !== 'erase') for (const effect of dungeonBossEffects) {
+        effect.state = 'active'; effect.timer = 9999; effect.platform.bossVoidWarning = false;
+        effect.platform.bossVoidErased = true; effect.platform.voidDisabled = true;
       }
     }
   }

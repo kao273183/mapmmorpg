@@ -62,8 +62,8 @@ const DUNGEON_BOSS_DEFS = {
     arena:{ width:1300, platforms:[{ x:170, y:405, w:150 }, { x:980, y:405, w:150 }, { x:570, y:325, w:160 }] },
     legacyAttackId:'leap_volley',
     attackSlots:[
-      { id:'void_barrage', name:'虛空彈幕', implemented:false },
-      { id:'platform_erasure', name:'平台消除', implemented:false }
+      { id:'void_barrage', name:'虛空彈幕', implemented:true, warningFrames:42, recoveryFrames:80 },
+      { id:'platform_erasure', name:'平台消除', implemented:true, warningFrames:48, goneFrames:90, recoveryFrames:86 }
     ]
   }
 };
@@ -138,6 +138,13 @@ function dungeonBossAddCount(boss, phase) {
 let dungeonBossEffects = [];
 
 function clearDungeonBossEffects() {
+  for (const effect of dungeonBossEffects) {
+    if (effect.type === 'void_platform_erasure' && effect.platform) {
+      effect.platform.voidDisabled = false;
+      effect.platform.bossVoidErased = false;
+      effect.platform.bossVoidWarning = false;
+    }
+  }
   dungeonBossEffects.length = 0;
 }
 
@@ -167,6 +174,11 @@ function dungeonBossAttackSequence(boss) {
     if (boss.phase <= 1) return ['ice_lance', def.legacyAttackId];
     if (boss.phase === 2) return ['ice_lance', def.legacyAttackId, 'blizzard_dash'];
     return ['ice_lance', 'blizzard_dash', def.legacyAttackId];
+  }
+  if (def.id === 'void_lord') {
+    if (boss.phase <= 1) return ['void_barrage', def.legacyAttackId];
+    if (boss.phase === 2) return ['void_barrage', def.legacyAttackId, 'platform_erasure'];
+    return ['void_barrage', 'platform_erasure', def.legacyAttackId];
   }
   return [def.legacyAttackId];
 }
@@ -282,7 +294,24 @@ function tundraDashPlan(boss, target) {
   return { direction, endX, speed:boss.phase >= 3 ? 10.2 : 8.8 };
 }
 
-function startDungeonBossSpecialAttack(boss, target, attackId) {
+function voidPlatformErasureEffects(boss, target, arenaPlatforms) {
+  const slot = dungeonBossAttackSlot(boss, 'platform_erasure');
+  const count = boss.phase >= 3 ? 2 : 1;
+  const candidates = (arenaPlatforms || [])
+    .filter(platform => !platform.ground && !platform.voidDisabled)
+    .sort((a, b) => Math.abs((a.x + a.w / 2) - target.x) - Math.abs((b.x + b.w / 2) - target.x));
+  return candidates.slice(0, count).map((platform, index) => {
+    platform.bossVoidWarning = true;
+    return {
+      type:'void_platform_erasure', bossId:boss.bossId, bossName:boss.name,
+      x:platform.x + platform.w / 2, y:platform.y, w:platform.w,
+      state:'warning', timer:slot.warningFrames + index * 10, goneFrames:slot.goneFrames,
+      platform, phase:boss.phase
+    };
+  });
+}
+
+function startDungeonBossSpecialAttack(boss, target, attackId, arenaPlatforms) {
   const slot = dungeonBossAttackSlot(boss, attackId);
   if (!slot || !slot.implemented || boss.specialAttack) return false;
   beginDungeonBossAttack(boss, attackId);
@@ -332,6 +361,17 @@ function startDungeonBossSpecialAttack(boss, target, attackId) {
       id:attackId, state:'warning', timer:slot.warningFrames, iceFrames:slot.iceFrames,
       recoveryFrames:slot.recoveryFrames, startX:boss.x, hit:false, iceCreated:false
     }, plan);
+  } else if (attackId === 'void_barrage') {
+    boss.specialAttack = { id:attackId, timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames, fired:false };
+  } else if (attackId === 'platform_erasure') {
+    const effects = voidPlatformErasureEffects(boss, target, arenaPlatforms);
+    if (!effects.length) { boss.activeAttackId = null; return false; }
+    dungeonBossEffects.push(...effects);
+    boss.specialAttack = {
+      id:attackId,
+      timer:Math.max(...effects.map(effect => effect.timer)) + slot.goneFrames,
+      recoveryFrames:slot.recoveryFrames
+    };
   } else return false;
   boss.vx = 0;
   return true;
@@ -352,6 +392,23 @@ function fireMeadowSeedBurst(boss, target) {
     });
   }
   beep(420, 0.14, 'square', 0.045);
+}
+
+function fireVoidBarrage(boss, target) {
+  const count = boss.phase >= 3 ? 9 : boss.phase === 2 ? 7 : 5;
+  const centerVx = (target.x - boss.x) / 62;
+  for (let i = 0; i < count; i++) {
+    const offset = i - (count - 1) / 2;
+    espits.push({
+      x:boss.x, y:boss.y - boss.h + 4,
+      vx:centerVx + offset * 0.76,
+      vy:-6.8 - Math.abs(offset) * 0.25,
+      dmg:Math.max(1, Math.round(boss.dmg * 0.64)),
+      col:'#b05ae0', voidBolt:true, heavy:boss.phase >= 3,
+      ownerName:boss.name, sourceName:boss.name + '的虛空彈幕'
+    });
+  }
+  beep(285, 0.16, 'square', 0.045);
 }
 
 function volcanoChargeHitsPlayer(boss, target) {
@@ -435,6 +492,10 @@ function updateDungeonBossSpecialAttack(boss, target) {
     attack.fired = true;
     fireCavernShockwave(boss);
   }
+  if (attack.id === 'void_barrage' && attack.timer <= 0 && !attack.fired) {
+    attack.fired = true;
+    fireVoidBarrage(boss, target);
+  }
   if (attack.timer <= 0) {
     boss.atkT = attack.recoveryFrames;
     boss.specialAttack = null;
@@ -479,6 +540,21 @@ function playerOnDungeonBossIce(target) {
 function updateDungeonBossEffects(target) {
   for (const effect of dungeonBossEffects.slice()) {
     effect.timer--;
+    if (effect.type === 'void_platform_erasure') {
+      if (effect.state === 'warning' && effect.timer <= 0) {
+        effect.state = 'active'; effect.timer = effect.goneFrames;
+        effect.platform.bossVoidWarning = false;
+        effect.platform.bossVoidErased = true;
+        effect.platform.voidDisabled = true;
+        beep(175, 0.12, 'sawtooth', 0.04);
+      } else if (effect.state === 'active' && effect.timer <= 0) {
+        effect.platform.voidDisabled = false;
+        effect.platform.bossVoidErased = false;
+        effect.platform.bossVoidWarning = false;
+        dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      }
+      continue;
+    }
     if (effect.type === 'tundra_ice') {
       if (effect.timer <= 0) dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
       continue;
@@ -567,9 +643,24 @@ function drawCavernSafeShelves() {
 function drawDungeonBossEffects() {
   const cavernActive = dungeonBossEffects.some(effect => effect.bossId === 'cavern_lord');
   if (cavernActive) drawCavernSafeShelves();
+  const voidActive = dungeonBossEffects.some(effect => effect.type === 'void_platform_erasure');
+  if (voidActive) {
+    ctx.globalAlpha = 0.72; ctx.fillStyle = '#7dffd6'; ctx.fillRect(0, 462, dungeonBossDef('void_lord').arena.width, 6);
+    ctx.fillStyle = '#d8fff4'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText('穩定地面', dungeonBossDef('void_lord').arena.width / 2, 454); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+  }
   for (const effect of dungeonBossEffects) {
     const pulse = 0.55 + Math.sin(frame * 0.28 + effect.x * 0.01) * 0.18;
-    if (effect.type === 'tundra_ice') {
+    if (effect.type === 'void_platform_erasure') {
+      ctx.globalAlpha = effect.state === 'warning' ? pulse : 0.28;
+      ctx.fillStyle = effect.state === 'warning' ? '#d9a8ff' : '#7a2fa8';
+      ctx.fillRect(effect.platform.x, effect.platform.y - 5, effect.platform.w, 11);
+      ctx.strokeStyle = effect.state === 'warning' ? '#fff2a8' : '#d9a8ff'; ctx.lineWidth = 3;
+      ctx.setLineDash(effect.state === 'warning' ? [8, 6] : [5, 8]);
+      ctx.strokeRect(effect.platform.x, effect.platform.y - 8, effect.platform.w, 17); ctx.setLineDash([]);
+      ctx.globalAlpha = 1; ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 10px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText(effect.state === 'warning' ? '平台即將消除' : '平台已消除', effect.x, effect.platform.y - 14); ctx.textAlign = 'left';
+    } else if (effect.type === 'tundra_ice') {
       const left = effect.x - effect.w / 2;
       ctx.globalAlpha = 0.72; ctx.fillStyle = '#bdefff'; ctx.fillRect(left, effect.y - 8, effect.w, 8);
       ctx.fillStyle = '#e9fbff'; ctx.fillRect(left + 4, effect.y - 8, effect.w - 8, 2);
@@ -682,6 +773,19 @@ function drawDungeonBossSpecialTelegraph(boss) {
     }
     ctx.restore(); return;
   }
+  if (boss.specialAttack.id === 'void_barrage') {
+    const count = boss.phase >= 3 ? 9 : boss.phase === 2 ? 7 : 5;
+    ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 18);
+    for (let i = 0; i < count; i++) {
+      const angle = i / count * Math.PI * 2 + frame * 0.035;
+      const radius = 29 + (i % 2) * 7;
+      const x = Math.cos(angle) * radius, y = Math.sin(angle) * 16;
+      ctx.fillStyle = i % 2 ? '#d9a8ff' : '#b05ae0';
+      ctx.fillRect(x - 5, y - 5, 10, 10); ctx.fillStyle = '#fff'; ctx.fillRect(x - 2, y - 2, 4, 4);
+    }
+    ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText('虛空彈幕', 0, -28); ctx.restore(); ctx.textAlign = 'left'; return;
+  }
   if (boss.specialAttack.id === 'cavern_shockwave') {
     drawCavernSafeShelves();
     ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 20);
@@ -709,11 +813,23 @@ function drawDungeonBossSpecialTelegraph(boss) {
 }
 
 function drawDungeonBossSprite(boss) {
-  if (!boss || !['meadow_lord','cavern_lord','volcano_lord','tundra_lord'].includes(boss.bossId)) return false;
+  if (!boss || !['meadow_lord','cavern_lord','volcano_lord','tundra_lord','void_lord'].includes(boss.bossId)) return false;
   const def = dungeonBossDef(boss.bossId);
   const flash = boss.hitT > 0;
   ctx.save(); ctx.translate(Math.round(boss.x), Math.round(boss.y));
   if (boss.vx < 0) ctx.scale(-1, 1);
+  if (boss.bossId === 'void_lord') {
+    ctx.globalAlpha = 0.35; ctx.fillStyle = '#d9a8ff'; ctx.fillRect(-43, -42, 86, 36); ctx.globalAlpha = 1;
+    ctx.fillStyle = flash ? '#fff' : '#251532';
+    ctx.fillRect(-34, -35, 68, 30); ctx.fillRect(-47, -24, 21, 16); ctx.fillRect(26, -24, 21, 16);
+    ctx.fillStyle = flash ? '#fff' : def.accent;
+    ctx.fillRect(-30, -58, 60, 30); ctx.fillRect(-40, -61, 18, 22); ctx.fillRect(22, -61, 18, 22);
+    ctx.fillStyle = flash ? '#fff' : def.color;
+    ctx.fillRect(-22, -70, 44, 21); ctx.fillRect(-36, -72, 13, 18); ctx.fillRect(23, -72, 13, 18);
+    ctx.fillStyle = '#f0d8ff'; ctx.fillRect(-16, -48, 9, 8); ctx.fillRect(8, -48, 9, 8); ctx.fillRect(-8, -28, 20, 5);
+    ctx.fillStyle = '#fff'; ctx.fillRect(-13, -46, 4, 4); ctx.fillRect(11, -46, 4, 4);
+    ctx.restore(); return true;
+  }
   if (boss.bossId === 'tundra_lord') {
     ctx.fillStyle = flash ? '#fff' : '#315d78';
     ctx.fillRect(-34, -35, 68, 30); ctx.fillRect(-45, -25, 19, 17); ctx.fillRect(26, -25, 19, 17);
