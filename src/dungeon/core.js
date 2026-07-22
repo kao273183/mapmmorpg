@@ -178,6 +178,7 @@ function resetDungeonRun(benchmarkProfile) {
     roomHistory:[],
     eventHistory:[],
     hazardTutorials:{},
+    modifierState:typeof createDungeonModifierRunState === 'function' ? createDungeonModifierRunState(seed) : null,
     chapterUsed:{ camp:false, treasure:false },
     completedFloor:0,
     rewardedFloor:0,

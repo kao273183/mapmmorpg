@@ -58,8 +58,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.7';
+const GAME_VERSION = '0.29.8';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.8', date:'2026-07-22', title:'G1-A 祝福與詛咒技術地基',
+    items:['建立祝福／詛咒共用的每局狀態、選擇、接受與安全拒絕流程。','同一地城種子可重現選項；每局提供兩次有限重抽，且不會重複提供已持有項目。','詛咒資料必須同時標示代價與對應收益；本批只建立契約，不調整戰鬥數值。']
+  },
   {
     version:'0.29.7', date:'2026-07-22', title:'F1 專案結構整理',
     items:['程式碼集中至 src，主遊戲依責任拆成九個載入順序固定的模組。','遊戲素材與原始素材包分流至 assets/runtime 與 assets/source。','完成完整 smoke、手機橫向、正式頁素材與舊存檔回歸；本次不調整玩法數值。']
