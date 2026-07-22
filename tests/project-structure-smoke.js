@@ -65,7 +65,7 @@ function scriptSources(file) {
   return Array.from(html.matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g), match => match[1]);
 }
 
-const releaseVersion = '0.29.13';
+const releaseVersion = '0.29.14';
 function releaseResourceVersions(file) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
   return Array.from(html.matchAll(/(?:style\.css|src\/(?:dungeon\/[^"?]+|game\/[^"?]+|mobile\.js))\?v=([^"&]+)/g), match => match[1]);

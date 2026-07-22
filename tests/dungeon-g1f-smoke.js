@@ -93,7 +93,7 @@ const balanceSource = fs.readFileSync(path.join(root, 'src/dungeon/balance.js'),
 const coreSource = fs.readFileSync(path.join(root, 'src/dungeon/core.js'), 'utf8');
 const updateSource = fs.readFileSync(path.join(root, 'src/game/update.js'), 'utf8');
 const planSource = fs.readFileSync(path.join(root, 'doc/PLAN-events-G1.md'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.13'"));
+assert.ok(gameSource.includes("version:'0.29.13'"), 'G1-F update note must remain available after later releases');
 assert.ok(balanceSource.includes('modifierStats'));
 assert.ok(balanceSource.includes('g1Modifiers'));
 assert.ok(coreSource.includes("recordDungeonReward('materials'"));

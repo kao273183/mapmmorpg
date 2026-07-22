@@ -11,7 +11,24 @@
   const coarse = window.matchMedia('(pointer:coarse)');
   const portrait = window.matchMedia('(orientation:portrait)');
 
+  function updateViewportMetrics() {
+    const viewport = window.visualViewport;
+    const width = Math.max(1, Math.round(viewport ? viewport.width : window.innerWidth));
+    const height = Math.max(1, Math.round(viewport ? viewport.height : window.innerHeight));
+    document.documentElement.style.setProperty('--app-width', width + 'px');
+    document.documentElement.style.setProperty('--app-height', height + 'px');
+    const bodyStyle = typeof getComputedStyle === 'function' ? getComputedStyle(document.body) : null;
+    const horizontalPadding = bodyStyle ? (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0) : 0;
+    const verticalPadding = bodyStyle ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0) : 0;
+    const availableWidth = Math.max(1, width - horizontalPadding);
+    const availableHeight = Math.max(1, height - verticalPadding);
+    const canvasWidth = Math.max(1, Math.floor(Math.min(960, availableWidth, availableHeight * 16 / 9)));
+    document.documentElement.style.setProperty('--canvas-width', canvasWidth + 'px');
+    document.documentElement.classList.toggle('mobile-short-landscape', coarse.matches && !portrait.matches && height < 540);
+  }
+
   function updateOrientationUi() {
+    updateViewportMetrics();
     const blocked = coarse.matches && portrait.matches && window.innerWidth <= 1024;
     prompt.setAttribute('aria-hidden', blocked ? 'false' : 'true');
     document.documentElement.classList.toggle('mobile-portrait', blocked);
@@ -47,8 +64,12 @@
   button.addEventListener('click', enterLandscape);
   window.addEventListener('resize', updateOrientationUi);
   window.addEventListener('orientationchange', updateOrientationUi);
+  window.addEventListener('pageshow', updateOrientationUi);
   document.addEventListener('fullscreenchange', updateOrientationUi);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateOrientationUi);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateOrientationUi);
+    window.visualViewport.addEventListener('scroll', updateOrientationUi);
+  }
   if (coarse.addEventListener) {
     coarse.addEventListener('change', updateOrientationUi);
     portrait.addEventListener('change', updateOrientationUi);

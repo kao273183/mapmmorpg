@@ -19,6 +19,7 @@ function clearGameInputs() {
   for (const k of Object.keys(keys)) keys[k] = false;
   for (const k of Object.keys(pressedKeys)) delete pressedKeys[k];
   inputBuffer.jump = 0; inputBuffer.dash = 0; inputBuffer.skills.fill(0);
+  if (typeof resetVirtualJoystick === 'function') resetVirtualJoystick();
   for (const id of Object.keys(touchMap || {})) delete touchMap[id];
 }
 function captureBufferedInputs() {
@@ -58,8 +59,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.13';
+const GAME_VERSION = '0.29.14';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.14', date:'2026-07-22', title:'行動版顯示與虛擬搖桿',
+    items:['橫向畫面改依瀏覽器實際可視高度縮放，Safari 網址列與分頁列展開時也不會裁掉遊戲上下緣。','左側三個方向按鈕改為可拖曳的圓形虛擬搖桿，支援左右移動與向下穿越平台。','保留右側跳躍、衝刺、技能、藥水、裝備與能力按鈕，並補齊窄高度與多點觸控回歸。']
+  },
   {
     version:'0.29.13', date:'2026-07-22', title:'G1-F 平衡與完整收尾',
     items:['以 D3 劍士／法師配對基準比較無效果、只拿祝福、只拿詛咒與混合四種局況。','固定模型與極端疊加均未越過首輪警戒，因此保留既有數值，不以理論值冒充自然遊玩樣本。','平衡紀錄新增祝福／詛咒組合、通關時間、承傷、靈魂與房間獎勵，完整報表可一併匯出。']
@@ -617,11 +622,35 @@ cv.addEventListener('mousedown', e => {
 });
 
 // ---------- touch controls ----------
-const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.__FORCE_TOUCH_CONTROLS__ === true;
+if (window.__FORCE_TOUCH_CONTROLS__ === true) document.documentElement.classList.add('force-touch-controls');
+const virtualJoystick = { x:100, y:404, radius:70, hitRadius:88, knobRange:38 };
+let joystickTouchId = null;
+let joystickVectorX = 0;
+let joystickVectorY = 0;
+function virtualJoystickAt(mx, my) {
+  return Math.hypot(mx - virtualJoystick.x, my - virtualJoystick.y) <= virtualJoystick.hitRadius;
+}
+function updateVirtualJoystick(mx, my) {
+  let dx = mx - virtualJoystick.x, dy = my - virtualJoystick.y;
+  const distance = Math.hypot(dx, dy);
+  const limit = virtualJoystick.radius;
+  if (distance > limit) { dx *= limit / distance; dy *= limit / distance; }
+  joystickVectorX = dx / limit;
+  joystickVectorY = dy / limit;
+  setGameKey('arrowleft', joystickVectorX < -0.24);
+  setGameKey('arrowright', joystickVectorX > 0.24);
+  setGameKey('arrowdown', joystickVectorY > 0.34);
+}
+function resetVirtualJoystick() {
+  joystickTouchId = null;
+  joystickVectorX = 0;
+  joystickVectorY = 0;
+  setGameKey('arrowleft', false);
+  setGameKey('arrowright', false);
+  setGameKey('arrowdown', false);
+}
 const vbtns = [
-  { x: 16,  y: 396, w: 74, h: 74, label: '◀', hold: 'arrowleft' },
-  { x: 104, y: 396, w: 74, h: 74, label: '▶', hold: 'arrowright' },
-  { x: 60,  y: 312, w: 74, h: 74, label: '▼', hold: 'arrowdown' },
   { x: 870, y: 396, w: 74, h: 74, label: '跳', press: 'space' },
   { x: 786, y: 396, w: 74, h: 74, label: 'Z', press: 'z' },
   { x: 702, y: 396, w: 74, h: 74, label: 'X', press: 'x' },
@@ -632,7 +661,7 @@ const vbtns = [
   { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
   { x: 890, y: 330, w: 52, h: 52, label: 'P', tap: openStats },
 ];
-const touchMap = {}; // touch identifier -> vbtn
+const touchMap = {}; // touch identifier -> virtual control
 function touchPos(t) {
   const r = cv.getBoundingClientRect();
   return [(t.clientX - r.left) * (W / r.width), (t.clientY - r.top) * (H / r.height)];
@@ -642,6 +671,7 @@ function vbtnAt(mx, my) {
 }
 function releaseVbtn(b) {
   if (!b) return;
+  if (b === virtualJoystick) { resetVirtualJoystick(); return; }
   if (b.hold) setGameKey(b.hold, false);
   if (b.press) setGameKey(b.press, false);
 }
@@ -656,6 +686,12 @@ cv.addEventListener('touchstart', e => {
   for (const t of e.changedTouches) {
     const [mx, my] = touchPos(t);
     if (gameState === 'play') {
+      if (joystickTouchId == null && virtualJoystickAt(mx, my)) {
+        joystickTouchId = t.identifier;
+        touchMap[t.identifier] = virtualJoystick;
+        updateVirtualJoystick(mx, my);
+        continue;
+      }
       const b = vbtnAt(mx, my);
       if (b) {
         touchMap[t.identifier] = b;
@@ -674,6 +710,10 @@ cv.addEventListener('touchmove', e => {
     const prev = touchMap[t.identifier];
     if (!prev) continue;
     const [mx, my] = touchPos(t);
+    if (prev === virtualJoystick) {
+      updateVirtualJoystick(mx, my);
+      continue;
+    }
     const b = vbtnAt(mx, my);
     if (b !== prev) {
       releaseVbtn(prev);
@@ -699,6 +739,22 @@ function drawTouchUI() {
   if (!isTouch || gameState !== 'play' || eventPanel || dungeonPanelOpen()) return;
   const held = new Set(Object.values(touchMap));
   ctx.textAlign = 'center';
+  const stickActive = joystickTouchId != null;
+  ctx.beginPath(); ctx.arc(virtualJoystick.x, virtualJoystick.y, virtualJoystick.radius, 0, Math.PI * 2);
+  ctx.fillStyle = stickActive ? 'rgba(38,72,82,0.46)' : 'rgba(20,22,43,0.38)'; ctx.fill();
+  ctx.strokeStyle = stickActive ? 'rgba(125,255,214,0.82)' : 'rgba(200,205,236,0.54)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,205,236,0.22)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(virtualJoystick.x - 44, virtualJoystick.y); ctx.lineTo(virtualJoystick.x + 44, virtualJoystick.y);
+  ctx.moveTo(virtualJoystick.x, virtualJoystick.y - 44); ctx.lineTo(virtualJoystick.x, virtualJoystick.y + 44);
+  ctx.stroke();
+  const knobX = virtualJoystick.x + joystickVectorX * virtualJoystick.knobRange;
+  const knobY = virtualJoystick.y + joystickVectorY * virtualJoystick.knobRange;
+  ctx.beginPath(); ctx.arc(knobX, knobY, 27, 0, Math.PI * 2);
+  ctx.fillStyle = stickActive ? 'rgba(125,255,214,0.66)' : 'rgba(200,205,236,0.38)'; ctx.fill();
+  ctx.strokeStyle = stickActive ? '#c6fff0' : 'rgba(255,255,255,0.68)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = 'bold 11px "Courier New",monospace';
+  ctx.fillText('移動', virtualJoystick.x, virtualJoystick.y + virtualJoystick.radius + 17);
   for (const b of vbtns) {
     ctx.fillStyle = held.has(b) ? 'rgba(125,255,214,0.35)' : 'rgba(20,22,43,0.35)';
     ctx.fillRect(b.x, b.y, b.w, b.h);
