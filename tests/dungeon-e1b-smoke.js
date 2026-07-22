@@ -82,7 +82,7 @@ const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'u
 assert.ok(gameSource.includes('updateDungeonBossEffects(p)'));
 assert.ok(gameSource.includes('drawDungeonBossEffects()'));
 assert.ok(gameSource.includes('drawDungeonBossSprite(m)'));
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.1'"));
+assert.ok(gameSource.includes("const GAME_VERSION = '0.29.2'"));
 for (const mode of ['root-active','thorns','seed-active','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
 console.log('dungeon E1-B meadow boss smoke test passed (phase schedule, root sweep, thorns, seed burst, source labels)');

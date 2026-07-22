@@ -29,8 +29,8 @@ const DUNGEON_BOSS_DEFS = {
     arena:{ width:1300, platforms:[{ x:170, y:405, w:150 }, { x:980, y:405, w:150 }, { x:570, y:325, w:160 }] },
     legacyAttackId:'leap_volley',
     attackSlots:[
-      { id:'marked_rockfall', name:'落石標記', implemented:false },
-      { id:'cavern_shockwave', name:'洞窟衝擊波', implemented:false }
+      { id:'marked_rockfall', name:'落石標記', implemented:true, warningFrames:60, activeFrames:28, recoveryFrames:72 },
+      { id:'cavern_shockwave', name:'洞窟衝擊波', implemented:true, warningFrames:42, activeFrames:110, recoveryFrames:84 }
     ]
   },
   volcano_lord: {
@@ -148,10 +148,17 @@ function dungeonBossAttackSlot(boss, attackId) {
 
 function dungeonBossAttackSequence(boss) {
   const def = dungeonBossDef(boss.bossId);
-  if (def.id !== 'meadow_lord') return [def.legacyAttackId];
-  if (boss.phase <= 1) return ['root_sweep', def.legacyAttackId];
-  if (boss.phase === 2) return ['root_sweep', def.legacyAttackId, 'seed_burst'];
-  return ['root_sweep', 'seed_burst', def.legacyAttackId];
+  if (def.id === 'meadow_lord') {
+    if (boss.phase <= 1) return ['root_sweep', def.legacyAttackId];
+    if (boss.phase === 2) return ['root_sweep', def.legacyAttackId, 'seed_burst'];
+    return ['root_sweep', 'seed_burst', def.legacyAttackId];
+  }
+  if (def.id === 'cavern_lord') {
+    if (boss.phase <= 1) return ['marked_rockfall', def.legacyAttackId];
+    if (boss.phase === 2) return ['marked_rockfall', def.legacyAttackId, 'cavern_shockwave'];
+    return ['marked_rockfall', 'cavern_shockwave', def.legacyAttackId];
+  }
+  return [def.legacyAttackId];
 }
 
 function dungeonBossNextAttack(boss) {
@@ -179,6 +186,39 @@ function meadowRootSweepEffects(boss, target) {
   return effects;
 }
 
+function cavernRockShelves(boss) {
+  return dungeonBossDef(boss.bossId).arena.platforms.map(platform => ({
+    x:platform.x - 18, y:platform.y, w:platform.w + 36
+  }));
+}
+
+function cavernRockfallEffects(boss, target) {
+  const slot = dungeonBossAttackSlot(boss, 'marked_rockfall');
+  const count = boss.phase <= 1 ? 2 : boss.phase === 2 ? 3 : 4;
+  const arenaWidth = dungeonBossDef(boss.bossId).arena.width;
+  const shelves = cavernRockShelves(boss);
+  const lanes = [90, 430, 835, 1210, 470, 880]
+    .filter(x => !shelves.some(shelf => x >= shelf.x && x <= shelf.x + shelf.w))
+    .sort((a, b) => Math.abs(a - target.x) - Math.abs(b - target.x));
+  return lanes.slice(0, count).map((x, i) => ({
+    type:'cavern_rockfall', bossId:boss.bossId, bossName:boss.name,
+    x:Math.max(70, Math.min(arenaWidth - 70, x)), y:468, w:92,
+    state:'warning', timer:slot.warningFrames + i * 8, activeFrames:slot.activeFrames,
+    damage:Math.max(1, Math.round(boss.dmg * 0.88)), phase:boss.phase, hit:false
+  }));
+}
+
+function fireCavernShockwave(boss) {
+  const slot = dungeonBossAttackSlot(boss, 'cavern_shockwave');
+  for (const direction of [-1, 1]) dungeonBossEffects.push({
+    type:'cavern_wave', bossId:boss.bossId, bossName:boss.name,
+    x:boss.x + direction * 46, y:468, w:76, direction, vx:direction * (boss.phase >= 3 ? 7.2 : 6),
+    state:'active', timer:slot.activeFrames, activeFrames:slot.activeFrames,
+    damage:Math.max(1, Math.round(boss.dmg * 0.78)), phase:boss.phase, hit:false
+  });
+  beep(125, 0.18, 'sawtooth', 0.05);
+}
+
 function startDungeonBossSpecialAttack(boss, target, attackId) {
   const slot = dungeonBossAttackSlot(boss, attackId);
   if (!slot || !slot.implemented || boss.specialAttack) return false;
@@ -192,6 +232,16 @@ function startDungeonBossSpecialAttack(boss, target, attackId) {
       recoveryFrames:slot.recoveryFrames
     };
   } else if (attackId === 'seed_burst') {
+    boss.specialAttack = { id:attackId, timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames, fired:false };
+  } else if (attackId === 'marked_rockfall') {
+    const effects = cavernRockfallEffects(boss, target);
+    dungeonBossEffects.push(...effects);
+    boss.specialAttack = {
+      id:attackId,
+      timer:Math.max(...effects.map(effect => effect.timer)) + slot.activeFrames,
+      recoveryFrames:slot.recoveryFrames
+    };
+  } else if (attackId === 'cavern_shockwave') {
     boss.specialAttack = { id:attackId, timer:slot.warningFrames, recoveryFrames:slot.recoveryFrames, fired:false };
   } else return false;
   boss.vx = 0;
@@ -224,6 +274,10 @@ function updateDungeonBossSpecialAttack(boss, target) {
     attack.fired = true;
     fireMeadowSeedBurst(boss, target);
   }
+  if (attack.id === 'cavern_shockwave' && attack.timer <= 0 && !attack.fired) {
+    attack.fired = true;
+    fireCavernShockwave(boss);
+  }
   if (attack.timer <= 0) {
     boss.atkT = attack.recoveryFrames;
     boss.specialAttack = null;
@@ -239,21 +293,47 @@ function dungeonBossEffectHitsPlayer(effect, target) {
     && target.y - target.h <= effect.y;
 }
 
+function cavernBossEffectHitsPlayer(effect, target) {
+  if (target.y < 422) return false; // 岩棚上的角色安全，不受地面落石與衝擊波命中。
+  return target.x + target.w / 2 >= effect.x - effect.w / 2
+    && target.x - target.w / 2 <= effect.x + effect.w / 2
+    && target.y >= effect.y - 54 && target.y - target.h <= effect.y;
+}
+
 function updateDungeonBossEffects(target) {
   for (const effect of dungeonBossEffects.slice()) {
     effect.timer--;
+    if (effect.type === 'cavern_wave') {
+      effect.x += effect.vx;
+      if (!effect.hit && target.inv <= 0 && cavernBossEffectHitsPlayer(effect, target)) {
+        effect.hit = true;
+        const damage = Math.max(1, effect.damage - armorDef());
+        target.vx = effect.direction * 5; target.vy = -4;
+        if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的洞窟衝擊波', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+      }
+      if (effect.timer <= 0 || effect.x < -80 || effect.x > dungeonBossDef(effect.bossId).arena.width + 80) dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      continue;
+    }
     if (effect.state === 'warning' && effect.timer <= 0) {
       effect.state = 'active'; effect.timer = effect.activeFrames; effect.hit = false;
       beep(190, 0.08, 'sawtooth', 0.035);
     } else if (effect.state === 'active') {
-      if (!effect.hit && target.inv <= 0 && dungeonBossEffectHitsPlayer(effect, target)) {
+      const hits = effect.type === 'cavern_rockfall'
+        ? effect.timer <= 1 && cavernBossEffectHitsPlayer(effect, target)
+        : dungeonBossEffectHitsPlayer(effect, target);
+      if (!effect.hit && target.inv <= 0 && hits) {
         effect.hit = true;
-        target.hazardSlowT = Math.max(target.hazardSlowT || 0, 60);
         const damage = Math.max(1, effect.damage - armorDef());
-        if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的根鬚橫掃', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+        if (effect.type === 'cavern_rockfall') {
+          target.vx = (target.x < effect.x ? -1 : 1) * 3.5;
+          if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的落石標記', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+        } else {
+          target.hazardSlowT = Math.max(target.hazardSlowT || 0, 60);
+          if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的根鬚橫掃', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+        }
       }
       if (effect.timer <= 0) {
-        if (effect.lingerFrames > 0) { effect.state = 'thorns'; effect.timer = effect.lingerFrames; }
+        if (effect.type === 'meadow_root' && effect.lingerFrames > 0) { effect.state = 'thorns'; effect.timer = effect.lingerFrames; }
         else dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
       }
     } else if (effect.state === 'thorns') {
@@ -264,10 +344,40 @@ function updateDungeonBossEffects(target) {
   return false;
 }
 
+function drawCavernSafeShelves() {
+  const def = dungeonBossDef('cavern_lord');
+  ctx.globalAlpha = 0.34 + Math.sin(frame * 0.16) * 0.08;
+  for (const shelf of cavernRockShelves({ bossId:'cavern_lord' })) {
+    ctx.fillStyle = '#b9f3ff'; ctx.fillRect(shelf.x + 18, shelf.y - 5, shelf.w - 36, 5);
+    ctx.fillStyle = def.color; ctx.fillRect(shelf.x + 28, shelf.y - 10, shelf.w - 56, 3);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawDungeonBossEffects() {
+  const cavernActive = dungeonBossEffects.some(effect => effect.bossId === 'cavern_lord');
+  if (cavernActive) drawCavernSafeShelves();
   for (const effect of dungeonBossEffects) {
     const pulse = 0.55 + Math.sin(frame * 0.28 + effect.x * 0.01) * 0.18;
-    if (effect.state === 'warning') {
+    if (effect.type === 'cavern_rockfall') {
+      if (effect.state === 'warning') {
+        ctx.globalAlpha = pulse; ctx.fillStyle = '#d8b76a';
+        ctx.beginPath(); ctx.ellipse(effect.x, effect.y - 3, effect.w / 2, 10, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff2a8'; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
+        ctx.beginPath(); ctx.ellipse(effect.x, effect.y - 3, effect.w / 2, 10, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#efe8dc'; ctx.fillRect(effect.x - 10, 92 + (effect.timer % 18), 20, 13);
+      } else {
+        const progress = 1 - Math.max(0, effect.timer) / Math.max(1, effect.activeFrames);
+        const rockY = 80 + progress * 365;
+        ctx.globalAlpha = 0.92; ctx.fillStyle = '#665e72'; ctx.fillRect(effect.x - 26, rockY - 23, 52, 46);
+        ctx.fillStyle = '#9589aa'; ctx.fillRect(effect.x - 17, rockY - 17, 23, 12);
+        ctx.fillStyle = '#3f3948'; ctx.fillRect(effect.x + 7, rockY + 2, 14, 13);
+      }
+    } else if (effect.type === 'cavern_wave') {
+      ctx.globalAlpha = 0.88; ctx.fillStyle = '#8a7aa8';
+      ctx.beginPath(); ctx.moveTo(effect.x - effect.w / 2, effect.y); ctx.lineTo(effect.x - 18, effect.y - 40); ctx.lineTo(effect.x, effect.y - 18); ctx.lineTo(effect.x + 18, effect.y - 52); ctx.lineTo(effect.x + effect.w / 2, effect.y); ctx.fill();
+      ctx.strokeStyle = '#d8cced'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(effect.x - effect.w / 2, effect.y - 4); ctx.lineTo(effect.x + effect.w / 2, effect.y - 4); ctx.stroke();
+    } else if (effect.state === 'warning') {
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#6b4b2a'; ctx.fillRect(effect.x - effect.w / 2, effect.y - 5, effect.w, 5);
       ctx.strokeStyle = '#d9c47a'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
@@ -286,8 +396,21 @@ function drawDungeonBossEffects() {
 }
 
 function drawDungeonBossSpecialTelegraph(boss) {
-  if (!boss.specialAttack || boss.specialAttack.id !== 'seed_burst') return;
+  if (!boss.specialAttack) return;
   const def = dungeonBossDef(boss.bossId);
+  if (boss.specialAttack.id === 'cavern_shockwave') {
+    drawCavernSafeShelves();
+    ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 20);
+    const radius = 22 + Math.sin(frame * 0.35) * 4;
+    ctx.strokeStyle = '#d8cced'; ctx.lineWidth = 4;
+    for (const direction of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(direction * 12, 10, radius, -0.85, 0.85); ctx.stroke();
+    }
+    ctx.fillStyle = '#fff2a8'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText('跳上岩棚', 0, -25); ctx.restore(); ctx.textAlign = 'left';
+    return;
+  }
+  if (boss.specialAttack.id !== 'seed_burst') return;
   const count = boss.phase >= 3 ? 7 : 5;
   ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 18);
   for (let i = 0; i < count; i++) {
@@ -302,11 +425,23 @@ function drawDungeonBossSpecialTelegraph(boss) {
 }
 
 function drawDungeonBossSprite(boss) {
-  if (!boss || boss.bossId !== 'meadow_lord') return false;
+  if (!boss || (boss.bossId !== 'meadow_lord' && boss.bossId !== 'cavern_lord')) return false;
   const def = dungeonBossDef(boss.bossId);
   const flash = boss.hitT > 0;
   ctx.save(); ctx.translate(Math.round(boss.x), Math.round(boss.y));
   if (boss.vx < 0) ctx.scale(-1, 1);
+  if (boss.bossId === 'cavern_lord') {
+    ctx.fillStyle = flash ? '#fff' : '#3f3948';
+    ctx.fillRect(-34, -34, 68, 29); ctx.fillRect(-45, -24, 18, 16); ctx.fillRect(27, -24, 18, 16);
+    ctx.fillStyle = flash ? '#fff' : def.accent;
+    ctx.fillRect(-29, -56, 58, 28); ctx.fillRect(-38, -49, 16, 19); ctx.fillRect(22, -49, 16, 19);
+    ctx.fillStyle = flash ? '#fff' : def.color;
+    ctx.fillRect(-19, -68, 38, 18); ctx.fillRect(-27, -58, 14, 14); ctx.fillRect(13, -58, 14, 14);
+    ctx.fillStyle = '#1a1523'; ctx.fillRect(-16, -47, 9, 8); ctx.fillRect(8, -47, 9, 8);
+    ctx.fillStyle = '#b9f3ff'; ctx.fillRect(-13, -45, 4, 4); ctx.fillRect(10, -45, 4, 4);
+    ctx.fillStyle = '#c7badc'; ctx.fillRect(-4, -30, 15, 5);
+    ctx.restore(); return true;
+  }
   ctx.fillStyle = flash ? '#fff' : '#6b4b2a';
   ctx.fillRect(-21, -39, 42, 34); ctx.fillRect(-31, -12, 18, 8); ctx.fillRect(13, -12, 18, 8);
   ctx.fillStyle = flash ? '#fff' : def.accent;

@@ -5,22 +5,22 @@
 <base href="../">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dungeon D1 Smoke Test</title>
-<link rel="stylesheet" href="style.css?v=0.29.1">
+<link rel="stylesheet" href="style.css?v=0.29.2">
 </head>
 <body>
 <canvas id="cv" width="960" height="540"></canvas>
 <div id="hint">Dungeon D1 Smoke Test</div>
 <script src="tiles.js?v=1"></script>
 <script src="items.js?v=1"></script>
-<script src="dungeon-data.js?v=0.29.1"></script>
-<script src="dungeon-bosses.js?v=0.29.1"></script>
-<script src="dungeon-balance.js?v=0.29.1"></script>
-<script src="dungeon.js?v=0.29.1"></script>
-<script src="dungeon-hazards.js?v=0.29.1"></script>
-<script src="dungeon-events.js?v=0.29.1"></script>
-<script src="dungeon-trials.js?v=0.29.1"></script>
-<script src="dungeon-ui.js?v=0.29.1"></script>
-<script src="game.js?v=0.29.1"></script>
+<script src="dungeon-data.js?v=0.29.2"></script>
+<script src="dungeon-bosses.js?v=0.29.2"></script>
+<script src="dungeon-balance.js?v=0.29.2"></script>
+<script src="dungeon.js?v=0.29.2"></script>
+<script src="dungeon-hazards.js?v=0.29.2"></script>
+<script src="dungeon-events.js?v=0.29.2"></script>
+<script src="dungeon-trials.js?v=0.29.2"></script>
+<script src="dungeon-ui.js?v=0.29.2"></script>
+<script src="game.js?v=0.29.2"></script>
 <script>
 const smokeParams = new URLSearchParams(location.search);
 const mode = smokeParams.get('mode') || 'route';
@@ -82,6 +82,18 @@ if (mode.startsWith('boss-')) {
     } else if (bossVariant === 'seed' || bossVariant === 'seed-active') {
       boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'seed_burst');
       if (bossVariant === 'seed') boss.specialAttack.timer = 9999;
+      else { boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999; }
+    }
+  } else if (boss && bossKey === 'cavern' && bossVariant) {
+    floorT = 0; boss.x = 720; boss.targetX = 720; boss.atkT = 9999;
+    if (bossVariant === 'rock' || bossVariant === 'rock-active' || bossVariant === 'lowfx') {
+      if (bossVariant === 'lowfx') { combatSettings.flashes = false; combatSettings.shake = 0; combatSettings.numbers = 'compact'; }
+      boss.phase = bossVariant === 'rock' ? 1 : 2;
+      startDungeonBossSpecialAttack(boss, player, 'marked_rockfall'); boss.specialAttack.timer = 9999;
+      if (bossVariant === 'rock-active' || bossVariant === 'lowfx') for (const effect of dungeonBossEffects) { effect.state = 'active'; effect.timer = 2; }
+    } else if (bossVariant === 'wave' || bossVariant === 'wave-active') {
+      boss.phase = 2; startDungeonBossSpecialAttack(boss, player, 'cavern_shockwave');
+      if (bossVariant === 'wave') boss.specialAttack.timer = 9999;
       else { boss.specialAttack.timer = 1; updateDungeonBossSpecialAttack(boss, player); boss.atkT = 9999; }
     }
   }
