@@ -432,6 +432,14 @@ function extractDungeonRun() {
   endRun('extract');
 }
 
+// 路線選擇畫面直接撤退回基地（保留戰利品，視為撤退不算死亡）。
+function retreatFromRoute() {
+  if (!routePanel) return;
+  routePanel = null;
+  lastDamageSource = '主動撤退';
+  endRun('extract');
+}
+
 function advanceDungeonPortal() {
   if (!portal) return;
   const nextFloor = floor + 1;

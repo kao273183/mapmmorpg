@@ -18,6 +18,7 @@ function setGameKey(key, down) {
 function clearGameInputs() {
   for (const k of Object.keys(keys)) keys[k] = false;
   for (const k of Object.keys(pressedKeys)) delete pressedKeys[k];
+  if (typeof interruptFleeChannel === 'function') interruptFleeChannel();
   inputBuffer.jump = 0; inputBuffer.dash = 0; inputBuffer.skills.fill(0);
   if (typeof resetVirtualJoystick === 'function') resetVirtualJoystick();
   for (const id of Object.keys(touchMap || {})) delete touchMap[id];
@@ -59,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.16';
+const GAME_VERSION = '0.29.17';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.17', date:'2026-07-22', title:'逃走機制：道中撤退回基地',
+    items:['道中長按 Q（手機為「逃」鈕）約 1.5 秒即可逃回基地，受擊會中斷蓄力。','路線選擇畫面新增「返回基地」按鈕（鍵盤 R），隨時能主動撤退。','逃走視為撤退：保留本局裝備、靈魂與素材，不算死亡。']
+  },
   {
     version:'0.29.16', date:'2026-07-22', title:'難度模式：一般／複雜',
     items:['設定新增「難度模式」：一般（推薦）與複雜，即時生效並記住於本瀏覽器。','一般模式移除滑冰與消失平台、減少每房陷阱與地形傷害，並降低險境房出現機率。','一般模式同步降低五群系 Boss 的生命與傷害；複雜模式維持現行完整地形與 Boss 強度。']
@@ -715,6 +720,7 @@ const vbtns = [
   { x: 768, y: 330, w: 52, h: 52, label: 'S', tap: () => usePot('mp') },
   { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
   { x: 890, y: 330, w: 52, h: 52, label: 'P', tap: openStats },
+  { x: 636, y: 330, w: 52, h: 52, label: '逃', hold: 'q' },
 ];
 const touchMap = {}; // touch identifier -> virtual control
 function touchPos(t) {
