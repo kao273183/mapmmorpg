@@ -89,12 +89,10 @@ assert.strictEqual(exported.benchmark.summary.runs, 10);
 
 const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
+assert.ok(gameSource.includes("version:'0.29.6', date:'2026-07-22', title:'E1-G Boss 平衡與收尾'"));
 assert.ok(gameSource.includes('function renderSettingsBosses'));
 assert.ok(gameSource.includes("settingsPage === 'bosses'"));
 assert.ok(smokeHtml.includes("mode === 'settings-boss-records'"));
 assert.ok(smokeHtml.includes("mode === 'result-death' || mode === 'result-extract'"));
-assert.ok(indexHtml.includes('src/game/main.js?v=0.29.6'));
 
 console.log('dungeon E1-G balance smoke test passed (10 paired boss cases, class timing/damage report, export and record page)');

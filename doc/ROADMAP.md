@@ -80,6 +80,8 @@
 
 固定更新率、輸入緩衝、命中回饋、Boss 預警與效果設定的完整規格詳見 [DESIGN-combat-feel.md](DESIGN-combat-feel.md)。
 
+F1 專案結構整理已完成：程式集中至 `src/`、主遊戲拆成九個責任模組，runtime／source 素材完成分區，並建立載入順序、資源版本與完整回歸契約。詳見 [PROJECT-STRUCTURE.md](PROJECT-STRUCTURE.md)。
+
 完成標準：第 5 層 Boss 的死亡原因容易理解；桌機與手機皆無輸入卡死；舊存檔可升級。
 
 ### v0.26 地城機制與路線選擇

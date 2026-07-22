@@ -103,7 +103,6 @@ assert.ok(velocity < 0, 'reverse input must brake and reverse on boss ice');
 
 const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['lance-active','dash-active','ice','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
 console.log('dungeon E1-E tundra boss smoke test passed (phase schedule, ice lance, blizzard dash, ice braking, source labels)');

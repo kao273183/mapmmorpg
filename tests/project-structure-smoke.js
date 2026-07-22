@@ -64,6 +64,19 @@ function scriptSources(file) {
   return Array.from(html.matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"><\/script>/g), match => match[1]);
 }
 
+const releaseVersion = '0.29.7';
+function releaseResourceVersions(file) {
+  const html = fs.readFileSync(path.join(root, file), 'utf8');
+  return Array.from(html.matchAll(/(?:style\.css|src\/(?:dungeon\/[^"?]+|game\/[^"?]+|mobile\.js))\?v=([^"&]+)/g), match => match[1]);
+}
+for (const entry of ['index.html', 'tests/dungeon-smoke.html']) {
+  const versions = releaseResourceVersions(entry);
+  assert.ok(versions.length > 0, entry + ' should contain versioned release resources');
+  assert.ok(versions.every(version => version === releaseVersion), entry + ' release resources should use v' + releaseVersion);
+}
+const interfaceSource = fs.readFileSync(path.join(root, 'src/game/interface.js'), 'utf8');
+assert.ok(interfaceSource.includes("const GAME_VERSION = '" + releaseVersion + "';"), 'in-game version should match release resources');
+
 const sharedOrder = [
   'src/data/tiles.js',
   'src/data/items.js',
@@ -83,4 +96,4 @@ assert.deepStrictEqual(smokeScripts.slice(0, sharedOrder.length), sharedOrder);
 assert.deepStrictEqual(indexScripts.slice(sharedOrder.length), ['src/mobile.js', ...GAME_SOURCE_FILES]);
 assert.deepStrictEqual(smokeScripts.slice(sharedOrder.length), GAME_SOURCE_FILES);
 
-console.log('project structure smoke test passed (src/assets layout and browser script order)');
+console.log('project structure smoke test passed (src/assets layout, browser order, release version)');

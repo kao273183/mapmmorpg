@@ -58,8 +58,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.6';
+const GAME_VERSION = '0.29.7';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.7', date:'2026-07-22', title:'F1 專案結構整理',
+    items:['程式碼集中至 src，主遊戲依責任拆成九個載入順序固定的模組。','遊戲素材與原始素材包分流至 assets/runtime 與 assets/source。','完成完整 smoke、手機橫向、正式頁素材與舊存檔回歸；本次不調整玩法數值。']
+  },
   {
     version:'0.29.6', date:'2026-07-22', title:'E1-G Boss 平衡與收尾',
     items:['五隻 Boss 各加入劍士／法師固定配對基準，統計擊殺時間與承傷。','設定新增 Boss 測試紀錄頁，顯示目標區間與超過 15% 的職業差警戒。','完成手機、低特效、死亡／撤退、掉落、舊存檔與完整 smoke 回歸。']

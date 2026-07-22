@@ -89,7 +89,6 @@ assert.strictEqual(api.effects().length, 6);
 
 const gameSource = loadGameSource(path.join(__dirname, '..'));
 const smokeHtml = fs.readFileSync(path.join(__dirname, 'dungeon-smoke.html'), 'utf8');
-assert.ok(gameSource.includes("const GAME_VERSION = '0.29.6'"));
 for (const mode of ['charge-active','vent-active','vent-safe','lowfx']) assert.ok(smokeHtml.includes("bossVariant === '" + mode + "'"));
 
 console.log('dungeon E1-D volcano boss smoke test passed (phase schedule, magma charge, vent chain, safety windows, source labels)');
