@@ -51,8 +51,8 @@ const DUNGEON_BOSS_DEFS = {
     arena:{ width:1300, platforms:[{ x:170, y:405, w:150 }, { x:980, y:405, w:150 }, { x:570, y:325, w:160 }] },
     legacyAttackId:'leap_volley',
     attackSlots:[
-      { id:'ice_lance', name:'寒冰槍陣', implemented:false },
-      { id:'blizzard_dash', name:'暴風突進', implemented:false }
+      { id:'ice_lance', name:'寒冰槍陣', implemented:true, warningFrames:50, activeFrames:22, recoveryFrames:76 },
+      { id:'blizzard_dash', name:'暴風突進', implemented:true, warningFrames:44, iceFrames:240, recoveryFrames:82 }
     ]
   },
   void_lord: {
@@ -163,6 +163,11 @@ function dungeonBossAttackSequence(boss) {
     if (boss.phase === 2) return ['magma_charge', def.legacyAttackId, 'vent_chain'];
     return ['magma_charge', 'vent_chain', def.legacyAttackId];
   }
+  if (def.id === 'tundra_lord') {
+    if (boss.phase <= 1) return ['ice_lance', def.legacyAttackId];
+    if (boss.phase === 2) return ['ice_lance', def.legacyAttackId, 'blizzard_dash'];
+    return ['ice_lance', 'blizzard_dash', def.legacyAttackId];
+  }
   return [def.legacyAttackId];
 }
 
@@ -251,6 +256,32 @@ function volcanoVentChainEffects(boss, target) {
   }));
 }
 
+function tundraIceLanceEffects(boss, target) {
+  const slot = dungeonBossAttackSlot(boss, 'ice_lance');
+  const count = boss.phase >= 3 ? 7 : boss.phase === 2 ? 5 : 3;
+  const lanes = [100, 280, 460, 650, 840, 1020, 1200]
+    .sort((a, b) => Math.abs(a - target.x) - Math.abs(b - target.x));
+  return lanes.slice(0, count).map(x => ({
+    type:'tundra_lance', bossId:boss.bossId, bossName:boss.name,
+    x, y:468, w:86, state:'warning', timer:slot.warningFrames,
+    activeFrames:slot.activeFrames, damage:Math.max(1, Math.round(boss.dmg * 0.7)),
+    phase:boss.phase, hit:false
+  }));
+}
+
+function tundraDashPlan(boss, target) {
+  const arenaWidth = dungeonBossDef(boss.bossId).arena.width;
+  const desiredDirection = target.x < boss.x ? -1 : 1;
+  const distance = boss.phase >= 3 ? 560 : 480;
+  let endX = Math.max(70, Math.min(arenaWidth - 70, boss.x + desiredDirection * distance));
+  let direction = endX < boss.x ? -1 : 1;
+  if (Math.abs(endX - boss.x) < 240) {
+    endX = Math.max(70, Math.min(arenaWidth - 70, boss.x - desiredDirection * distance));
+    direction = endX < boss.x ? -1 : 1;
+  }
+  return { direction, endX, speed:boss.phase >= 3 ? 10.2 : 8.8 };
+}
+
 function startDungeonBossSpecialAttack(boss, target, attackId) {
   const slot = dungeonBossAttackSlot(boss, attackId);
   if (!slot || !slot.implemented || boss.specialAttack) return false;
@@ -289,6 +320,18 @@ function startDungeonBossSpecialAttack(boss, target, attackId) {
       timer:Math.max(...effects.map(effect => effect.timer)) + slot.activeFrames,
       recoveryFrames:slot.recoveryFrames
     };
+  } else if (attackId === 'ice_lance') {
+    const effects = tundraIceLanceEffects(boss, target);
+    dungeonBossEffects.push(...effects);
+    boss.specialAttack = {
+      id:attackId, timer:slot.warningFrames + slot.activeFrames, recoveryFrames:slot.recoveryFrames
+    };
+  } else if (attackId === 'blizzard_dash') {
+    const plan = tundraDashPlan(boss, target);
+    boss.specialAttack = Object.assign({
+      id:attackId, state:'warning', timer:slot.warningFrames, iceFrames:slot.iceFrames,
+      recoveryFrames:slot.recoveryFrames, startX:boss.x, hit:false, iceCreated:false
+    }, plan);
   } else return false;
   boss.vx = 0;
   return true;
@@ -340,12 +383,49 @@ function updateVolcanoMagmaCharge(boss, target, attack) {
   return false;
 }
 
+function createTundraIceTrail(boss, attack) {
+  const left = Math.min(attack.startX, attack.endX) - 36;
+  const right = Math.max(attack.startX, attack.endX) + 36;
+  dungeonBossEffects.push({
+    type:'tundra_ice', bossId:boss.bossId, bossName:boss.name,
+    x:(left + right) / 2, y:468, w:right - left, state:'ice', timer:attack.iceFrames,
+    phase:boss.phase
+  });
+  attack.iceCreated = true;
+}
+
+function updateTundraBlizzardDash(boss, target, attack) {
+  if (attack.visualHold) return false;
+  attack.timer--;
+  if (attack.state === 'warning' && attack.timer <= 0) {
+    attack.state = 'active';
+    attack.timer = Math.max(1, Math.ceil(Math.abs(attack.endX - boss.x) / attack.speed));
+    if (!attack.iceCreated) createTundraIceTrail(boss, attack);
+    beep(520, 0.16, 'sawtooth', 0.05);
+    return false;
+  }
+  if (attack.state !== 'active') return false;
+  boss.x += attack.direction * attack.speed;
+  if ((attack.direction < 0 && boss.x <= attack.endX) || (attack.direction > 0 && boss.x >= attack.endX)) {
+    boss.x = attack.endX; attack.timer = 0;
+  }
+  if (!attack.hit && target.inv <= 0 && volcanoChargeHitsPlayer(boss, target)) {
+    attack.hit = true;
+    target.vx = attack.direction * 6; target.vy = -4; target.onGround = false;
+    target.chillT = Math.max(target.chillT || 0, 90);
+    const damage = Math.max(1, Math.round(boss.dmg * 0.82) - armorDef());
+    return dmgPlayer({ amount:damage, sourceName:boss.name + '的暴風突進', sourceX:boss.x, heavy:boss.phase >= 3 });
+  }
+  return false;
+}
+
 function updateDungeonBossSpecialAttack(boss, target) {
   const attack = boss.specialAttack;
   if (!attack) return { handled:false, playerDied:false };
   boss.vx = 0;
   let playerDied = false;
   if (attack.id === 'magma_charge') playerDied = updateVolcanoMagmaCharge(boss, target, attack);
+  else if (attack.id === 'blizzard_dash') playerDied = updateTundraBlizzardDash(boss, target, attack);
   else attack.timer--;
   if (attack.id === 'seed_burst' && attack.timer <= 0 && !attack.fired) {
     attack.fired = true;
@@ -383,9 +463,40 @@ function volcanoVentHitsPlayer(effect, target) {
     && target.y >= effect.y - 78 && target.y - target.h <= effect.y;
 }
 
+function tundraIceLanceHitsPlayer(effect, target) {
+  return target.x + target.w / 2 >= effect.x - effect.w / 2
+    && target.x - target.w / 2 <= effect.x + effect.w / 2
+    && target.y >= effect.y - 74 && target.y - target.h <= effect.y;
+}
+
+function playerOnDungeonBossIce(target) {
+  if (!target.onGround) return false;
+  return dungeonBossEffects.some(effect => effect.type === 'tundra_ice' && effect.timer > 0
+    && Math.abs(target.y - effect.y) < 3
+    && target.x >= effect.x - effect.w / 2 && target.x <= effect.x + effect.w / 2);
+}
+
 function updateDungeonBossEffects(target) {
   for (const effect of dungeonBossEffects.slice()) {
     effect.timer--;
+    if (effect.type === 'tundra_ice') {
+      if (effect.timer <= 0) dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      continue;
+    }
+    if (effect.type === 'tundra_lance') {
+      if (effect.state === 'warning' && effect.timer <= 0) {
+        effect.state = 'active'; effect.timer = effect.activeFrames; effect.hit = false;
+        beep(610, 0.08, 'square', 0.035);
+      } else if (effect.state === 'active') {
+        if (!effect.hit && target.inv <= 0 && tundraIceLanceHitsPlayer(effect, target)) {
+          effect.hit = true; target.chillT = Math.max(target.chillT || 0, 60);
+          const damage = Math.max(1, effect.damage - armorDef());
+          if (dmgPlayer({ amount:damage, sourceName:effect.bossName + '的寒冰槍陣', sourceX:effect.x, heavy:effect.phase >= 3 })) return true;
+        }
+        if (effect.timer <= 0) dungeonBossEffects.splice(dungeonBossEffects.indexOf(effect), 1);
+      }
+      continue;
+    }
     if (effect.type === 'volcano_vent') {
       if (effect.state === 'warning' && effect.timer <= 0) {
         effect.state = 'active'; effect.timer = effect.activeFrames; effect.hit = false;
@@ -458,7 +569,26 @@ function drawDungeonBossEffects() {
   if (cavernActive) drawCavernSafeShelves();
   for (const effect of dungeonBossEffects) {
     const pulse = 0.55 + Math.sin(frame * 0.28 + effect.x * 0.01) * 0.18;
-    if (effect.type === 'volcano_vent') {
+    if (effect.type === 'tundra_ice') {
+      const left = effect.x - effect.w / 2;
+      ctx.globalAlpha = 0.72; ctx.fillStyle = '#bdefff'; ctx.fillRect(left, effect.y - 8, effect.w, 8);
+      ctx.fillStyle = '#e9fbff'; ctx.fillRect(left + 4, effect.y - 8, effect.w - 8, 2);
+      ctx.strokeStyle = '#6eb9d8'; ctx.lineWidth = 2;
+      for (let x = left + 24; x < left + effect.w - 10; x += 48) {
+        ctx.beginPath(); ctx.moveTo(x, effect.y - 7); ctx.lineTo(x + 9, effect.y - 2); ctx.lineTo(x + 17, effect.y - 7); ctx.stroke();
+      }
+    } else if (effect.type === 'tundra_lance') {
+      const left = effect.x - effect.w / 2;
+      if (effect.state === 'warning') {
+        ctx.globalAlpha = pulse; ctx.fillStyle = '#9adcf0'; ctx.fillRect(left, effect.y - 9, effect.w, 9);
+        ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+        ctx.strokeRect(left, effect.y - 14, effect.w, 13); ctx.setLineDash([]);
+      } else {
+        ctx.globalAlpha = 0.94; ctx.fillStyle = '#6eb9d8';
+        ctx.beginPath(); ctx.moveTo(left, effect.y); ctx.lineTo(effect.x - 15, effect.y - 58); ctx.lineTo(effect.x, effect.y - 78); ctx.lineTo(effect.x + 15, effect.y - 58); ctx.lineTo(left + effect.w, effect.y); ctx.fill();
+        ctx.fillStyle = '#e9fbff'; ctx.beginPath(); ctx.moveTo(effect.x - 8, effect.y - 12); ctx.lineTo(effect.x, effect.y - 67); ctx.lineTo(effect.x + 8, effect.y - 12); ctx.fill();
+      }
+    } else if (effect.type === 'volcano_vent') {
       const left = effect.x - effect.w / 2;
       ctx.fillStyle = '#4b2520'; ctx.fillRect(left, effect.y - 8, effect.w, 8);
       if (effect.state === 'warning') {
@@ -533,6 +663,25 @@ function drawDungeonBossSpecialTelegraph(boss) {
     }
     ctx.restore(); return;
   }
+  if (boss.specialAttack.id === 'blizzard_dash') {
+    const attack = boss.specialAttack;
+    ctx.save();
+    if (attack.state === 'warning') {
+      const left = Math.min(boss.x, attack.endX), width = Math.abs(attack.endX - boss.x);
+      ctx.globalAlpha = 0.25 + Math.sin(frame * 0.42) * 0.08; ctx.fillStyle = '#9adcf0';
+      ctx.fillRect(left, 438, width, 30); ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#e9fbff'; ctx.lineWidth = 3; ctx.setLineDash([9, 6]); ctx.strokeRect(left, 438, width, 28); ctx.setLineDash([]);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText('暴風突進 · 反向煞車', left + width / 2, 430); ctx.textAlign = 'left';
+    } else {
+      ctx.globalAlpha = 0.78; ctx.fillStyle = '#dff8ff';
+      for (let i = 1; i <= 5; i++) {
+        const x = boss.x - attack.direction * (24 + i * 18), y = 450 - (i % 2) * 10;
+        ctx.fillRect(x - 7, y - 3, 14, 6); ctx.fillRect(x - 3, y - 7, 6, 14);
+      }
+    }
+    ctx.restore(); return;
+  }
   if (boss.specialAttack.id === 'cavern_shockwave') {
     drawCavernSafeShelves();
     ctx.save(); ctx.translate(boss.x, boss.y - boss.h - 20);
@@ -560,11 +709,22 @@ function drawDungeonBossSpecialTelegraph(boss) {
 }
 
 function drawDungeonBossSprite(boss) {
-  if (!boss || !['meadow_lord','cavern_lord','volcano_lord'].includes(boss.bossId)) return false;
+  if (!boss || !['meadow_lord','cavern_lord','volcano_lord','tundra_lord'].includes(boss.bossId)) return false;
   const def = dungeonBossDef(boss.bossId);
   const flash = boss.hitT > 0;
   ctx.save(); ctx.translate(Math.round(boss.x), Math.round(boss.y));
   if (boss.vx < 0) ctx.scale(-1, 1);
+  if (boss.bossId === 'tundra_lord') {
+    ctx.fillStyle = flash ? '#fff' : '#315d78';
+    ctx.fillRect(-34, -35, 68, 30); ctx.fillRect(-45, -25, 19, 17); ctx.fillRect(26, -25, 19, 17);
+    ctx.fillStyle = flash ? '#fff' : def.accent;
+    ctx.fillRect(-30, -57, 60, 29); ctx.fillRect(-39, -62, 17, 23); ctx.fillRect(22, -62, 17, 23);
+    ctx.fillStyle = flash ? '#fff' : def.color;
+    ctx.fillRect(-21, -68, 42, 19); ctx.fillRect(-35, -78, 13, 23); ctx.fillRect(22, -78, 13, 23);
+    ctx.fillStyle = '#e9fbff'; ctx.fillRect(-16, -48, 9, 8); ctx.fillRect(8, -48, 9, 8); ctx.fillRect(-8, -28, 20, 5);
+    ctx.fillStyle = '#fff'; ctx.fillRect(-13, -46, 4, 4); ctx.fillRect(11, -46, 4, 4);
+    ctx.restore(); return true;
+  }
   if (boss.bossId === 'volcano_lord') {
     ctx.fillStyle = flash ? '#fff' : '#4a201c';
     ctx.fillRect(-34, -35, 68, 30); ctx.fillRect(-46, -25, 20, 17); ctx.fillRect(26, -25, 20, 17);
