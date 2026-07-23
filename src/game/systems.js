@@ -200,10 +200,10 @@ function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') 
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0) + blessingV('aerial_grace'); }
 function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (1 + blessingV('arcane_tide')) * (1 + curseRewardV('mana_leak')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste) * (1 + curseRiskV('broken_hourglass')); }
-function potionDropChance() { return 0.07 + 0.04 * player.cd.pot; }
+function potionDropChance() { return (0.07 + 0.04 * player.cd.pot) * dungeonDropMul(); }
 function gearDropChance(elite, atFloor = floor) {
   const base = Math.min(0.025 + 0.0025 * atFloor + 0.01 * meta.up.treasure, 0.10);
-  return Math.min(base + affixV('gearDrop') + blessingV('treasure_eye') + curseRewardV('razor_bargain') + (elite ? 0.15 + curseRewardV('elite_tribute') : 0), 0.50);
+  return Math.min(base + affixV('gearDrop') + blessingV('treasure_eye') + curseRewardV('razor_bargain') + (elite ? 0.15 + curseRewardV('elite_tribute') : 0), 0.50) * dungeonDropMul();
 }
 function soulGainMul() { return (1 + 0.05 * meta.up.soul) * (1 + 0.1 * perkV('greed')) * (1 + affixV('soulGain')) * (1 + blessingV('soul_bloom')) * (1 + curseRewardV('hardened_horde')) * (1 + curseRewardV('last_light')); }
 const SOUL_DROP_CHANCE = 0.25;

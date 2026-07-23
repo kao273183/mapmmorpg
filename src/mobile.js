@@ -76,3 +76,32 @@
   }
   updateOrientationUi();
 })();
+
+// ---------- 通用全螢幕切換（桌機 Web / Android；iOS Safari 分頁不支援）----------
+function gameFullscreenActive() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function gameFullscreenSupported() {
+  const el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+}
+// 回傳 'entered' | 'exited' | 'unsupported'（iOS Safari 分頁 → 引導改用「加入主畫面」）
+function toggleGameFullscreen() {
+  const el = document.documentElement;
+  if (gameFullscreenActive()) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) { try { exit.call(document); } catch (e) {} }
+    return 'exited';
+  }
+  if (!gameFullscreenSupported()) return 'unsupported';
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.catch) p.catch(function () { try { req.call(el); } catch (e) {} });
+  } catch (e) {
+    try { req.call(el); } catch (err) {}
+  }
+  // 手機盡量鎖橫向（桌機無此 API，忽略失敗）
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+  return 'entered';
+}

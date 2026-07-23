@@ -28,8 +28,8 @@ function dungeonHazardSoulBonus(atFloor) {
 // 「複雜」＝現行完整地形系統。設定存於本瀏覽器，不影響存檔碼。
 // hazardChanceMul：險境房出現機率倍率；bossStrengthMul：Boss 生命與傷害倍率。
 const TERRAIN_MODE_DEFS = {
-  normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossStrengthMul:0.85 },
-  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossStrengthMul:1 }
+  normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossStrengthMul:0.85, dropMul:0.7 },
+  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossStrengthMul:1,    dropMul:1 }
 };
 const TERRAIN_MODE_KEY = 'pixelrogue_terrain_mode';
 let terrainMode = 'normal';
@@ -58,6 +58,8 @@ function terrainHazardIsMovementType(hazardId) {
 function dungeonHazardChanceMul() { return terrainModeConfig().hazardChanceMul; }
 // 一般模式降低 Boss 生命與傷害。
 function dungeonBossStrengthMul() { return terrainModeConfig().bossStrengthMul; }
+// 一般模式降低裝備與藥水掉落機率（簡單模式的報酬取捨）。
+function dungeonDropMul() { const m = terrainModeConfig().dropMul; return Number.isFinite(m) ? m : 1; }
 
 const DUNGEON_BIOME_DEFS = [
   { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },

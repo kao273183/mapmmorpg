@@ -730,17 +730,17 @@ function renderMenu() {
   }
   ctx.fillStyle = '#343850'; ctx.fillRect(24, 103, 912, 1);
   if (menuTab === 'skills') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
     renderSkillTab();
     return;
   }
   if (menuTab === 'stash') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; activityBtns.length = 0;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; activityBtns.length = 0;
     renderStashTab();
     return;
   }
   if (menuTab === 'activity') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
     renderActivityTab();
     return;
   }
@@ -759,8 +759,8 @@ function renderMenu() {
   const cls = ['warrior', 'mage'];
   for (let i = 0; i < 2; i++) {
     const c = cls[i];
-    const cw = 190, ch = 132;
-    const cx = left.x + 18 + i * 202, cy = left.y + 60;
+    const cw = 190, ch = 118;
+    const cx = left.x + 18 + i * 202, cy = left.y + 56;
     const sel = chosenCls === c;
     if (sel) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 9; }
     fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : '#3c4058', sel ? 2 : 1);
@@ -783,23 +783,38 @@ function renderMenu() {
 
   // 目前裝備的三個技能。
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
-  ctx.fillText('出戰技能', left.x + 18, left.y + 218);
+  ctx.fillText('出戰技能', left.x + 18, left.y + 188);
   const equipped = loadouts[chosenCls];
   for (let i = 0; i < equipped.length; i++) {
-    const id = equipped[i], ix = left.x + 32 + i * 126, iy = left.y + 252;
+    const id = equipped[i], ix = left.x + 32 + i * 126, iy = left.y + 216;
     drawSkillSigil(id, ix, iy, 20, !!id, !id);
     ctx.fillStyle = id ? '#dfe3f5' : '#6c728f'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(id ? SKILL_DEFS[id].name : '尚未裝備', ix + 30, iy - 3);
     ctx.fillStyle = '#686f90'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('技能 ' + (i + 1), ix + 30, iy + 13);
   }
-  ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 286, left.w - 36, 1);
-  const bw2 = left.w - 36, bh2 = 54;
-  startBtn = { x: left.x + 18, y: left.y + 304, w: bw2, h: bh2 };
+  // 本次難度（一般／複雜）— 與設定頁同步，per-run 可在此切換。
+  const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
+  ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
+  ctx.fillText('本次難度', left.x + 18, left.y + 250);
+  const dbW = 188, dbH = 26, db1 = left.x + 18, db2 = left.x + 18 + dbW + 12, dby = left.y + 258;
+  diffBtns.length = 0;
+  const diffBtn = (x, mode, label, on) => {
+    diffBtns.push({ x, y: dby, w: dbW, h: dbH, act: mode });
+    fillRoundRect(x, dby, dbW, dbH, 5, on ? 'rgba(176,90,224,0.22)' : 'rgba(255,255,255,0.035)', on ? '#a962cf' : '#363a52', on ? 2 : 1);
+    ctx.textAlign = 'center'; ctx.fillStyle = on ? '#f0dcfa' : '#858ba8'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(label, x + dbW / 2, dby + 17);
+  };
+  diffBtn(db1, 'terrainNormal', '一般（推薦）', terrainNormal);
+  diffBtn(db2, 'terrainComplex', '複雜', !terrainNormal);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#ffb45e'; ctx.font = '9px ' + STAT_FONT;
+  ctx.fillText(terrainNormal ? '一般：掉落機率偏低、Boss 較弱、無滑冰／消失平台、陷阱少' : '複雜：掉落較高、完整地形與 Boss 全強度、險境較多', left.x + 18, left.y + 296);
+  ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 304, left.w - 36, 1);
+  const bw2 = left.w - 36, bh2 = 48;
+  startBtn = { x: left.x + 18, y: left.y + 312, w: bw2, h: bh2 };
   const pulse = 0.32 + (Math.sin(frame * 0.07) + 1) * 0.06;
   ctx.shadowColor = '#b05ae0'; ctx.shadowBlur = 8;
   fillRoundRect(startBtn.x, startBtn.y, bw2, bh2, 6, 'rgba(176,90,224,' + pulse.toFixed(2) + ')', '#c56ef0', 2);
   ctx.shadowBlur = 0; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 18px ' + STAT_FONT;
-  ctx.fillText('進入地城', startBtn.x + bw2 / 2 - 22, startBtn.y + 33);
-  ctx.fillStyle = '#e3c4f3'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('[ ENTER ]', startBtn.x + bw2 / 2 + 82, startBtn.y + 33);
+  ctx.fillText('進入地城', startBtn.x + bw2 / 2 - 22, startBtn.y + 30);
+  ctx.fillStyle = '#e3c4f3'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('[ ENTER ]', startBtn.x + bw2 / 2 + 82, startBtn.y + 30);
   ctx.fillStyle = '#777e9f'; ctx.font = '10px ' + STAT_FONT;
   ctx.fillText(lastRun ? (lastRun.benchmarkId ? '上次基準  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  進度未保存' : '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained) : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
 

@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.17';
+const GAME_VERSION = '0.29.20';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.20', date:'2026-07-23', title:'難度移至基地選擇 + 掉落取捨 + 全螢幕',
+    items:['「本次難度：一般（推薦）／複雜」移至基地頁「選擇冒險者」，出戰前即可切換；設定頁不再重複顯示。','一般模式新增掉落機率取捨：裝備與藥水掉落 ×0.7（Boss 保底掉落不受影響），並在基地標明。','設定頁右上角新增「全螢幕」切換，桌機 Web 與 Android 皆可；iOS Safari 分頁不支援時提示改用「加入主畫面」。']
+  },
   {
     version:'0.29.17', date:'2026-07-22', title:'逃走機制：道中撤退回基地',
     items:['道中長按 Q（手機為「逃」鈕）約 1.5 秒即可逃回基地，受擊會中斷蓄力。','路線選擇畫面新增「返回基地」按鈕（鍵盤 R），隨時能主動撤退。','逃走視為撤退：保留本局裝備、靈魂與素材，不算死亡。']
@@ -316,7 +320,7 @@ function renderSettingsBenchmark(mx, my, mw, mh) {
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 580, mh = 520, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 580, mh = 470, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';
@@ -328,6 +332,15 @@ function renderSettings() {
   if (settingsPage === 'benchmark') { renderSettingsBenchmark(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
   ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
+  // 全螢幕切換（右上角 header 動作；iOS Safari 分頁不支援時提示改用「加入主畫面」）
+  const fsActive = typeof gameFullscreenActive === 'function' && gameFullscreenActive();
+  const fsBtn = { x: mx + mw - 148, y: my + 14, w: 132, h: 30, act: 'fullscreen' };
+  settingsBtns.push(fsBtn);
+  ctx.fillStyle = fsActive ? 'rgba(125,255,214,0.18)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
+  ctx.strokeStyle = fsActive ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+  ctx.fillText(fsActive ? '◱ 結束全螢幕' : '◱ 全螢幕', fsBtn.x + fsBtn.w / 2, fsBtn.y + 20);
+  ctx.textAlign = 'center';
   ctx.fillStyle = audioSettings.muted ? '#ff8a8a' : '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
   ctx.fillText('音效音量：' + (audioSettings.muted ? '靜音' : Math.round(audioSettings.volume * 100) + '%'), W / 2, my + 112);
   const sm = (x, y, w, label, act, on) => { const b = { x, y, w, h:34, act }; settingsBtns.push(b); ctx.fillStyle = on ? 'rgba(125,255,214,0.22)' : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, w, 34); ctx.strokeStyle = on ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, 34); ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(label, x + w / 2, y + 22); };
@@ -340,26 +353,20 @@ function renderSettings() {
   sm(mx + 156, my + 196, 118, '閃光 ' + (combatSettings.flashes ? '完整' : '降低'), 'flashes', combatSettings.flashes);
   sm(mx + 286, my + 196, 118, '數字 ' + (combatSettings.numbers === 'full' ? '完整' : '精簡'), 'numbers', combatSettings.numbers === 'full');
   sm(mx + 416, my + 196, 118, '觸覺 ' + (combatSettings.haptics ? '開' : '關'), 'haptics', combatSettings.haptics);
-  // 難度模式（一般：陷阱少、無滑冰／消失平台、Boss 較弱、險境較少；複雜：完整）
-  const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
-  ctx.fillStyle = '#ffb45e'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
-  ctx.fillText('難度模式', W / 2, my + 238);
-  sm(mx + 64, my + 248, 210, '一般（推薦）', 'terrainNormal', terrainNormal);
-  sm(mx + 306, my + 248, 210, '複雜', 'terrainComplex', !terrainNormal);
-  // 手機搖桿大小
+  // 手機搖桿大小（難度模式已移至基地頁「選擇冒險者」）
   ctx.fillStyle = '#7dc4ff'; ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'center';
-  ctx.fillText('手機搖桿大小：' + Math.round(virtualJoystick.size * 100) + '%', W / 2, my + 292);
-  sm(mx + 26, my + 302, 60, '－', 'joySizeDown', false);
-  const jbX = mx + 96, jbY = my + 302, jbW = 300, jbH = 34;
+  ctx.fillText('手機搖桿大小：' + Math.round(virtualJoystick.size * 100) + '%', W / 2, my + 252);
+  sm(mx + 26, my + 262, 60, '－', 'joySizeDown', false);
+  const jbX = mx + 96, jbY = my + 262, jbW = 300, jbH = 34;
   settingsBtns.push({ x: jbX, y: jbY, w: jbW, h: jbH, act: 'joySizeBar' });
   ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(jbX, jbY, jbW, jbH);
   ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(jbX, jbY, jbW, jbH);
   const jRatio = (virtualJoystick.size - JOY_SIZE_MIN) / (JOY_SIZE_MAX - JOY_SIZE_MIN);
   ctx.fillStyle = 'rgba(125,196,255,0.35)'; ctx.fillRect(jbX, jbY, jbW * jRatio, jbH);
   ctx.fillStyle = '#cfe4ff'; ctx.fillRect(jbX + jbW * jRatio - 2, jbY - 3, 4, jbH + 6);
-  sm(mx + 406, my + 302, 60, '＋', 'joySizeUp', false);
-  sm(mx + 478, my + 302, 76, '重置', 'joySizeReset', false);
-  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 352;
+  sm(mx + 406, my + 262, 60, '＋', 'joySizeUp', false);
+  sm(mx + 478, my + 262, 76, '重置', 'joySizeReset', false);
+  const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 312;
   const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
   mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
   mk(bx2, byy, '匯入存檔', 'import');
@@ -371,7 +378,7 @@ function renderSettings() {
   if (menuMsg) { ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(menuMsg.text, W / 2, my + mh + 22); if (--menuMsg.t <= 0) menuMsg = null; }
   ctx.textAlign = 'left';
 }
-const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [], activityBtns = [];
+const tabBtns = [], skillBtns = [], skillActBtns = [], stashBtns = [], stashActBtns = [], activityBtns = [], diffBtns = [];
 let gachaBtn = null;
 function dismantleStash(it) {
   const i = meta.stash.indexOf(it);
@@ -540,11 +547,14 @@ function handleTap(mx, my) {
         else menuMsg = { text:'此環境不支援自動複製', color:'#ff5a5a', t:180 };
         return;
       }
+      if (b.act === 'fullscreen') {
+        const r = typeof toggleGameFullscreen === 'function' ? toggleGameFullscreen() : 'unsupported';
+        if (r === 'unsupported') menuMsg = { text:'此瀏覽器分頁不支援全螢幕；iOS 請用「加入主畫面」以全螢幕開啟', color:'#ffb45e', t:280 };
+        playSfx('uiSelect'); return;
+      }
       if (b.act === 'volDown') { changeSfxVolume(-0.1); return; }
       if (b.act === 'volUp') { changeSfxVolume(0.1); return; }
       if (b.act === 'mute') { toggleSfxMute(); return; }
-      if (b.act === 'terrainNormal') { setTerrainMode('normal'); menuMsg = { text:'難度：一般（無滑冰／消失平台，陷阱少、Boss 較弱、險境較少）', color:'#ffb45e', t:240 }; playSfx('uiSelect'); return; }
-      if (b.act === 'terrainComplex') { setTerrainMode('complex'); menuMsg = { text:'難度：複雜（完整地形、Boss 全強度、險境機率較高）', color:'#ffb45e', t:220 }; playSfx('uiSelect'); return; }
       if (b.act === 'joySizeDown') { setJoystickSize(virtualJoystick.size - 0.1); playSfx('uiSelect'); return; }
       if (b.act === 'joySizeUp') { setJoystickSize(virtualJoystick.size + 0.1); playSfx('uiSelect'); return; }
       if (b.act === 'joySizeReset') { setJoystickSize(JOY_SIZE_DEFAULT); playSfx('uiSelect'); return; }
@@ -629,6 +639,11 @@ function handleTap(mx, my) {
       return;
     }
     for (const b of selBtns) if (inside(b)) { chosenCls = b.cls; return; }
+    for (const b of diffBtns) if (inside(b)) {
+      if (b.act === 'terrainNormal') setTerrainMode('normal');
+      else if (b.act === 'terrainComplex') setTerrainMode('complex');
+      playSfx('uiSelect'); return;
+    }
     for (const b of metaBtns) if (inside(b)) {
       if (b.act === 'category') { metaCategory = b.category; playSfx('uiSelect', 0.65); }
       else if (b.d) buyMeta(b.d);
