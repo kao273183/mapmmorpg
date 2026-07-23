@@ -53,7 +53,7 @@ meta.cosmetics = {
 
 ## 4. 分批交付
 
-- **K1-A 統一狀態與遷移**：`meta.cosmetics` + `unlock/equip/owns` API + 遷移現有光環（`equipAura` 轉接）。附 smoke（解鎖→擁有→選用→存檔往返）。
+- **K1-A 統一狀態與遷移** — ✅ 已完成（v0.29.35）：`meta.cosmetics{owned,equipped}` 四類結構、`unlockCosmetic/equipCosmetic/ownsCosmetic/equippedCosmetic/ownedCosmetics` API、`ensureCosmeticState` 補齊舊存檔、`migrateLegacyCosmetics` 併入舊光環、`equipAura` 轉接、存檔 `cs` 欄位；光環繪製與城鎮光環 UI 改讀統一狀態。附 `tests/cosmetics-k1a-smoke.js`。
 - **K1-B 稱號**：`TITLE_DEFS` + 名牌/結算顯示所選稱號 + 選用。
 - **K1-C 角色配色**：`COLOR_DEFS`（recolor 表）+ 玩家繪製套用（`drawSprite` recolor）+ 選用。
 - **K1-D 技能外觀**：`SKIN_DEFS` + 技能特效依 skin 換色/變體。

@@ -667,7 +667,7 @@ function renderActivityTab() {
   ctx.textAlign = 'left'; ctx.fillStyle = '#9da1bc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('外觀光環', x + 18, y + 137);
   let ax = x + 105;
   for (const id of Object.keys(AURA_DEFS)) {
-    const a = AURA_DEFS[id], unlocked = activityState.cosmetics.includes(id), equipped = activityState.aura === id;
+    const a = AURA_DEFS[id], unlocked = ownsCosmetic('aura', id), equipped = equippedCosmetic('aura') === id;
     const b = { x:ax, y:y + 118, w:126, h:27, act:'aura', id };
     if (unlocked) activityBtns.push(b);
     ctx.fillStyle = equipped ? a.color : 'rgba(255,255,255,0.035)'; ctx.globalAlpha = equipped ? 0.28 : 1; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1;

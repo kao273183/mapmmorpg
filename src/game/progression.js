@@ -4,7 +4,12 @@ const meta = {
   souls: 0, up: { atk: 0, vit: 0, crit: 0, guard: 0, haste: 0, pots: 0, treasure: 0, soul: 0, recovery: 0, alchemy: 0 },
   stash: [], mats: { enh: 0, ench: 0, set: 0 }, stashSeq: 1,
   loadout: { weapon: null, armor: null, helmet: null, boots: null, acc: null },
-  playerName: '勇者'
+  playerName: '勇者',
+  // 統一外觀系統（K1）：稱號/配色/光環/技能外觀共用同一套擁有與選用狀態
+  cosmetics: {
+    owned: { title: [], color: [], aura: ['none'], skin: [] },
+    equipped: { title: null, color: null, aura: 'none', skin: null }
+  }
 };
 const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
 const SET_PARTS = ['weapon', 'armor', 'helmet', 'boots'];
@@ -388,7 +393,8 @@ function saveMeta() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
-      st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName
+      st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName,
+      cs: meta.cosmetics
     }));
   } catch (e) {}
 }
@@ -402,6 +408,11 @@ function loadMeta() {
     if (d && d.lo) for (const part of GEAR_PARTS) meta.loadout[part] = d.lo[part] || null;
     if (d && d.sq) meta.stashSeq = Math.max(1, d.sq | 0);
     if (d && typeof d.pn === 'string' && d.pn.trim()) meta.playerName = d.pn.slice(0, 12);
+    // 外觀狀態先原樣還原（此時 defs 尚未定義，合法性交給 migrateLegacyCosmetics 清理）
+    if (d && d.cs && typeof d.cs === 'object') {
+      if (d.cs.owned && typeof d.cs.owned === 'object') for (const t of Object.keys(d.cs.owned)) if (Array.isArray(d.cs.owned[t])) meta.cosmetics.owned[t] = d.cs.owned[t].slice();
+      if (d.cs.equipped && typeof d.cs.equipped === 'object') for (const t of Object.keys(d.cs.equipped)) meta.cosmetics.equipped[t] = d.cs.equipped[t];
+    }
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
@@ -502,6 +513,70 @@ const AURA_DEFS = {
   ember:{ name:'餘燼光環', color:'#ff8c2e' },
   void:{ name:'虛空光環', color:'#b05ae0' }
 };
+// ---------- 統一外觀系統（K1-A）----------
+// 四類共用同一套擁有/選用/解鎖流程；任何系統（精通/成就/活躍/賽季）都以 unlockCosmetic 發獎。
+// 外觀一律零局內戰力。title/color/skin 目錄留待 K1-B/C/D 填入。
+const TITLE_DEFS = {};
+const COLOR_DEFS = {};
+const SKIN_DEFS = {};
+const COSMETIC_TYPES = ['title', 'color', 'aura', 'skin'];
+const COSMETIC_DEFS = { title: TITLE_DEFS, color: COLOR_DEFS, aura: AURA_DEFS, skin: SKIN_DEFS };
+const COSMETIC_DEFAULT_EQUIPPED = { title: null, color: null, aura: 'none', skin: null };
+function ensureCosmeticState() { // 舊存檔或缺欄位時補齊結構
+  if (!meta.cosmetics || typeof meta.cosmetics !== 'object') meta.cosmetics = { owned: {}, equipped: {} };
+  if (!meta.cosmetics.owned || typeof meta.cosmetics.owned !== 'object') meta.cosmetics.owned = {};
+  if (!meta.cosmetics.equipped || typeof meta.cosmetics.equipped !== 'object') meta.cosmetics.equipped = {};
+  for (const t of COSMETIC_TYPES) {
+    if (!Array.isArray(meta.cosmetics.owned[t])) meta.cosmetics.owned[t] = [];
+    if (!(t in meta.cosmetics.equipped)) meta.cosmetics.equipped[t] = COSMETIC_DEFAULT_EQUIPPED[t];
+  }
+  if (!meta.cosmetics.owned.aura.includes('none')) meta.cosmetics.owned.aura.unshift('none');
+  return meta.cosmetics;
+}
+function cosmeticDefs(type) { return COSMETIC_DEFS[type] || {}; }
+function cosmeticDef(type, id) { return id ? (cosmeticDefs(type)[id] || null) : null; }
+function ownedCosmetics(type) { ensureCosmeticState(); return meta.cosmetics.owned[type] || []; }
+function ownsCosmetic(type, id) { return !!cosmeticDef(type, id) && ownedCosmetics(type).indexOf(id) >= 0; }
+function unlockCosmetic(type, id) { // 發獎共用入口；回傳是否為「新解鎖」
+  if (!cosmeticDef(type, id)) return false;
+  const owned = ownedCosmetics(type);
+  if (owned.indexOf(id) >= 0) return false;
+  owned.push(id); saveMeta();
+  return true;
+}
+function equipCosmetic(type, id) {
+  if (!ownsCosmetic(type, id)) return false;
+  ensureCosmeticState().equipped[type] = id; saveMeta();
+  return true;
+}
+function equippedCosmetic(type) { // 取目前選用；無效則回預設
+  const id = ensureCosmeticState().equipped[type];
+  return cosmeticDef(type, id) ? id : COSMETIC_DEFAULT_EQUIPPED[type];
+}
+// 遷移：舊光環狀態存在 activityState.cosmetics/aura，併入統一狀態（須在 loadMeta/loadActivity 之後呼叫）
+function migrateLegacyCosmetics() {
+  ensureCosmeticState();
+  const owned = meta.cosmetics.owned.aura;
+  const legacyOwned = (typeof activityState !== 'undefined' && Array.isArray(activityState.cosmetics)) ? activityState.cosmetics : [];
+  let changed = false;
+  for (const id of legacyOwned) if (AURA_DEFS[id] && owned.indexOf(id) < 0) { owned.push(id); changed = true; }
+  // 清掉目錄中已不存在的舊 id
+  for (const t of COSMETIC_TYPES) {
+    const list = meta.cosmetics.owned[t], defs = cosmeticDefs(t);
+    const kept = list.filter(id => defs[id]);
+    if (kept.length !== list.length) { meta.cosmetics.owned[t] = kept; changed = true; }
+  }
+  if (!meta.cosmetics.owned.aura.includes('none')) meta.cosmetics.owned.aura.unshift('none');
+  const legacyEquipped = (typeof activityState !== 'undefined') ? activityState.aura : null;
+  if (meta.cosmetics.equipped.aura === 'none' && legacyEquipped && meta.cosmetics.owned.aura.indexOf(legacyEquipped) >= 0) {
+    meta.cosmetics.equipped.aura = legacyEquipped; changed = true;
+  }
+  for (const t of COSMETIC_TYPES) { // 選用的若已不合法則回預設
+    const id = meta.cosmetics.equipped[t];
+    if (id && !ownsCosmetic(t, id)) { meta.cosmetics.equipped[t] = COSMETIC_DEFAULT_EQUIPPED[t]; changed = true; }
+  }
+  if (changed) saveMeta();
+}
 const activityState = {
   day:'', week:'', activity:0,
   daily:{ kills:0, floors:0, skills:0, bosses:0, elites:0, potions:0 }, weekly:{ kills:0, floors:0, skills:0, bosses:0, elites:0, potions:0 },
@@ -596,16 +671,13 @@ function claimActivityMilestone(points) {
   if (!reward || activityState.milestones[points] || activityState.activity < points) return;
   activityState.milestones[points] = true;
   meta.mats.enh += reward.enh || 0; meta.mats.ench += reward.ench || 0; meta.mats.set += reward.set || 0;
-  if (reward.aura && !activityState.cosmetics.includes(reward.aura)) {
-    activityState.cosmetics.push(reward.aura); activityState.aura = reward.aura;
-  }
+  if (reward.aura && unlockCosmetic('aura', reward.aura)) equipCosmetic('aura', reward.aura); // 統一外觀發獎入口
   saveMeta(); saveActivity();
   menuMsg = { text:'活躍 ' + points + ' 獎勵：' + reward.label, color:'#ffe680', t:300 };
   playSfx('enhanceSuccess');
 }
-function equipAura(id) {
-  if (!activityState.cosmetics.includes(id) || !AURA_DEFS[id]) return;
-  activityState.aura = id; saveActivity(); playSfx('uiSelect', 0.7);
+function equipAura(id) { // 相容舊呼叫：轉接統一外觀系統
+  if (equipCosmetic('aura', id)) playSfx('uiSelect', 0.7);
 }
 function hasActivityReward() {
   refreshActivityPeriods();
@@ -615,3 +687,4 @@ function hasActivityReward() {
     || ACTIVITY_MILESTONES.some(m => !activityState.milestones[m.points] && activityState.activity >= m.points);
 }
 loadActivity();
+migrateLegacyCosmetics(); // 舊光環狀態併入統一外觀系統（須在 loadMeta/loadActivity 之後）

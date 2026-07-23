@@ -332,7 +332,7 @@ function drawSprite(rows, x, y, s, flip, flash, recolor) {
   }
 }
 function drawEquippedAura(x, y, w, h) {
-  const id = activityState && activityState.aura;
+  const id = typeof equippedCosmetic === 'function' ? equippedCosmetic('aura') : null; // 統一外觀系統
   if (!id || id === 'none' || !AURA_DEFS[id]) return;
   const col = AURA_DEFS[id].color, pulse = 0.72 + Math.sin(frame * 0.09) * 0.12;
   ctx.save();
