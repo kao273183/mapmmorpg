@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.31';
+const GAME_VERSION = '0.29.32';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.32', date:'2026-07-23', title:'裝備詳細 tooltip',
+    items:['桌機在裝備視窗把滑鼠移到裝備欄或背包裝備上，會顯示詳細資訊卡。','資訊卡含稀有度、完整數值、詞綴、傳奇能力與出處、套裝效果與職業限制。','資訊卡跟隨滑鼠並自動避開邊界，邊框依稀有度上色。']
+  },
   {
     version:'0.29.31', date:'2026-07-23', title:'裝備掉落發光',
     items:['地上裝備依稀有度發光：地面徑向光暈＋漸層光柱（底亮頂淡），越稀有越亮越高。','傳說與傳奇掉落加上星火閃爍；傳奇以專屬金橙色最為醒目。','普通／精良維持低調底光，遠遠就能辨識好裝掉在哪。']
@@ -729,6 +733,13 @@ cv.addEventListener('mousedown', e => {
   const r = cv.getBoundingClientRect();
   handleTap((e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height));
 });
+let hoverGX = -1, hoverGY = -1; // 滑鼠在畫布座標（供裝備 tooltip）
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect();
+  hoverGX = (e.clientX - r.left) * (W / r.width);
+  hoverGY = (e.clientY - r.top) * (H / r.height);
+});
+cv.addEventListener('mouseleave', () => { hoverGX = -1; hoverGY = -1; });
 
 // ---------- touch controls ----------
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.__FORCE_TOUCH_CONTROLS__ === true;

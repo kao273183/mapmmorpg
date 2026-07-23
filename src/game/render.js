@@ -566,11 +566,12 @@ function drawItemWin() {
   glow.addColorStop(0, 'rgba(216,179,101,0.15)'); glow.addColorStop(1, 'rgba(216,179,101,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, gcy, 84, 0, Math.PI * 2); ctx.fill();
   drawSprite(p.cls === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false);
-  slotBox(cx - 22, dy + 10, 'helmet', '頭盔');
-  slotBox(dx + 12, dy + 100, 'weapon', '武器');
-  slotBox(dx + dw - 56, dy + 100, 'armor', '防具');
-  slotBox(dx + dw - 56, dy + 10, 'acc', '飾品');
-  slotBox(cx - 22, dy + dh - 76, 'boots', '鞋子');
+  let tipItem = null; // hover tooltip 目標
+  const slotDefs = [[cx - 22, dy + 10, 'helmet', '頭盔'], [dx + 12, dy + 100, 'weapon', '武器'], [dx + dw - 56, dy + 100, 'armor', '防具'], [dx + dw - 56, dy + 10, 'acc', '飾品'], [cx - 22, dy + dh - 76, 'boots', '鞋子']];
+  for (const s of slotDefs) {
+    slotBox(s[0], s[1], s[2], s[3]);
+    if (p.eq[s[2]] && hoverGX >= s[0] && hoverGX <= s[0] + 44 && hoverGY >= s[1] && hoverGY <= s[1] + 44) tipItem = p.eq[s[2]];
+  }
   // 屬性子面板
   fillRoundRect(dx, dy + dh + 6, dw, y + h - (dy + dh + 6) - 10, 6, 'rgba(255,255,255,0.035)', '#2e3350', 1);
   ctx.textAlign = 'left';
@@ -620,6 +621,7 @@ function drawItemWin() {
     else if (it.r >= 2) rbg = withAlpha(rcol, 0.10);
     fillRoundRect(bx - 4, ry - 13, bw, 23, 4, pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : rbg, null, 0);
     ctx.fillStyle = rcol; fillRoundRect(bx - 4, ry - 13, 3, 23, 1.5, rcol, null, 0); // 稀有度／傳奇色條
+    if (hoverGX >= bx - 4 && hoverGX <= bx - 4 + bw && hoverGY >= ry - 13 && hoverGY <= ry + 10) tipItem = it;
     if (!eqd) {
       itemBtns.push({ x: bx - 4, y: ry - 13, w: bw - 44, h: 24, it: it });
       delBtns.push({ x: bx + bw - 46, y: ry - 13, w: 42, h: 24, it: it });
@@ -651,6 +653,49 @@ function drawItemWin() {
   ctx.fillText('x' + p.bag.mp + '[S]', bx + 82, py + 11);
   ctx.fillStyle = '#7dffd6';
   ctx.fillText('靈魂 +' + soulsRun, bx + 140, py + 11);
+  if (tipItem) drawItemTooltip(tipItem, hoverGX, hoverGY, p.eq[tipItem.kind]); // 詳細 tooltip
+}
+// 裝備詳細 tooltip：稀有度/數值/詞綴/傳奇能力/套裝/與已裝備比較
+function drawItemTooltip(it, mx, my, equipped) {
+  const col = gearColor(it);
+  const tierName = it.unique ? '傳奇' : (typeof RARITY_NAME !== 'undefined' ? RARITY_NAME[it.r] || '' : '');
+  const lines = [];
+  lines.push({ t: gearDesc(it), c: '#dfe3f5' });
+  if ((it.enh || 0) > 0) lines.push({ t: '強化 +' + it.enh + '（數值已含）', c: '#9ecbff' });
+  for (const a of (it.affixes || [])) { if (!a) continue; const txt = (typeof affixText === 'function') ? affixText(a) : ''; if (txt && txt !== '空槽') lines.push({ t: '✦ ' + txt, c: '#c9a6ff' }); }
+  if (it.unique && typeof uniqueDef === 'function') {
+    const u = uniqueDef(it.unique);
+    if (u && u.powerText) lines.push({ t: '◈ ' + u.powerText, c: UNIQUE_COLOR });
+    if (u && u.biome && u.biome !== '通用') lines.push({ t: '出處：' + u.biome, c: '#8890b8' });
+  }
+  const set = it.setId && GEAR_SET_BY_ID[it.setId];
+  if (set) { lines.push({ t: '【' + set.name + '】套裝', c: set.color }); for (const b of set.bonuses) lines.push({ t: '　' + b.pieces + '件 ' + b.text, c: withAlpha(set.color, 0.85) }); }
+  if (it.cls && it.cls !== 'any') lines.push({ t: '限' + (it.cls === 'mage' ? '法師' : '劍士') + '使用', c: '#ff9a8a' });
+  if (equipped && equipped !== it) lines.push({ t: '（目前已裝備同部位）', c: '#6b7290' });
+  // 量測尺寸
+  ctx.font = 'bold 12px "Courier New",monospace';
+  let maxW = ctx.measureText(gearLabel(it)).width + ctx.measureText(tierName).width + 30;
+  ctx.font = '11px "Courier New",monospace';
+  for (const ln of lines) maxW = Math.max(maxW, ctx.measureText(ln.t).width + 20);
+  const tw = Math.max(148, Math.min(268, maxW));
+  const th = 30 + lines.length * 15 + 6;
+  let tx = mx + 16, ty = my + 10;
+  if (tx + tw > W - 6) tx = mx - tw - 16;
+  if (ty + th > H - 6) ty = H - th - 6;
+  if (tx < 6) tx = 6; if (ty < 6) ty = 6;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+  fillRoundRect(tx, ty, tw, th, 7, '#12101c', null, 0);
+  ctx.restore();
+  fillRoundRect(tx, ty, tw, th, 7, null, col, 1.5);
+  ctx.textAlign = 'left'; ctx.fillStyle = col; ctx.font = 'bold 12px "Courier New",monospace';
+  ctx.fillText(gearLabel(it), tx + 10, ty + 18);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#8890b8'; ctx.font = '10px "Courier New",monospace';
+  ctx.fillText(tierName, tx + tw - 10, ty + 17);
+  ctx.strokeStyle = withAlpha(col, 0.4); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(tx + 8, ty + 25); ctx.lineTo(tx + tw - 8, ty + 25); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.font = '11px "Courier New",monospace';
+  for (let i = 0; i < lines.length; i++) { ctx.fillStyle = lines[i].c; ctx.fillText(lines[i].t, tx + 10, ty + 40 + i * 15); }
+  ctx.textAlign = 'left';
 }
 
 // ---------- full character stats ----------
