@@ -638,6 +638,79 @@ function renderActivityTaskPanel(scope, x, y, w, defs, title, resetText) {
     ctx.fillText(claimed ? '已領取' : done ? '領取' : '進行中', b.x + b.w / 2, b.y + 22);
   }
 }
+// ---------- 精通分頁（J1-B）：各職業等級/進度/轉職解鎖/獎勵軌 ----------
+function masteryChapterOf(lv) { return lv >= 21 ? 2 : lv >= 11 ? 1 : 0; }
+function renderMasteryJobPanel(job, x, y, w, h) {
+  const cls = CLASSES[job] || { name: job, col: '#8890b8' };
+  const p = masteryProgress(job);
+  drawStonePanel(x, y, w, h, cls.name + '  精 通');
+  // 大字等級
+  ctx.textAlign = 'left';
+  ctx.fillStyle = cls.col; ctx.font = 'bold 34px ' + STAT_FONT;
+  ctx.fillText('Lv ' + p.lv, x + 16, y + 62);
+  ctx.fillStyle = '#6f7492'; ctx.font = '11px ' + STAT_FONT;
+  ctx.fillText('/ ' + MASTERY_MAX_LEVEL, x + 16 + ctx.measureText('Lv ' + p.lv).width + 74, y + 62);
+  // 章節標示
+  const chapter = masteryChapterOf(p.lv), chapterNames = ['第一章', '第二章', '第三章'];
+  ctx.textAlign = 'right'; ctx.fillStyle = '#9da1bc'; ctx.font = 'bold 10px ' + STAT_FONT;
+  ctx.fillText(chapterNames[chapter], x + w - 16, y + 34);
+  // 進度條
+  const barX = x + 16, barY = y + 78, barW = w - 32;
+  ctx.fillStyle = '#17192a'; ctx.fillRect(barX, barY, barW, 14);
+  const g = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  g.addColorStop(0, cls.col); g.addColorStop(1, '#7dffd6');
+  ctx.fillStyle = g; ctx.fillRect(barX, barY, barW * (p.max ? 1 : p.ratio), 14);
+  ctx.strokeStyle = '#4e526c'; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, 14);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#dfe3f5'; ctx.font = 'bold 9px ' + STAT_FONT;
+  ctx.fillText(p.max ? '已達精通上限' : (p.into + ' / ' + p.need + '  EXP'), barX + barW / 2, barY + 11);
+  // 統計
+  ctx.textAlign = 'left'; ctx.fillStyle = '#8c92b1'; ctx.font = '10px ' + STAT_FONT;
+  ctx.fillText('累積精通 ' + p.xp + ' EXP', x + 16, y + 112);
+  ctx.fillText('最深 ' + p.best + ' 層　首殺 Boss ' + p.bosses.length + ' 種', x + 16, y + 130);
+  // 進階轉職解鎖狀態
+  const unlocked = p.lv >= MASTERY_ADVANCE_LEVEL;
+  const ay = y + 144, ah = 34;
+  ctx.fillStyle = unlocked ? 'rgba(255,230,128,0.12)' : 'rgba(255,255,255,0.028)';
+  ctx.fillRect(x + 14, ay, w - 28, ah);
+  ctx.strokeStyle = unlocked ? '#c8a64f' : '#35374b'; ctx.strokeRect(x + 14, ay, w - 28, ah);
+  ctx.fillStyle = unlocked ? '#ffe680' : '#74778e'; ctx.font = 'bold 10px ' + STAT_FONT;
+  ctx.fillText(unlocked ? '★ 進階轉職條件已達成' : '進階轉職：Lv ' + MASTERY_ADVANCE_LEVEL + '（還差 ' + (MASTERY_ADVANCE_LEVEL - p.lv) + ' 級）', x + 24, ay + 15);
+  ctx.fillStyle = '#64677b'; ctx.font = '9px ' + STAT_FONT;
+  ctx.fillText('進階職業將於後續版本開放', x + 24, ay + 28);
+}
+function renderMasteryTab() {
+  const jobs = Object.keys(CLASSES);
+  const top = 112, ph = 192, gap = 16;
+  const pw = Math.floor((912 - gap * (Math.min(2, jobs.length) - 1)) / Math.min(2, jobs.length));
+  for (let i = 0; i < jobs.length; i++) {
+    const col = i % 2, row = Math.floor(i / 2);
+    renderMasteryJobPanel(jobs[i], 24 + col * (pw + gap), top + row * (ph + gap), pw, ph);
+  }
+  // 獎勵軌（外觀獎勵，K1 系列開放後接上）
+  const ry = top + Math.ceil(jobs.length / 2) * (ph + gap), rh = 504 - ry;
+  drawStonePanel(24, ry, 912, rh, '精 通 獎 勵 軌  •  只給外觀與材料，不影響戰力');
+  const chapters = [
+    { range: 'Lv 1–10', name: '第一章', reward: '角色配色・材料・名牌框', col: '#7dffd6' },
+    { range: 'Lv 11–20', name: '第二章', reward: '職業稱號・技能外觀・基地旗幟', col: '#9ecbff' },
+    { range: 'Lv 21–30', name: '第三章', reward: '勝利姿勢・終極技能外觀・職業雕像', col: '#d9a8ff' }
+  ];
+  const bw = 288, bx0 = 36;
+  for (let i = 0; i < chapters.length; i++) {
+    const c = chapters[i], bx = bx0 + i * (bw + 12), by = ry + 30;
+    const reached = jobs.some(j => masteryChapterOf(masteryProgress(j).lv) >= i);
+    ctx.fillStyle = reached ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.022)';
+    ctx.fillRect(bx, by, bw, 52);
+    ctx.strokeStyle = reached ? c.col : '#33364a'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 52);
+    ctx.textAlign = 'left'; ctx.fillStyle = reached ? c.col : '#5d6076'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillText(c.name + '　' + c.range, bx + 10, by + 19);
+    ctx.fillStyle = reached ? '#aeb2ca' : '#54576b'; ctx.font = '9px ' + STAT_FONT;
+    ctx.fillText(c.reward, bx + 10, by + 36);
+    ctx.fillStyle = '#5d6076'; ctx.fillText(reached ? '（獎勵於後續版本開放）' : '尚未解鎖', bx + 10, by + 48);
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = '#6f7492'; ctx.font = '9px ' + STAT_FONT;
+  ctx.fillText('精通經驗來自樓層深度、擊殺與成功撤退；首次以該職業擊敗某 Boss 有額外加成，未突破該職最深紀錄時收益降低。', 36, ry + rh - 12);
+  ctx.textAlign = 'left';
+}
 function renderActivityTab() {
   refreshActivityPeriods(); activityBtns.length = 0;
   renderActivityTaskPanel('daily', 24, 112, 448, currentActivityTasks('daily'), '每 日 任 務', '每日輪替・00:00 重置');
@@ -711,7 +784,7 @@ function renderMenu() {
   }
   // 分頁:基地 / 技能 / 倉庫 / 契約
   tabBtns.length = 0;
-  const tabs = [['base', '⌂  基地'], ['skills', '✦  技能'], ['stash', '▣  倉庫'], ['activity', '▤  契約']];
+  const tabs = [['base', '⌂  基地'], ['skills', '✦  技能'], ['stash', '▣  倉庫'], ['activity', '▤  契約'], ['mastery', '★  精通']];
   for (let i = 0; i < tabs.length; i++) {
     const b = { x: 24 + i * 100, y: 62, w: 92, h: 30, tab: tabs[i][0] };
     tabBtns.push(b);
@@ -742,6 +815,11 @@ function renderMenu() {
   if (menuTab === 'activity') {
     selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
     renderActivityTab();
+    return;
+  }
+  if (menuTab === 'mastery') {
+    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
+    renderMasteryTab();
     return;
   }
   skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;

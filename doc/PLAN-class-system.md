@@ -59,7 +59,7 @@
 
 - **J1-A 精通基礎** — ✅ 已完成（v0.29.36）：`meta.mastery[job]={xp,bosses,best}`、30 級三章曲線（`masteryXpForNext`/`masteryLevel`/`masteryProgress`）、`addMasteryXp`/`calcMasteryGain`/`recordMasteryRun`、`ensureMasteryState` 補齊舊存檔、存檔 `ms` 欄位；`endRun` 入帳（基準局不計），`runBossIds` 記錄本局 Boss 供首殺加成，未突破該職最深紀錄時 ×0.6 衰減。零局內戰力。附 `tests/mastery-j1a-smoke.js`。
   - 實跑驗證：第 8 層/40 殺/首殺草原領主/撤退 → 275 XP（升 2 級）；同深度重跑僅 93 XP；法師不受影響；存檔往返正確。
-- **J1-B 精通分頁**：選單新增「精通」頁，顯示各職等級/進度/獎勵軌與「Lv10 解鎖進階職」提示。
+- **J1-B 精通分頁** — ✅ 已完成（v0.29.37）：選單新增「★ 精通」分頁（`renderMasteryTab`/`renderMasteryJobPanel`，town.js）。各職業顯示等級（依職業配色）、章節、經驗進度條、累積經驗、最深樓層、首殺 Boss 數；進階轉職解鎖狀態（Lv10 達成／尚差級數）；獎勵軌三章一覽（已達章節亮起），並標明只給外觀與材料、不影響戰力。
 - **J1-C 轉職框架 + 首個進階職**：`CLASSES`/`SKILL_DEFS`/選角頁/裝備映射支援進階職；精通 Lv10 解鎖；先做**狂戰士**打通整條管線（選得到、技能可用、裝備吃得到、精通獨立累積）。
 - **J1-D 補齊第一批進階職**：聖騎士／元素師／咒術師，各自技能線與天賦。
 - **J1-E 外觀獎勵**：稱號 + 角色配色系統（精通解鎖、可選用套用），接精通獎勵軌。
