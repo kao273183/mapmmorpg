@@ -4,42 +4,46 @@
 // first 12 concrete blessings. G1-C adds 12 voluntary curses with paired gains.
 const DUNGEON_MODIFIER_SCHEMA_VERSION = 1;
 const DUNGEON_MODIFIER_REROLLS_PER_RUN = 2;
+// 處決之刃的斬殺線：敵人 HP 低於此比例時觸發額外傷害。
+const DUNGEON_EXECUTE_HP_THRESHOLD = 0.30;
+// 每個祝福都走不同的整合路徑（effect.type），並盡量給「會改變玩法」的效果，
+// 而非只是又一個小幅被動加成，避免玩家覺得每張祝福都一樣。
 const DUNGEON_BLESSING_DEFS = {
   sunsteel_edge:{
     id:'sunsteel_edge', kind:'blessing', category:'attack', name:'日鋼鋒芒', summary:'所有攻擊穩定提高。',
-    minChapter:1, weight:10, effect:{ type:'attack_mul', value:0.10, cap:0.10, label:'所有傷害 +10%' }
+    minChapter:1, weight:10, effect:{ type:'attack_mul', value:0.15, cap:0.15, label:'所有傷害 +15%' }
   },
-  arcane_tide:{
-    id:'arcane_tide', kind:'blessing', category:'attack', name:'奧術潮汐', summary:'出戰技能造成更多傷害。',
-    minChapter:2, weight:8, effect:{ type:'skill_damage_mul', value:0.12, cap:0.12, label:'技能傷害 +12%' }
+  executioner:{
+    id:'executioner', kind:'blessing', category:'attack', name:'處決之刃', summary:'對瀕死敵人造成致命一擊。',
+    minChapter:2, weight:8, effect:{ type:'execute_damage_mul', value:1.0, cap:1.0, label:'對 HP 低於 30% 的敵人傷害 +100%' }
   },
   hunter_mark:{
     id:'hunter_mark', kind:'blessing', category:'attack', name:'獵手印記', summary:'專門壓制菁英與 Boss。',
-    minChapter:3, weight:6, effect:{ type:'elite_damage_mul', value:0.15, cap:0.15, label:'對菁英與 Boss 傷害 +15%' }
+    minChapter:3, weight:6, effect:{ type:'elite_damage_mul', value:0.20, cap:0.20, label:'對菁英與 Boss 傷害 +20%' }
   },
   oak_heart:{
     id:'oak_heart', kind:'blessing', category:'defense', name:'古橡之心', summary:'提高本局最大生命。',
-    minChapter:1, weight:10, effect:{ type:'max_hp_mul', value:0.12, cap:0.12, label:'最大 HP +12%' }
+    minChapter:1, weight:10, effect:{ type:'max_hp_mul', value:0.15, cap:0.15, label:'最大 HP +15%' }
   },
   guardian_shell:{
     id:'guardian_shell', kind:'blessing', category:'defense', name:'守護甲殼', summary:'每次進入房間時獲得護盾。',
-    minChapter:2, weight:8, effect:{ type:'room_shield_pct', value:0.10, cap:0.10, label:'進房獲得最大 HP 10% 護盾' }
+    minChapter:2, weight:8, effect:{ type:'room_shield_pct', value:0.12, cap:0.12, label:'進房獲得最大 HP 12% 護盾' }
   },
   renewal_well:{
-    id:'renewal_well', kind:'blessing', category:'defense', name:'新生之泉', summary:'所有生命回復效果提高。',
-    minChapter:3, weight:6, effect:{ type:'healing_mul', value:0.25, cap:0.25, label:'生命回復量 +25%' }
+    id:'renewal_well', kind:'blessing', category:'defense', name:'新生之泉', summary:'所有生命回復效果大幅提高。',
+    minChapter:3, weight:6, effect:{ type:'healing_mul', value:0.30, cap:0.30, label:'生命回復量 +30%' }
   },
   wind_stride:{
     id:'wind_stride', kind:'blessing', category:'mobility', name:'逐風步', summary:'提高地面與空中水平移動。',
-    minChapter:1, weight:10, effect:{ type:'move_flat', value:0.35, cap:0.35, label:'移動速度 +0.35' }
+    minChapter:1, weight:10, effect:{ type:'move_flat', value:0.40, cap:0.40, label:'移動速度 +0.40' }
   },
   swift_dash:{
-    id:'swift_dash', kind:'blessing', category:'mobility', name:'迅捷殘影', summary:'更頻繁地使用衝刺。',
-    minChapter:2, weight:8, effect:{ type:'dash_cooldown_mul', value:0.20, cap:0.20, label:'衝刺冷卻 -20%' }
+    id:'swift_dash', kind:'blessing', category:'mobility', name:'迅捷殘影', summary:'衝刺更頻繁，且衝刺全程無敵。',
+    minChapter:2, weight:8, effect:{ type:'dash_cooldown_mul', value:0.30, cap:0.30, label:'衝刺冷卻 -30%，衝刺期間無敵' }
   },
   aerial_grace:{
-    id:'aerial_grace', kind:'blessing', category:'mobility', name:'天穹恩典', summary:'提高跳躍高度與跨越能力。',
-    minChapter:3, weight:6, effect:{ type:'jump_flat', value:1.0, cap:1.0, label:'跳躍力 +1.0' }
+    id:'aerial_grace', kind:'blessing', category:'mobility', name:'天穹恩典', summary:'獲得空中二段跳。',
+    minChapter:3, weight:6, effect:{ type:'double_jump', value:1, cap:1, label:'獲得二段跳' }
   },
   soul_bloom:{
     id:'soul_bloom', kind:'blessing', category:'resource', name:'靈魂綻放', summary:'本局結算獲得更多靈魂。',
@@ -47,7 +51,7 @@ const DUNGEON_BLESSING_DEFS = {
   },
   treasure_eye:{
     id:'treasure_eye', kind:'blessing', category:'resource', name:'尋寶之眼', summary:'怪物更容易掉落裝備。',
-    minChapter:2, weight:8, effect:{ type:'gear_drop_flat', value:0.05, cap:0.05, label:'裝備掉落率 +5%' }
+    minChapter:2, weight:8, effect:{ type:'gear_drop_flat', value:0.08, cap:0.08, label:'裝備掉落率 +8%' }
   },
   fate_thread:{
     id:'fate_thread', kind:'blessing', category:'resource', name:'命運絲線', summary:'本局可額外重抽一次升級卡。',
@@ -209,7 +213,23 @@ function dungeonBlessingHealingAmount(amount, state) {
 function dungeonBlessingDamageForTarget(amount, target, state) {
   let result = Math.max(0, amount) * (1 + dungeonBlessingValue('sunsteel_edge', state));
   if (target && (target.elite || target.type === 'boss')) result *= 1 + dungeonBlessingValue('hunter_mark', state);
+  // 處決之刃：以命中前的當前血量判定，對瀕死目標追加致命傷害。
+  const execute = dungeonBlessingValue('executioner', state);
+  if (execute > 0 && target && Number.isFinite(target.hp) && Number.isFinite(target.mhp) && target.mhp > 0
+      && target.hp <= target.mhp * DUNGEON_EXECUTE_HP_THRESHOLD) {
+    result *= 1 + execute;
+  }
   return result;
+}
+
+// 迅捷殘影：衝刺全程無敵。
+function dungeonBlessingDashInvincible(state) {
+  return dungeonBlessingValue('swift_dash', state) > 0;
+}
+
+// 天穹恩典：獲得空中二段跳。
+function dungeonBlessingHasDoubleJump(state) {
+  return dungeonBlessingValue('aerial_grace', state) > 0;
 }
 
 function dungeonBlessingRoomShieldAmount(maxHp, state) {
@@ -516,7 +536,6 @@ function dungeonG1BalanceReport() {
     (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'hardened_horde', 'reward')) *
     (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'last_light', 'reward'));
   const bossSkillDamageMul = (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'sunsteel_edge')) *
-    (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'arcane_tide')) *
     (1 + dungeonG1DefinitionValue(DUNGEON_BLESSING_DEFS, 'hunter_mark')) *
     (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'frail_power', 'reward')) *
     (1 + dungeonG1DefinitionValue(DUNGEON_CURSE_DEFS, 'mana_leak', 'reward'));

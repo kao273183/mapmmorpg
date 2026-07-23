@@ -54,21 +54,25 @@ const state = api.create(8181);
 assert.strictEqual(api.value('sunsteel_edge', state), 0);
 state.activeBlessings.push(...defs.map(def => def.id));
 assert.strictEqual(api.active('sunsteel_edge', state), true);
-assert.strictEqual(api.value('sunsteel_edge', state), 0.10);
-assert.strictEqual(api.value('arcane_tide', state), 0.12);
-assert.strictEqual(api.value('hunter_mark', state), 0.15);
-assert.strictEqual(api.value('oak_heart', state), 0.12);
-assert.strictEqual(api.value('wind_stride', state), 0.35);
+assert.strictEqual(api.value('sunsteel_edge', state), 0.15);
+assert.strictEqual(api.value('executioner', state), 1);
+assert.strictEqual(api.value('hunter_mark', state), 0.20);
+assert.strictEqual(api.value('oak_heart', state), 0.15);
+assert.strictEqual(api.value('wind_stride', state), 0.40);
 assert.strictEqual(api.value('aerial_grace', state), 1);
 assert.strictEqual(api.value('soul_bloom', state), 0.15);
-assert.strictEqual(api.value('treasure_eye', state), 0.05);
+assert.strictEqual(api.value('treasure_eye', state), 0.08);
 
-assert.strictEqual(api.heal(100, state), 125);
-assert.ok(Math.abs(api.damage(100, { type:'slime', elite:false }, state) - 110) < 0.0001);
-assert.ok(Math.abs(api.damage(100, { type:'slime', elite:true }, state) - 126.5) < 0.0001);
-assert.ok(Math.abs(api.damage(100, { type:'boss' }, state) - 126.5) < 0.0001);
-assert.strictEqual(api.shield(100, state), 10);
-assert.strictEqual(api.dash(120, state), 96);
+assert.strictEqual(api.heal(100, state), 130);
+// 一般敵人（未提供血量）不觸發處決；斬殺線僅對瀕死目標生效。
+assert.ok(Math.abs(api.damage(100, { type:'slime', elite:false }, state) - 115) < 0.0001);
+assert.ok(Math.abs(api.damage(100, { type:'slime', elite:true }, state) - 138) < 0.0001);
+assert.ok(Math.abs(api.damage(100, { type:'boss' }, state) - 138) < 0.0001);
+// 處決之刃：目標 HP 低於 30% 時追加 +100%。
+assert.ok(Math.abs(api.damage(100, { type:'slime', elite:false, hp:20, mhp:100 }, state) - 230) < 0.0001);
+assert.ok(Math.abs(api.damage(100, { type:'slime', elite:false, hp:50, mhp:100 }, state) - 115) < 0.0001);
+assert.strictEqual(api.shield(100, state), 12);
+assert.strictEqual(api.dash(120, state), 84);
 assert.strictEqual(api.consume('fate_thread', state), true);
 assert.strictEqual(api.consume('fate_thread', state), false, 'fate thread must grant only one card reroll');
 
@@ -81,12 +85,14 @@ const run = fs.readFileSync(path.join(root, 'src/game/run.js'), 'utf8');
 const update = fs.readFileSync(path.join(root, 'src/game/update.js'), 'utf8');
 const core = fs.readFileSync(path.join(root, 'src/dungeon/core.js'), 'utf8');
 const events = fs.readFileSync(path.join(root, 'src/dungeon/events.js'), 'utf8');
-for (const id of ['arcane_tide', 'oak_heart', 'wind_stride', 'aerial_grace', 'soul_bloom', 'treasure_eye', 'fate_thread']) {
+for (const id of ['oak_heart', 'wind_stride', 'soul_bloom', 'treasure_eye', 'fate_thread']) {
   assert.ok(systems.includes(id), id + ' must be wired into shared player calculations');
 }
-assert.ok(run.includes('dungeonBlessingDamageForTarget'));
+assert.ok(run.includes('dungeonBlessingDamageForTarget'), '處決之刃／獵手印記透過命中傷害整合');
 assert.ok(run.includes('blessingHeal'));
 assert.ok(update.includes('dungeonBlessingDashCooldown'));
+assert.ok(update.includes('dungeonBlessingDashInvincible'), '迅捷殘影的無敵衝刺需接入衝刺流程');
+assert.ok(update.includes('dungeonBlessingHasDoubleJump'), '天穹恩典的二段跳需接入跳躍流程');
 assert.ok(core.includes('dungeonBlessingRoomShieldAmount'));
 assert.ok(core.includes('dungeonBlessingHealingAmount'));
 assert.ok(events.includes('dungeonBlessingHealingAmount'));
