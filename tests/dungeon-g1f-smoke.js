@@ -42,13 +42,13 @@ const fixed = api.fixedReport();
 assert.deepStrictEqual(Object.keys(fixed.cases), ['neutral', 'blessings', 'curses', 'mixed']);
 assert.strictEqual(fixed.alerts.length, 0);
 assert.strictEqual(fixed.cases.neutral.warrior.clearSec, 960);
-assert.strictEqual(fixed.cases.blessings.warrior.clearSec, 873);
+assert.strictEqual(fixed.cases.blessings.warrior.clearSec, 835);
 assert.strictEqual(fixed.cases.blessings.warrior.souls, 115);
 assert.strictEqual(fixed.cases.curses.warrior.clearSec, 1133);
 assert.strictEqual(fixed.cases.curses.warrior.damageTaken, 173);
 assert.strictEqual(fixed.cases.curses.warrior.souls, 125);
 assert.strictEqual(fixed.cases.curses.warrior.roomRewards, 11.6);
-assert.strictEqual(fixed.cases.mixed.warrior.clearSec, 1030);
+assert.strictEqual(fixed.cases.mixed.warrior.clearSec, 985);
 assert.strictEqual(fixed.cases.mixed.warrior.souls, 144);
 for (const profile of Object.values(fixed.cases)) {
   assert.ok(profile.classGapPct < 0.15, profile.id + ' must stay below the paired-class warning');

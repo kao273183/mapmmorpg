@@ -1,5 +1,12 @@
 # 開發完成紀錄
 
+## v0.29.36 — 祝福改版：更有個性的選擇（2026-07-23）
+
+- 針對「祝福感覺都一樣」的回報：問題在於 12 個祝福清一色是小幅被動加成，缺少會改變玩法的效果。改為讓每個祝福走不同整合路徑（`effect.type` 維持 12 種各異）。
+- 新增發動／條件型祝福：`executioner` 處決之刃（命中前 HP < 30% 的敵人傷害 +100%，於 `dungeonBlessingDamageForTarget` 判定，取代與日鋼重複的奧術潮汐）、`aerial_grace` 改為 `double_jump` 二段跳（接入 `update.js` 跳躍流程）、`swift_dash` 追加衝刺全程無敵（`dungeonBlessingDashInvincible`）並將冷卻縮減提高到 30%。
+- 全面調高數值使加成更有感：日鋼鋒芒 +15%、獵手印記 +20%、古橡之心 +15%、守護甲殼 12%、新生之泉 +30%、逐風步 +0.40、尋寶之眼 +8%；數值仍守住既有平衡警戒線（極端靈魂與 Boss 技能傷害倍率 ≤ ×2）。
+- 更新 `dungeon-g1b`、`set-system` 與 `dungeon-g1f` 固定基準報表的期望值，涵蓋處決、二段跳與無敵衝刺的實際接線。正式頁與測試頁資源統一為 v0.29.36。
+
 ## v0.29.17 — 逃走機制：道中撤退回基地（2026-07-22）
 
 - 新增道中逃走：`gameState === 'play'` 時長按 Q（手機為右側「逃」鈕，`hold:'q'`）約 1.5 秒（`FLEE_CHANNEL_FRAMES = 90`）即可撤退回基地；`dmgPlayer` 受擊會呼叫 `interruptFleeChannel()` 中斷蓄力，放開按鍵或開啟面板（`clearGameInputs`）亦會重置。
