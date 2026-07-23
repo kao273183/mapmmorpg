@@ -5,19 +5,24 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
-// 需要 systems.js 的 CLASSES/baseClassOf，與 progression.js 的技能/精通
-const CLASSES_SRC = `
-const CLASSES = {
-  warrior:   { name:'劍士', col:'#c84a4a' },
-  mage:      { name:'法師', col:'#5a4ad0' },
-  berserker: { name:'狂戰士', col:'#ff6b3d', base:'warrior', advanced:true }
-};
-function baseClassOf(cls) { const c = CLASSES[cls]; return (c && c.base) || cls; }
-function isAdvancedClass(cls) { return !!(CLASSES[cls] && CLASSES[cls].advanced); }
-`;
+// 直接抽出 systems.js 真正的 CLASSES 與職業解析函式，避免測試用的假名單跟正式碼走鐘
+const systemsSrc = fs.readFileSync(path.join(root, 'src', 'game', 'systems.js'), 'utf8');
+function extract(re, label) {
+  const m = systemsSrc.match(re);
+  assert.ok(m, 'systems.js 找不到 ' + label);
+  return m[0];
+}
+const CLASSES_SRC = [
+  extract(/const CLASSES = \{[\s\S]*?\n\};/, 'CLASSES'),
+  extract(/function baseClassOf\(cls\) \{.*?\}/, 'baseClassOf'),
+  extract(/function isAdvancedClass\(cls\) \{.*?\}/, 'isAdvancedClass'),
+  extract(/function baseClassIds\(\) \{.*?\}/, 'baseClassIds'),
+  extract(/function advancedJobsFor\(base\) \{.*?\}/, 'advancedJobsFor')
+].join('\n');
 const source = CLASSES_SRC + fs.readFileSync(path.join(root, 'src', 'game', 'progression.js'), 'utf8') + `
 globalThis.__j1c = {
-  meta, CLASSES, baseClassOf, isAdvancedClass, isJobUnlocked, selectableJobs,
+  meta, CLASSES, baseClassOf, isAdvancedClass, baseClassIds, advancedJobsFor,
+  isJobUnlocked, selectableJobs, jobPickList, jobHotkeyList, jobUnlockHint, revalidateLoadouts,
   classSkills, gearUsableByClass, uniqueIdsFor, loadouts, skillState,
   SKILL_DEFS, SKILL_IDS, LEGACY_SKILL_IDS, skillsToNums, applySkillNums,
   advancedSkillState, applyAdvancedSkillState, ensureMasteryState, masteryLevel,

@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.38';
+const GAME_VERSION = '0.29.39';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.39', date:'2026-07-23', title:'四大進階職與選角改版（J1-D）',
+    items:['新增三個進階職：聖騎士（護盾減傷、命中回血）、元素師（火冰雷三環爆發、雷球連鎖）、咒術師（疫病持續傷害與虛弱、汲取生命）。','選角頁改版：上方固定兩張基礎職大卡，下方一列該系的「進階轉職」晶片；未達條件也會顯示灰晶片並標明解鎖門檻，不再是看不到就不知道有這回事。','進階職解鎖只看自己那一系的基礎職精通 Lv10；精通分頁與技能分頁都已排得下六個職業。','修正進階職讀檔後出戰欄被清空、開局沒有技能可用的問題。']
+  },
   {
     version:'0.29.38', date:'2026-07-23', title:'轉職框架與首個進階職（J1-C）',
     items:['新增進階職「狂戰士」：劍士精通 Lv10 後解鎖，出戰選單與技能分頁都會多出一張職業卡。','狂戰士沿用劍士的屬性、裝備與技能，另有兩個專屬技能——血怒斬（消耗 HP，血越低傷害越高）與戰吼（群體緩速並自我狂暴回 MP）。','技能樹版面改為依技能數自適應，進階專屬技能排在最右一層；精通分頁與獎勵軌也改成多職業版面。','進階職精通獨立累積，不影響基礎職；既有存檔的技能與天賦完全沿用，不需重點。']
@@ -549,7 +553,7 @@ window.addEventListener('keydown', e => {
     return; // 走動/互動由 keys[] + updateTown 處理
   }
   if (gameState === 'select') {
-    if (k >= '1' && k <= '9') { const jobs = selectableJobs(), n = parseInt(k, 10) - 1; if (jobs[n]) chosenCls = jobs[n]; } // 含已解鎖進階職
+    if (k >= '1' && k <= '9') { const jobs = jobHotkeyList(), n = parseInt(k, 10) - 1; if (jobs[n]) chosenCls = jobs[n]; } // 基礎職 + 當前系別已解鎖的進階職
     if (k === 'escape' && fromTown) { gameState = 'town'; setHint(HINT_TOWN); return; }
     if (k === 'enter' && menuTab === 'base') resetRun();
     return;

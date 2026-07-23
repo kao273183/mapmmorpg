@@ -26,6 +26,8 @@ function update() {
     p.shieldT--;
     if (p.shieldT === 0) { p.shieldHp = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; }
   }
+  if (p.holyGuardT > 0) p.holyGuardT--;   // 聖騎士減傷
+  if (p.ccImmuneT > 0) { p.ccImmuneT--; p.chillT = 0; p.hazardSlowT = 0; } // 庇護：免疫緩速與凍結
   if (perkV('aegis') > 0) { // 守護結界:每12秒補護盾
     if (p.aegisCd > 0) p.aegisCd--;
     if (p.aegisCd <= 0) {

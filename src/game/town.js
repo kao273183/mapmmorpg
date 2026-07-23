@@ -432,7 +432,10 @@ function drawEnchantAnim() {
 const SKILL_COLORS = {
   slash:'#d9c7a2', spin:'#e8a84c', dash:'#8ec9df', quake:'#c98b59', rage:'#d95745',
   fire:'#ff7a36', bolt:'#e9d45a', ice:'#71c9e8', meteor:'#d85132', shield:'#9575d5',
-  bloodrend:'#c02f3a', warcry:'#ff9b45'
+  bloodrend:'#c02f3a', warcry:'#ff9b45',
+  bulwark:'#ffd76a', smite:'#ffe9a8',
+  elemburst:'#4ad0c8', chainstorm:'#7ee0ff',
+  plague:'#a35ad0', soulleech:'#c99ae8'
 };
 function drawSkillSigil(id, x, y, r, active, locked) {
   const col = SKILL_COLORS[id] || '#d8b365';
@@ -508,7 +511,7 @@ function renderSkillTab() {
 
   // 頂部職業切換與技能秘典
   const clsList = selectableJobs();
-  const clsW = Math.min(118, Math.floor((380 - (clsList.length - 1) * 10) / Math.max(1, clsList.length)));
+  const clsW = Math.min(118, Math.floor((634 - (clsList.length - 1) * 10) / Math.max(1, clsList.length))); // 用到技能秘典鈕之前的完整寬度
   for (let i = 0; i < clsList.length; i++) {
     const b = { x: 30 + i * (clsW + 10), y: 118, w: clsW, h: 34, act: 'cls', cls: clsList[i] };
     skillActBtns.push(b);
@@ -732,10 +735,10 @@ function renderMasteryTab() {
     ctx.fillText(c.name + '　' + c.range, bx + 10, by + 19);
     ctx.fillStyle = reached ? '#aeb2ca' : '#54576b'; ctx.font = '9px ' + STAT_FONT;
     ctx.fillText(c.reward, bx + 10, by + 36);
-    ctx.fillStyle = '#5d6076'; ctx.fillText(reached ? '（獎勵於後續版本開放）' : '尚未解鎖', bx + 10, by + 48);
+    ctx.fillStyle = '#5d6076'; ctx.fillText(reached ? '（獎勵於後續版本開放）' : '尚未解鎖', bx + 10, by + 41);
   }
   ctx.textAlign = 'left'; ctx.fillStyle = '#6f7492'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText('精通經驗來自樓層深度、擊殺與成功撤退；首次以該職業擊敗某 Boss 有額外加成，未突破該職最深紀錄時收益降低。', 36, ry + rh - 12);
+  ctx.fillText('精通經驗來自樓層深度、擊殺與成功撤退；首次以該職業擊敗某 Boss 有額外加成，未突破該職最深紀錄時收益降低。', 36, ry + rh - 7);
   ctx.textAlign = 'left';
 }
 function renderActivityTab() {
@@ -861,47 +864,64 @@ function renderMenu() {
 
   // 更有辨識度的職業卡。
   selBtns.length = 0;
-  const cls = selectableJobs();
-  const inner = left.w - 36, gapC = 12, n = Math.max(1, cls.length);
-  const cw = Math.floor((inner - gapC * (n - 1)) / n), ch = 118;
-  const wide = cw >= 170; // 兩職業時維持原本橫式排版，較多職業時改直式精簡卡
-  for (let i = 0; i < cls.length; i++) {
-    const c = cls[i];
+  // 版面：上排固定兩張基礎職大卡；下方一列「進階轉職」晶片，只顯示當前系別，未達條件顯示灰晶片。
+  const picks = jobPickList(chosenCls);
+  const bases = picks.bases, advList = picks.adv;
+  const inner = left.w - 36, gapC = 12, nb = Math.max(1, bases.length);
+  const cw = Math.floor((inner - gapC * (nb - 1)) / nb), ch = 96;
+  for (let i = 0; i < bases.length; i++) {
+    const c = bases[i];
     const cx = left.x + 18 + i * (cw + gapC), cy = left.y + 56;
-    const sel = chosenCls === c, def = CLASSES[c] || { name: c, col: '#8890b8' };
+    const sel = chosenCls === c, family = baseClassOf(chosenCls) === c, def = CLASSES[c] || { name: c, col: '#8890b8' };
     if (sel) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 9; }
-    fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : (isAdvancedClass(c) ? '#8a5a3b' : '#3c4058'), sel ? 2 : 1);
+    fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : family ? 'rgba(30,40,54,0.72)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : family ? '#4d7d72' : '#3c4058', sel ? 2 : 1);
     ctx.shadowBlur = 0;
     selBtns.push({ x: cx, y: cy, w: cw, h: ch, cls: c });
-    if (isAdvancedClass(c)) { ctx.textAlign = 'right'; ctx.fillStyle = '#ffb45e'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.fillText('★ 進階', cx + cw - 8, cy + 14); }
-    if (wide) {
-      drawSprite(baseClassOf(c) === 'mage' ? MAGE : WAR, cx + 16, cy + 22, 3, false);
-      ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
-      ctx.fillText(def.name, cx + 86, cy + 36);
-      ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT; ctx.fillText(def.tag || '', cx + 86, cy + 57);
-      ctx.fillStyle = '#6f7695'; ctx.font = '10px ' + STAT_FONT; ctx.fillText(def.sub || '', cx + 86, cy + 77);
-      if (sel) {
-        fillRoundRect(cx + 86, cy + 92, 78, 24, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
-        ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 108);
-      } else {
-        ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 108);
-      }
-    } else { // 精簡直式卡（3 個以上職業）
-      drawSprite(baseClassOf(c) === 'mage' ? MAGE : WAR, cx + cw / 2 - 18, cy + 20, 3, false);
-      ctx.textAlign = 'center'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 13px ' + STAT_FONT;
-      ctx.fillText(def.name, cx + cw / 2, cy + 78);
-      ctx.fillStyle = '#7d84a4'; ctx.font = '9px ' + STAT_FONT;
-      ctx.fillText(sel ? '✓ 目前出戰' : '按 [' + (i + 1) + ']', cx + cw / 2, cy + 96);
+    drawSprite(c === 'mage' ? MAGE : WAR, cx + 16, cy + 18, 3, false);
+    ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
+    ctx.fillText(def.name, cx + 86, cy + 32);
+    ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT; ctx.fillText(def.tag || '', cx + 86, cy + 52);
+    if (sel) {
+      fillRoundRect(cx + 86, cy + 62, 78, 22, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
+      ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 77);
+    } else {
+      ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 77);
     }
+  }
+  // 進階轉職晶片列（隨大卡選擇切換系別；未解鎖顯示條件）
+  const chipY = left.y + 158, chipH = 26, labW = 40;
+  ctx.textAlign = 'left'; ctx.fillStyle = '#7a819f'; ctx.font = 'bold 10px ' + STAT_FONT;
+  ctx.fillText('進階', left.x + 18, chipY + 17);
+  if (!advList.length) {
+    ctx.fillStyle = '#565b76'; ctx.font = '10px ' + STAT_FONT;
+    ctx.fillText('此職業的進階轉職尚未開放', left.x + 18 + labW, chipY + 17);
+  }
+  const chipAvail = inner - labW, gapH = 8, na = Math.max(1, advList.length);
+  const chw = Math.min(168, Math.floor((chipAvail - gapH * (na - 1)) / na));
+  for (let i = 0; i < advList.length; i++) {
+    const c = advList[i], def = CLASSES[c] || { name: c, col: '#8890b8' };
+    const unl = isJobUnlocked(c), sel = chosenCls === c;
+    const bx = left.x + 18 + labW + i * (chw + gapH);
+    fillRoundRect(bx, chipY, chw, chipH, 5,
+      sel ? 'rgba(66,112,110,0.28)' : unl ? 'rgba(122,74,42,0.22)' : 'rgba(255,255,255,0.028)',
+      sel ? '#7dffd6' : unl ? '#8a5a3b' : '#33364a', sel ? 2 : 1);
+    if (unl) selBtns.push({ x: bx, y: chipY, w: chw, h: chipH, cls: c }); // 灰晶片不可點
+    const hotkey = bases.length + advList.slice(0, i).filter(isJobUnlocked).length + 1;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = sel ? '#8affdc' : unl ? '#ffb45e' : '#565b76'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillText((unl ? '★ ' : '✕ ') + def.name, bx + 9, chipY + 17);
+    const tail = sel ? '出戰中' : unl ? '[' + hotkey + ']' : jobUnlockHint(c);
+    ctx.textAlign = 'right'; ctx.fillStyle = sel ? '#6fd8bb' : unl ? '#8a7f6d' : '#4e5268'; ctx.font = '9px ' + STAT_FONT;
+    ctx.fillText(tail, bx + chw - 9, chipY + 17);
   }
   ctx.textAlign = 'left';
 
   // 目前裝備的三個技能。
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
-  ctx.fillText('出戰技能', left.x + 18, left.y + 188);
+  ctx.fillText('出戰技能', left.x + 18, left.y + 200);
   const equipped = loadouts[chosenCls];
   for (let i = 0; i < equipped.length; i++) {
-    const id = equipped[i], ix = left.x + 32 + i * 126, iy = left.y + 216;
+    const id = equipped[i], ix = left.x + 32 + i * 126, iy = left.y + 228;
     drawSkillSigil(id, ix, iy, 20, !!id, !id);
     ctx.fillStyle = id ? '#dfe3f5' : '#6c728f'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(id ? SKILL_DEFS[id].name : '尚未裝備', ix + 30, iy - 3);
     ctx.fillStyle = '#686f90'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('技能 ' + (i + 1), ix + 30, iy + 13);
@@ -909,8 +929,8 @@ function renderMenu() {
   // 本次難度（一般／困難）— 與設定頁同步，per-run 可在此切換。
   const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
-  ctx.fillText('本次難度', left.x + 18, left.y + 250);
-  const dbW = 188, dbH = 26, db1 = left.x + 18, db2 = left.x + 18 + dbW + 12, dby = left.y + 258;
+  ctx.fillText('本次難度', left.x + 18, left.y + 262);
+  const dbW = 188, dbH = 26, db1 = left.x + 18, db2 = left.x + 18 + dbW + 12, dby = left.y + 270;
   diffBtns.length = 0;
   const diffBtn = (x, mode, label, on) => {
     diffBtns.push({ x, y: dby, w: dbW, h: dbH, act: mode });
@@ -920,10 +940,10 @@ function renderMenu() {
   diffBtn(db1, 'terrainNormal', '一般（推薦）', terrainNormal);
   diffBtn(db2, 'terrainComplex', '困難', !terrainNormal);
   ctx.textAlign = 'left'; ctx.fillStyle = '#ffb45e'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '困難：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 296);
-  ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 304, left.w - 36, 1);
+  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '困難：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 308);
+  ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 316, left.w - 36, 1);
   const bw2 = left.w - 36, bh2 = 48;
-  startBtn = { x: left.x + 18, y: left.y + 312, w: bw2, h: bh2 };
+  startBtn = { x: left.x + 18, y: left.y + 324, w: bw2, h: bh2 };
   const pulse = 0.32 + (Math.sin(frame * 0.07) + 1) * 0.06;
   ctx.shadowColor = '#b05ae0'; ctx.shadowBlur = 8;
   fillRoundRect(startBtn.x, startBtn.y, bw2, bh2, 6, 'rgba(176,90,224,' + pulse.toFixed(2) + ')', '#c56ef0', 2);
@@ -931,7 +951,7 @@ function renderMenu() {
   ctx.fillText('進入地城', startBtn.x + bw2 / 2 - 22, startBtn.y + 30);
   ctx.fillStyle = '#e3c4f3'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.fillText('[ ENTER ]', startBtn.x + bw2 / 2 + 82, startBtn.y + 30);
   ctx.fillStyle = '#777e9f'; ctx.font = '10px ' + STAT_FONT;
-  ctx.fillText(lastRun ? (lastRun.benchmarkId ? '上次基準  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  進度未保存' : '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained) : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 378);
+  ctx.fillText(lastRun ? (lastRun.benchmarkId ? '上次基準  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  進度未保存' : '上次紀錄  第 ' + lastRun.floor + ' 層  •  擊殺 ' + lastRun.kills + '  •  靈魂 +' + lastRun.gained) : '清空怪物、啟動傳送門，挑戰更深樓層', left.x + left.w / 2, left.y + 382);
 
   // 永久成長分成戰鬥／冒險兩頁，維持清楚密度並方便繼續擴充。
   metaBtns.length = 0;

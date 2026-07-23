@@ -68,7 +68,14 @@
   - **存檔相容**：序列化區塊凍結在 `LEGACY_SKILL_IDS`/`LEGACY_SKILL_CLASSES`（維持 46 個數字，`V2_LEN`/`V3_LEN` 不動），進階職技能與出戰欄另存於新的 `ax` 欄位。
   - 裝備一律以基礎職標記（`createGear` 正規化 `cls`、`gearName` 與裝備美術查表經 `baseClassOf`），進階職才穿得到自己掉的裝。
   - 附 `tests/advance-j1c-smoke.js`（解鎖門檻／技能繼承／裝備沿用／技能樹版面涵蓋／46 格存檔不變）。
-- **J1-D 補齊第一批進階職**：聖騎士／元素師／咒術師，各自技能線與天賦。
+- **J1-D 補齊第一批進階職 + 選角改版** — ✅ 已完成（v0.29.39）：
+  - 三個進階職到齊：**聖騎士**（`bulwark` 聖盾壁壘＝護盾＋20% 減傷；`smite` 制裁光錘＝前方神聖打擊、每命中回血）、**元素師**（`elemburst` 元素爆發＝火冰雷三環，依位置決定元素效果；`chainstorm` 連鎖風暴＝雷球連跳並衰減）、**咒術師**（`plague` 疫咒＝範圍持續傷害＋虛弱；`soulleech` 汲魂＝直線抽血回 MP）。每個都有 2 條天賦分支與 Lv3/Lv5 效果。
+  - 每個進階職 = 基礎職 5 技能 + 專屬 2 技能（共 7），沿用既有 `TREE_LAYOUTS[7]` 版面。
+  - **選角頁改版**：上方固定兩張基礎職大卡（`ch` 118→96），下方一列該系的「進階轉職」晶片。未解鎖顯示灰晶片並標示 `jobUnlockHint()`（例：「法師精通 Lv10」），可見但不可點；解鎖後才吃數字鍵（`jobHotkeyList()`）。原本單列平均分寬在 6 職業時每張只剩 55px，改版後大卡維持 191px。
+  - 新機制掛接：`p.holyGuardT`（減傷，`dmgPlayer`）、`p.ccImmuneT`（免疫緩速凍結，update）、`m.burnSpread`（持續傷害在目標死亡時傳染，run.js 擊殺處）。延遲第二段爆發沿用既有 `addSkillZone`。
+  - 精通分頁改為 3 欄 × 2 列 compact 卡；技能分頁職業切換列改用到技能秘典鈕之前的完整寬度（6 職 97px）。
+  - **修正載入順序 bug**：`applyAdvancedSkillState` 在 `loadMeta()`（早於 systems.js）呼叫 `classSkills()`，此時 `CLASSES`/`baseClassOf` 未定義，會把進階職出戰欄裡的基礎職技能濾掉 → 進階職開局空手。改為載入時只做不依賴職業表的檢查，職業歸屬交給 `revalidateLoadouts()`（main.js 於全部載入後呼叫）。
+  - 附 `tests/advance-j1d-smoke.js`；`tests/advance-j1c-smoke.js` 改為直接抽取 systems.js 真正的 `CLASSES`，新增職業時自動納入檢查。
 - **J1-E 外觀獎勵**：稱號 + 角色配色系統（精通解鎖、可選用套用），接精通獎勵軌。
 - **J1-F 平衡與回歸**：確認零戰力、進階職平衡不破壞曲線、遞減合理；固定種子 smoke、桌機/手機/低特效、舊存檔相容。
 - （後續）**J2**：弓箭手基礎職 + 其進階職（接 DESIGN-classes 第三職業）。

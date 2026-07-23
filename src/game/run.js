@@ -364,7 +364,7 @@ function resetRun() {
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.dashT = 0; p.dashCd = 0; p.dashDir = 1;
   p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
-  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0;
+  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0; p.holyGuardT = 0; p.ccImmuneT = 0;
   p.skillCasts = {};
   p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.uniqueReviveUsed = false; p.eventAtk = 0; p.eventRerolls = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;
@@ -563,6 +563,16 @@ function hitMon(m, d, crit, noChain) {
     if (m.type === 'boss') activityProgress('bosses', 1);
     else if (m.elite) activityProgress('elites', 1);
     burst(m.x, m.y - m.h / 2, m.elite ? '#b05ae0' : (m.type === 'slime' ? '#63cf3c' : '#c0aaff'), m.elite ? 24 : 14);
+    if (m.burnSpread && m.burnDmg > 0) { // 咒術師蔓延／元素師熾炎：死亡時把持續傷害傳染給鄰近敵人
+      for (const o of mons) {
+        if (o === m || o.hp <= 0) continue;
+        if (Math.hypot(o.x - m.x, (o.y - o.h / 2) - (m.y - m.h / 2)) > 150) continue;
+        o.burnT = Math.max(o.burnT || 0, 200);
+        o.burnDmg = Math.max(o.burnDmg || 0, m.burnDmg);
+        num(o.x, o.y - o.h - 18, '傳染', '#a35ad0', { size:10 });
+      }
+      burst(m.x, m.y - m.h / 2, '#a35ad0', 16);
+    }
     gainXp(m.xpv);
     if (player.cd.ls > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(3 * player.cd.ls));
     if (player.rageT > 0 && player.rageExtend > 0) {
