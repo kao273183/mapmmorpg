@@ -25,6 +25,7 @@ assert.ok(!fs.existsSync(path.join(root, 'src', 'game.js')), 'the split game mon
 const requiredAssets = [
   'assets/README.md',
   'assets/runtime/audio/LICENSE.md',
+  'assets/runtime/skills/LICENSE.md',
   'assets/runtime/audio/sfx/sword_swing.ogg',
   'assets/runtime/equipment/weapons and armor/sword - wood.png',
   'assets/runtime/equipment/items/amulet 1.png',

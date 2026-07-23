@@ -1,0 +1,19 @@
+Pixel Art Spells
+================
+
+Sources:
+- https://opengameart.org/content/pixel-art-spells
+- 直接下載：https://opengameart.org/sites/default/files/pixelart_spells_1.zip
+
+Author: DevWizard (https://opengameart.org/users/devwizard)
+License: CC0 1.0 Universal (public domain dedication)
+          http://creativecommons.org/publicdomain/zero/1.0/
+Retrieved: 2026-07-23
+
+作者備註：署名非必要，但作者希望被標示為 DevWizard。
+
+內容：23 組法術動畫（多為投射物），16x16，含 PNG 與 Aseprite (.asp) 原始檔。
+      黑白版本是設計成在引擎內上色用的，同一組可衍生多種法術外觀。
+
+使用方式：把下載的 zip 解壓在本目錄。實際採用的圖集整理後放到
+          assets/runtime/skills/vfx/，並在 assets/runtime/skills/LICENSE.md 登記。
