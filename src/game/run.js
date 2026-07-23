@@ -374,6 +374,7 @@ function resetRun() {
   calcStats();
   p.hp = p.mhp; p.mp = p.mmp;
   floor = 1; kills = 0; soulsRun = 0; gearSeq = 1;
+  runBossIds = []; // 本局擊敗的 Boss（供精通首殺加成）
   pendingPicks = 0;
   dmgNums.length = 0; parts.length = 0;
   resetDungeonRun(benchmarkProfile);
@@ -411,7 +412,15 @@ function endRun(result) {
   lastRun = { floor: floor, kills: kills, gained: gained, stashed: stashed, cause: lastDamageSource, result:result === 'extract' ? 'extract' : 'death', benchmarkId:activeDungeonBenchmarkId };
   if (typeof finishDungeonBalanceRun === 'function') finishDungeonBalanceRun(lastRun);
   if (benchmarkRun) restoreDungeonBenchmarkProgress();
-  else { if (floor > bestFloor) bestFloor = floor; saveMeta(); }
+  else {
+    if (floor > bestFloor) bestFloor = floor;
+    // 職業精通結算（基準局不計）；只影響外觀/解鎖，零局內戰力
+    if (typeof recordMasteryRun === 'function') {
+      const mr = recordMasteryRun(player.cls, { floor: floor, kills: kills, result: lastRun.result, bossIds: runBossIds });
+      if (mr) lastRun.mastery = mr;
+    }
+    saveMeta();
+  }
   activeDungeonBenchmarkId = null;
   gameState = 'dead';
   setHint('Enter 返回基地');
@@ -582,6 +591,7 @@ function hitMon(m, d, crit, noChain) {
     }
     if (m.type === 'boss') {
       if (typeof recordDungeonBossEnd === 'function') recordDungeonBossEnd('kill', null);
+      if (m.bossId && runBossIds.indexOf(m.bossId) < 0) runBossIds.push(m.bossId); // 精通首殺加成用
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });

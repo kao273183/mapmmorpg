@@ -9,7 +9,9 @@ const meta = {
   cosmetics: {
     owned: { title: [], color: [], aura: ['none'], skin: [] },
     equipped: { title: null, color: null, aura: 'none', skin: null }
-  }
+  },
+  // 職業精通（J1）：每個職業（含未來進階職）獨立累積，零局內戰力
+  mastery: {}
 };
 const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
 const SET_PARTS = ['weapon', 'armor', 'helmet', 'boots'];
@@ -394,7 +396,7 @@ function saveMeta() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
       st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName,
-      cs: meta.cosmetics
+      cs: meta.cosmetics, ms: meta.mastery
     }));
   } catch (e) {}
 }
@@ -413,6 +415,8 @@ function loadMeta() {
       if (d.cs.owned && typeof d.cs.owned === 'object') for (const t of Object.keys(d.cs.owned)) if (Array.isArray(d.cs.owned[t])) meta.cosmetics.owned[t] = d.cs.owned[t].slice();
       if (d.cs.equipped && typeof d.cs.equipped === 'object') for (const t of Object.keys(d.cs.equipped)) meta.cosmetics.equipped[t] = d.cs.equipped[t];
     }
+    // 職業精通（結構清理交給 ensureMasteryState，舊存檔缺欄位＝從 0 開始）
+    if (d && d.ms && typeof d.ms === 'object') meta.mastery = d.ms;
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
@@ -552,6 +556,72 @@ function equipCosmetic(type, id) {
 function equippedCosmetic(type) { // 取目前選用；無效則回預設
   const id = ensureCosmeticState().equipped[type];
   return cosmeticDef(type, id) ? id : COSMETIC_DEFAULT_EQUIPPED[type];
+}
+// ---------- 職業精通（J1-A）----------
+// 每個職業（含未來進階職）獨立累積精通經驗；精通只用於外觀/材料獎勵與解鎖轉職，**零局內戰力**。
+const MASTERY_MAX_LEVEL = 30;
+const MASTERY_ADVANCE_LEVEL = 10;   // 基礎職達此等級解鎖進階轉職（供 J1-C 使用）
+const MASTERY_FIRST_BOSS_XP = 120;  // 首次以該職業擊敗某 Boss 的一次性加成
+const MASTERY_REPEAT_MUL = 0.6;     // 未突破該職業最深紀錄時的收益衰減（防重複刷淺層）
+const MASTERY_EXTRACT_MUL = 1.25;   // 成功撤退加成
+function masteryXpForNext(lv) { // 由 lv 升到 lv+1 所需經驗（三章：1–10 快 / 11–20 中 / 21–30 慢）
+  if (lv < 10) return 100 + 50 * (lv - 1);
+  if (lv < 20) return 600 + 100 * (lv - 10);
+  return 1800 + 200 * (lv - 20);
+}
+function ensureMasteryState(job) { // 補齊結構（舊存檔相容）
+  if (!meta.mastery || typeof meta.mastery !== 'object') meta.mastery = {};
+  if (!job) return meta.mastery;
+  const e = meta.mastery[job];
+  if (!e || typeof e !== 'object') meta.mastery[job] = { xp: 0, bosses: [], best: 0 };
+  else {
+    if (!Number.isFinite(e.xp) || e.xp < 0) e.xp = 0;
+    if (!Array.isArray(e.bosses)) e.bosses = [];
+    if (!Number.isFinite(e.best) || e.best < 0) e.best = 0;
+  }
+  return meta.mastery[job];
+}
+function masteryLevel(xpOrJob) { // 傳數字＝直接換算；傳職業 id＝查該職等級
+  const xp = typeof xpOrJob === 'number' ? xpOrJob : ensureMasteryState(xpOrJob).xp;
+  let lv = 1, left = Math.max(0, xp);
+  while (lv < MASTERY_MAX_LEVEL && left >= masteryXpForNext(lv)) { left -= masteryXpForNext(lv); lv++; }
+  return lv;
+}
+function masteryProgress(job) { // 供 UI：等級與當級進度
+  const e = ensureMasteryState(job);
+  let lv = 1, left = Math.max(0, e.xp);
+  while (lv < MASTERY_MAX_LEVEL && left >= masteryXpForNext(lv)) { left -= masteryXpForNext(lv); lv++; }
+  const max = lv >= MASTERY_MAX_LEVEL, need = max ? 0 : masteryXpForNext(lv);
+  return { job, xp: e.xp, lv, into: left, need, ratio: need ? Math.min(1, left / need) : 1, max, best: e.best, bosses: e.bosses.slice() };
+}
+function addMasteryXp(job, amount) { // 回傳本次升了幾級
+  if (!job || !(amount > 0)) return 0;
+  const e = ensureMasteryState(job);
+  const before = masteryLevel(e.xp);
+  e.xp += Math.round(amount);
+  saveMeta();
+  return masteryLevel(e.xp) - before;
+}
+function calcMasteryGain(job, opts) { // 樓層/擊殺/撤退 + 首次 Boss 加成 + 重複刷衰減
+  const o = opts || {}, e = ensureMasteryState(job);
+  const fl = Math.max(0, o.floor | 0), kl = Math.max(0, o.kills | 0);
+  let gain = fl * 8 + kl * 1.5;
+  if (o.result === 'extract') gain *= MASTERY_EXTRACT_MUL;
+  if (fl <= e.best) gain *= MASTERY_REPEAT_MUL; // 沒突破最深紀錄＝重複刷，收益降低
+  const newBosses = (o.bossIds || []).filter(id => id && e.bosses.indexOf(id) < 0);
+  gain += newBosses.length * MASTERY_FIRST_BOSS_XP;
+  const tierMul = (typeof dungeonMasteryXpMul === 'function') ? dungeonMasteryXpMul() : 1; // R1 秘境層級加成掛勾
+  return { xp: Math.max(1, Math.round(gain * tierMul)), newBosses };
+}
+function recordMasteryRun(job, opts) { // 一局結束結算（endRun 呼叫；基準局不計）
+  if (!job) return null;
+  const e = ensureMasteryState(job);
+  const res = calcMasteryGain(job, opts);
+  for (const id of res.newBosses) e.bosses.push(id);
+  const fl = Math.max(0, (opts && opts.floor) | 0);
+  if (fl > e.best) e.best = fl;
+  const levelsGained = addMasteryXp(job, res.xp); // 內含 saveMeta
+  return { xp: res.xp, levelsGained, newBosses: res.newBosses, lv: masteryLevel(e.xp) };
 }
 // 遷移：舊光環狀態存在 activityState.cosmetics/aura，併入統一狀態（須在 loadMeta/loadActivity 之後呼叫）
 function migrateLegacyCosmetics() {

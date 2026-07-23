@@ -5,6 +5,7 @@ let chosenCls = 'warrior';
 const CLASSES = { warrior: { name: '劍士', col: '#c84a4a' }, mage: { name: '法師', col: '#5a4ad0' } };
 let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
+let runBossIds = []; // 本局擊敗的 Boss id（精通首殺加成用）
 let portal = null;
 let floorEvent = null, eventPanel = null, floorTrial = null;
 const DUNGEON_BENCHMARK_SNAPSHOT_KEY = 'pixelrogue_dungeon_benchmark_snapshot_v1';

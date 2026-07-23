@@ -57,7 +57,8 @@
 
 ## 5. 分批交付
 
-- **J1-A 精通基礎**：`meta.mastery` + 等級曲線 + `endRun` 入帳（樓層/擊殺/撤退 + 首次 Boss 加成 + 同種子遞減）+ 存檔相容。無 UI，附 smoke。
+- **J1-A 精通基礎** — ✅ 已完成（v0.29.36）：`meta.mastery[job]={xp,bosses,best}`、30 級三章曲線（`masteryXpForNext`/`masteryLevel`/`masteryProgress`）、`addMasteryXp`/`calcMasteryGain`/`recordMasteryRun`、`ensureMasteryState` 補齊舊存檔、存檔 `ms` 欄位；`endRun` 入帳（基準局不計），`runBossIds` 記錄本局 Boss 供首殺加成，未突破該職最深紀錄時 ×0.6 衰減。零局內戰力。附 `tests/mastery-j1a-smoke.js`。
+  - 實跑驗證：第 8 層/40 殺/首殺草原領主/撤退 → 275 XP（升 2 級）；同深度重跑僅 93 XP；法師不受影響；存檔往返正確。
 - **J1-B 精通分頁**：選單新增「精通」頁，顯示各職等級/進度/獎勵軌與「Lv10 解鎖進階職」提示。
 - **J1-C 轉職框架 + 首個進階職**：`CLASSES`/`SKILL_DEFS`/選角頁/裝備映射支援進階職；精通 Lv10 解鎖；先做**狂戰士**打通整條管線（選得到、技能可用、裝備吃得到、精通獨立累積）。
 - **J1-D 補齊第一批進階職**：聖騎士／元素師／咒術師，各自技能線與天賦。
