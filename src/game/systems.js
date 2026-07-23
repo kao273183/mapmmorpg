@@ -427,6 +427,7 @@ const SKILL_FX = {
   slash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
+    p.slashArc = { col:'255,255,255', r:52, spread:2.2, w:5 };
     playSkillAnim('slashBeam', p.x + p.face * 42, p.y - 30, { scale:1.05 * t.area, flip:p.face < 0, rotation:p.face < 0 ? -0.08 : 0.08 });
     playSfx('swordSwing');
     p.skillCasts.slash = (p.skillCasts.slash || 0) + 1;
@@ -468,6 +469,7 @@ const SKILL_FX = {
   dash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
+    p.slashArc = { col:'142,201,223', r:48, spread:1.4, w:6 }; // 突進：藍白短促殘影
     const x0 = p.x;
     const dashMul = t.mechanic && t.branch === 0 ? 1.35 : 1;
     const nx = Math.max(14, Math.min(worldW - 14, p.x + p.face * 130 * t.area * dashMul));
@@ -529,7 +531,9 @@ const SKILL_FX = {
   rend(t) { // 狂戰士基本技：粗暴橫斬，血越低越痛
     const p = player;
     p.cast = 10; p.slashT = 10;
+    p.slashArc = { col:'224,85,94', r:44, spread:2.7, w:7 }; // 血紅粗弧，比揮砍更野
     playSkillAnim('slashBeam', p.x + p.face * 40, p.y - 30, { scale:1.0 * t.area, flip:p.face < 0, rotation:p.face < 0 ? 0.12 : -0.12 });
+    playSkillAnim('slashBeam', p.x + p.face * 48, p.y - 22, { scale:0.8 * t.area, flip:p.face > 0, rotation:p.face < 0 ? -0.5 : 0.5, alpha:0.7 }); // 第二道反刀，讀起來是兩下
     playSfx('swordSwing'); beep(190, 0.07, 'sawtooth', 0.035);
     const missing = 1 - p.hp / p.mhp;
     const lowMul = 1 + missing * 0.5;                       // 滿血 1.0 → 空血 1.5
@@ -555,6 +559,7 @@ const SKILL_FX = {
   holystrike(t) { // 聖騎士基本技：穩健的聖光斬，每第三擊回血
     const p = player;
     p.cast = 10; p.slashT = 10;
+    p.slashArc = { col:'255,233,168', r:56, spread:1.7, w:4 }; // 金色細弧，收束乾淨
     playSkillAnim('slashBeam', p.x + p.face * 42, p.y - 30, { scale:1.05 * t.area, flip:p.face < 0 });
     playSfx('swordSwing'); beep(660, 0.07, 'sine', 0.032);
     p.skillCasts.holystrike = (p.skillCasts.holystrike || 0) + 1;
@@ -609,6 +614,7 @@ const SKILL_FX = {
     const missing = 1 - p.hp / p.mhp;                       // 越殘血越強
     const lowMul = 1 + missing * (t.mechanic && t.branch === 1 ? 1.1 : 0.75);
     p.cast = 12; p.slashT = 12;
+    p.slashArc = { col:'192,47,58', r:60, spread:2.4, w:8 };
     playSkillAnim('slashBeam', p.x + p.face * 46, p.y - 30, { scale:1.3 * t.area, flip:p.face < 0 });
     playSfx('swordSwing'); beep(150, 0.14, 'sawtooth', 0.05);
     let hit = 0;
@@ -667,6 +673,7 @@ const SKILL_FX = {
     const wide = t.ultimate && t.branch === 0;
     const range = (140 + (wide ? 44 : 0)) * t.area;
     p.cast = 12; p.slashT = 12;
+    p.slashArc = { col:'255,242,184', r:58, spread:2.0, w:6 };
     playSkillAnim('groundImpact', p.x + p.face * 52, p.y - 12, { scale:1.25 * t.area, flip:p.face < 0 });
     playSfx('swordSwing'); beep(880, 0.12, 'sine', 0.05);
     let hit = 0;

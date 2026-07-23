@@ -288,11 +288,13 @@ function render() {
       }
     }
     if (p.slashT > 0) {
-      ctx.strokeStyle = 'rgba(255,255,255,' + (0.15 + p.slashT / 10 * 0.6).toFixed(2) + ')';
-      ctx.lineWidth = 5;
+      // 每個近戰技能有自己的刀光顏色／半徑／弧度，讓不同職業的普攻一眼分得出來
+      const arc = p.slashArc || { col:'255,255,255', r:52, spread:2.2, w:5 };
+      ctx.strokeStyle = 'rgba(' + arc.col + ',' + (0.15 + p.slashT / 10 * 0.6).toFixed(2) + ')';
+      ctx.lineWidth = arc.w;
       ctx.beginPath();
       const a0 = p.face > 0 ? -1.1 : Math.PI - 1.1;
-      ctx.arc(p.x, p.y - 26, 52, a0, a0 + 2.2);
+      ctx.arc(p.x, p.y - 26, arc.r, a0, a0 + arc.spread);
       ctx.stroke();
     }
     if (p.spinT > 0) {
@@ -305,10 +307,30 @@ function render() {
     }
   }
   // projectiles
+  const ELEM_PROJ_COL = { fire:['#ff7a36', '#ffd9a0'], ice:['#4ad0c8', '#d8fffb'], bolt:['#e9d45a', '#fff6c0'] };
   for (const pr of projs) {
     if (pr.kind === 'ice') {
       ctx.fillStyle = '#7dcfff'; ctx.fillRect(pr.x - 8, pr.y - 4, 16, 8);
       ctx.fillStyle = '#d8f4ff'; ctx.fillRect(pr.x - 3, pr.y - 2, 6, 4);
+    } else if (pr.kind === 'elem') {           // 元素飛彈：依當前元素換色的稜形彈
+      const col = ELEM_PROJ_COL[pr.elem] || ELEM_PROJ_COL.fire;
+      const spin = frame * 0.28, s1 = 8, s2 = 4;
+      ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(spin);
+      ctx.fillStyle = col[0]; ctx.fillRect(-s1, -s1 / 2, s1 * 2, s1);
+      ctx.rotate(Math.PI / 4); ctx.fillRect(-s1, -s1 / 2, s1 * 2, s1);
+      ctx.fillStyle = col[1]; ctx.fillRect(-s2, -s2 / 2, s2 * 2, s2);
+      ctx.restore();
+      ctx.globalAlpha = 0.4; ctx.fillStyle = col[0];
+      ctx.fillRect(pr.x - pr.vx * 1.6 - 4, pr.y - (pr.vy || 0) * 1.6 - 3, 8, 6);
+      ctx.globalAlpha = 1;
+      if (pr.elemAll) { ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.strokeRect(pr.x - 10, pr.y - 10, 20, 20); }
+    } else if (pr.kind === 'shadow') {         // 暗影箭：紫黑核心 + 拖曳殘影
+      ctx.globalAlpha = 0.35; ctx.fillStyle = '#5a2f80';
+      for (let i = 1; i <= 3; i++) ctx.fillRect(pr.x - pr.vx * i * 1.1 - 4, pr.y - (pr.vy || 0) * i * 1.1 - 4, 8, 8);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#a35ad0'; ctx.fillRect(pr.x - 7, pr.y - 7, 14, 14);
+      ctx.fillStyle = '#2a1038'; ctx.fillRect(pr.x - 4, pr.y - 4, 8, 8);
+      ctx.fillStyle = '#e0b8ff'; ctx.fillRect(pr.x - 2, pr.y - 2, 4, 4);
     } else {
       const fireAngle = Math.atan2(pr.vy || 0, Math.abs(pr.vx));
       if (!drawSkillVfxFrame('fireball', pr.x, pr.y, Math.floor(frame / 4), 1.05, pr.vx < 0, fireAngle, 1)) {
