@@ -541,12 +541,20 @@ function drawItemWin() {
   ctx.fillText('攻擊 ' + Math.round(atkPow()) + '  爆擊 ' + (critRate() * 100).toFixed(1) + '%', dx + 4, dy + dh + 18);
   ctx.fillText('減傷 ' + armorDef() + '  移速 ' + moveSpd().toFixed(1) + '  HP ' + p.mhp, dx + 4, dy + dh + 34);
   const activeSets = Object.entries(equippedSetCounts(p.eq)).filter(([, count]) => count >= 2);
+  let extraY = dy + dh + 50;
   if (activeSets.length) {
     ctx.font = 'bold 10px ' + STAT_FONT;
     for (let i = 0; i < Math.min(2, activeSets.length); i++) {
       const [setId, count] = activeSets[i], set = GEAR_SET_BY_ID[setId];
-      ctx.fillStyle = set.color; ctx.fillText('⬟ ' + set.name + ' ' + count + '/4　套裝效果已啟動', dx + 4, dy + dh + 50 + i * 14);
+      ctx.fillStyle = set.color; ctx.fillText('⬟ ' + set.name + ' ' + count + '/4　套裝效果已啟動', dx + 4, extraY + i * 14);
     }
+    extraY += Math.min(2, activeSets.length) * 14;
+  }
+  // 已裝備的傳奇武器能力（背包列太窄，改在這裡顯示全文）
+  const uw = p.eq.weapon;
+  if (uw && uw.unique && typeof uniqueDef === 'function') {
+    const u = uniqueDef(uw.unique);
+    if (u && u.powerText) { ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillStyle = UNIQUE_COLOR; ctx.fillText('◈ ' + u.name + '：' + u.powerText, dx + 4, extraY); }
   }
   const bx = x + 232, by = y + 36, bw = w - 244;
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';

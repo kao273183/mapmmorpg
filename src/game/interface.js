@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.25';
+const GAME_VERSION = '0.29.26';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.26', date:'2026-07-23', title:'傳奇命名裝備（第一批）',
+    items:['新增傳奇命名裝備：冰霜劍（凍結）、嗜血巨劍（吸血）、寒霜法杖（緩速）、雷霆法杖（連鎖閃電）、疾風之靴（極速+跳躍）。','只在困難模式的高稀有度掉落（取代套裝），有專屬金橙色與能力說明；命中觸發特殊能力。','一般模式因掉落最高藍裝，不會出現傳奇命名裝。']
+  },
   {
     version:'0.29.25', date:'2026-07-23', title:'難度「複雜」改名為「困難」',
     items:['難度模式「複雜」顯示名稱改為「困難」；內部設定相容，既有選擇不受影響。','未來規劃：困難將擴充為秘境式分層難度（可選層級、越高越強、獎勵更好）。']
@@ -428,15 +432,17 @@ function enhBoomRate(lv) { return 0.15 + 0.05 * (lv - 8); }
 function enhZone(lv) { return lv < 4 ? 'safe' : lv < 8 ? 'down' : 'risk'; }
 function gearDesc(it) {
   const e = enhMul(it);
-  if (it.kind === 'weapon') return '攻擊+' + Math.round(it.atk * e);
-  if (it.kind === 'armor' || it.kind === 'helmet') return 'HP+' + Math.round(it.hp * e) + ' 減傷' + Math.max(1, Math.round(it.def * e));
-  if (it.kind === 'boots') return '移速+' + (Math.round(it.spd * e * 10) / 10) + (it.jmp ? ' 跳躍+1' : '');
-  if (it.kind === 'acc') return it.crit != null ? '爆擊+' + Math.round(it.crit * e * 100) + '%' : '攻擊+' + Math.round((it.atkMul || 0) * e * 100) + '%';
-  return it.desc || '';
+  let s;
+  if (it.kind === 'weapon') s = '攻擊+' + Math.round(it.atk * e);
+  else if (it.kind === 'armor' || it.kind === 'helmet') s = 'HP+' + Math.round(it.hp * e) + ' 減傷' + Math.max(1, Math.round(it.def * e));
+  else if (it.kind === 'boots') s = '移速+' + (Math.round(it.spd * e * 10) / 10) + (it.jmp ? ' 跳躍+1' : '');
+  else if (it.kind === 'acc') s = it.crit != null ? '爆擊+' + Math.round(it.crit * e * 100) + '%' : '攻擊+' + Math.round((it.atkMul || 0) * e * 100) + '%';
+  else s = it.desc || '';
+  return s; // 傳奇能力文字改在紙娃娃裝備區顯示（背包列太窄）
 }
 function gearLabel(it) {
   const affixN = (it.affixes || []).filter(Boolean).length;
-  return it.name + ((it.enh || 0) > 0 ? ' +' + it.enh : '') + (affixN ? ' ✦' + affixN : '');
+  return it.name + (it.unique ? ' ◈' : '') + ((it.enh || 0) > 0 ? ' +' + it.enh : '') + (affixN ? ' ✦' + affixN : '');
 }
 let enhAnim = null; // {t, result, uid}
 function enhanceGear(it) {

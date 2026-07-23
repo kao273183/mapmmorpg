@@ -91,11 +91,14 @@
 
 ## 分批交付
 
-- **I1-A：難度稀有度上限**（Part 1）— `maxRarity` 設定 + `dungeonMaxRarity()` + genGear/createGear 夾值 + UI 標明。小而獨立，先上。
-- **I1-B：元素狀態層**（Part 2）— 統一命中 proc 入口，接現有 freeze/slow/shock/lifesteal/thorns/revive，新增 burn DoT。無 Unique 也可先用於怪物／技能。
-- **I1-C：Unique 資料與掉落**（Part 3）— `UNIQUE_DEFS` 目錄 + genGear 高稀有度轉 Unique + 群系／職業條件（只在複雜掉）。
-- **I1-D：顯示與圖鑑整合**（Part 4）— 顏色、能力文字、tooltip、接 H1 圖鑑、附魔相容。
-- **I1-E：平衡與回歸** — proc 觸發率／冷卻上限、Unique 不破壞曲線；固定種子 smoke、桌機／手機／低特效、舊存檔相容、更新紀錄。
+- **I1-A：難度稀有度上限**（Part 1）— ✅ 已完成（v0.29.22）：`maxRarity` 設定 + `dungeonMaxRarity()` + genGear 夾值 + 停套裝 + 基地標明。一般模式頂多藍裝。
+- **I1-B：命中 proc 入口（部分）**（Part 2）— ✅ 已完成（v0.29.26）：`applyUniqueWeaponProcs` 統一入口接 freeze/slow/lifesteal/chain（重用既有 `m.freezeT`/`m.slowT` 與巢狀 hitMon）。⏳ 待做：burn DoT（需 DoT 死亡處理）、armor/acc 被動能力（thorns/revive 走 dmgPlayer）。
+- **I1-C：Unique 資料與掉落（第一批）**（Part 3）— ✅ 已完成（v0.29.26）：`UNIQUE_DEFS` 5 件（冰霜劍/嗜血巨劍/寒霜法杖/雷霆法杖/疾風之靴）+ genGear 高稀有度轉 Unique + 職業過濾 + 取代套裝 + 只困難掉。⏳ 待做：擴充更多群系主題 Unique、防具/飾品/頭盔類。
+- **I1-D：顯示（部分）**（Part 4）— ✅ 基本完成（v0.29.26）：專屬金橙色（gearColor）、背包列 ◈ 標記、紙娃娃底部能力全文。⏳ 待做：接 H1 圖鑑、掉落發光、詳細 tooltip。
+- **I1-E：平衡與回歸** — ⏳ 待做：proc 觸發率／冷卻上限調校、Unique 不破壞曲線；固定種子 smoke、桌機／手機／低特效、舊存檔相容全回歸。
+
+### 已驗證（v0.29.26）
+困難 400 抽出 43 Unique、職業過濾正確、一般模式 0 Unique；冰霜劍凍結 25%、嗜血吸血 12%、寒霜緩速 35%、雷霆連鎖觸發且命中鄰近、巢狀 hitMon 無錯；顯示金色 + ◈ + 紙娃娃全文。
 
 ## 完成標準
 

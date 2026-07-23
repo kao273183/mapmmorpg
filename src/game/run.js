@@ -506,6 +506,27 @@ function explodeBomber(m) {
   removeMon(m);
   return dead;
 }
+function chainToNearby(from, dmg) { // 傳奇武器連鎖閃電：找最近一隻補一擊
+  let best = null, bd = 1e9;
+  for (const o of mons) {
+    if (o === from || o.hp <= 0) continue;
+    const dd = Math.hypot(o.x - from.x, (o.y - o.h / 2) - (from.y - from.h / 2));
+    if (dd < 190 && dd < bd) { bd = dd; best = o; }
+  }
+  if (best) { burst(from.x, from.y - from.h / 2, '#8fd4ff', 8); beep(620, 0.06, 'square', 0.04); hitMon(best, dmg, false, true); }
+}
+function applyUniqueWeaponProcs(m, d, crit) { // 傳奇武器命中觸發（凍結/緩速/吸血/連鎖）
+  const w = player.eq && player.eq.weapon;
+  if (!w || !w.unique || typeof uniqueDef !== 'function') return;
+  const def = uniqueDef(w.unique);
+  if (!def || !def.powers) return;
+  for (const pw of def.powers) {
+    if (pw.type === 'freeze') { if (Math.random() < pw.chance) { m.freezeT = Math.max(m.freezeT || 0, pw.dur); num(m.x, m.y - m.h - 20, '凍結', '#d8f4ff'); } }
+    else if (pw.type === 'slow') { if (Math.random() < pw.chance) { m.slowT = Math.max(m.slowT || 0, pw.dur); num(m.x, m.y - m.h - 20, '緩速', '#9fd8ff'); } }
+    else if (pw.type === 'lifesteal') { player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * pw.amount)); }
+    else if (pw.type === 'chain') { if (Math.random() < pw.chance) chainToNearby(m, Math.max(1, Math.round(d * (pw.mul || 0.5)))); }
+  }
+}
 function hitMon(m, d, crit, noChain) {
   if (typeof dungeonBlessingDamageForTarget === 'function') d = Math.max(1, Math.round(dungeonBlessingDamageForTarget(d, m)));
   if (typeof dungeonCurseOutgoingDamage === 'function') d = Math.max(1, Math.round(dungeonCurseOutgoingDamage(d)));
@@ -514,6 +535,7 @@ function hitMon(m, d, crit, noChain) {
   m.hp -= d; m.hitT = 8;
   const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
   if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * lifesteal)); // 吸血鬼/吸血詞綴
+  if (!noChain) applyUniqueWeaponProcs(m, d, crit); // 傳奇武器命中觸發
   const feelKind = noChain ? 'tick' : crit ? (m.type === 'boss' ? 'boss' : 'crit') : Math.abs(m.x - player.x) < 110 ? 'melee' : 'ranged';
   const feel = FEEL_PRESETS[feelKind];
   num(m.x, m.y - m.h - 8, String(d), crit ? '#ffb020' : '#fff', {

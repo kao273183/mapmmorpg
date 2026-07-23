@@ -617,9 +617,10 @@ function rollRarity(n) {
   if (roll > 0.62) return 1; // 精良
   return 0;                  // 普通
 }
-function createGear(n, slot, cls, rarity, setId) {
+function createGear(n, slot, cls, rarity, setId, uniqueId) {
+  const uniq = (typeof uniqueDef === 'function') ? uniqueDef(uniqueId) : null;
   const set = GEAR_SET_BY_ID[setId];
-  const r = set ? Math.max(3, rarity) : rarity;
+  const r = uniq ? Math.max(uniq.minR || 3, rarity) : (set ? Math.max(3, rarity) : rarity);
   const m = [1, 1.5, 2.1, 2.8, 3.6][r] * (0.85 + Math.random() * 0.3);
   const it = { kind: slot, r: r, id: 'g' + (gearSeq++), cls: cls, affixes: Array(affixSlots(r)).fill(null) };
   if (set) it.setId = set.id;
@@ -646,7 +647,13 @@ function createGear(n, slot, cls, rarity, setId) {
       it.desc = '攻擊+' + Math.round(it.atkMul * 100) + '%';
     }
   }
-  it.name = set ? set.pieces[slot] : gearName(slot, r, cls);
+  if (uniq) {
+    it.unique = uniq.id;
+    it.name = uniq.name;
+    if (uniq.id === 'gale_boots') { it.spd = Math.min(1.6, (it.spd || 0) + 0.35); it.jmp = 1; it.desc = '移速+' + it.spd + ' 跳躍+1'; }
+  } else {
+    it.name = set ? set.pieces[slot] : gearName(slot, r, cls);
+  }
   return it;
 }
 function genGear(n, forceR, source) {
@@ -654,11 +661,17 @@ function genGear(n, forceR, source) {
   const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
   const slot = pick(slots);
   const baseR = Math.min(cap, forceR != null ? forceR : rollRarity(n));
-  // 套裝為史詩以上；上限低於 3 的模式（一般）不掉套裝。
-  const rate = (cap >= 3 && n >= 5 && SET_PARTS.includes(slot)) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
+  // 傳奇命名裝：高稀有度有機率生成 Unique（取代套裝；一般模式 cap=1 到不了這）。
+  let uniqueId = null;
+  if (baseR >= 3 && typeof uniqueIdsFor === 'function') {
+    const cands = uniqueIdsFor(slot, player.cls, baseR);
+    if (cands.length && Math.random() < UNIQUE_DROP_RATE) uniqueId = pick(cands);
+  }
+  // 套裝為史詩以上；上限低於 3 的模式（一般）不掉套裝；已是 Unique 則不再滾套裝。
+  const rate = (!uniqueId && cap >= 3 && n >= 5 && SET_PARTS.includes(slot)) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
   const setIds = setIdsForClass(player.cls);
   const setId = setIds.length && Math.random() < rate ? pick(setIds) : null;
-  return createGear(n, slot, player.cls, baseR, setId);
+  return createGear(n, slot, player.cls, baseR, setId, uniqueId);
 }
 function forgeSetPiece(setId) {
   const set = GEAR_SET_BY_ID[setId];

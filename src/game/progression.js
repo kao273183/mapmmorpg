@@ -33,7 +33,27 @@ const GEAR_SETS = [
   }
 ];
 const GEAR_SET_BY_ID = Object.fromEntries(GEAR_SETS.map(s => [s.id, s]));
-function gearColor(it) { const set = it && GEAR_SET_BY_ID[it.setId]; return set ? set.color : RARITY_COL[(it && it.r) || 0]; }
+// ---------- 傳奇命名裝（Unique）：有名字且帶固定特殊能力（暗黑風）----------
+// 只在困難模式的高稀有度掉落（一般模式 maxRarity=1 不會到）。能力多重用既有機制。
+const UNIQUE_COLOR = '#ff9d3c';   // 傳奇命名裝專屬色（暖金橙）
+const UNIQUE_DROP_RATE = 0.28;    // 高稀有度掉落時轉為 Unique 的機率
+const UNIQUE_DEFS = {
+  frost_blade:   { id:'frost_blade',   name:'冰霜劍',   kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'冰霜凍原', powers:[{ type:'freeze', chance:0.22, dur:48 }],   powerText:'命中 22% 凍結敵人' },
+  bloodfang:     { id:'bloodfang',     name:'嗜血巨劍', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'通用',     powers:[{ type:'lifesteal', amount:0.12 }],          powerText:'攻擊吸血 12%' },
+  frost_stave:   { id:'frost_stave',   name:'寒霜法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'冰霜凍原', powers:[{ type:'slow', chance:0.35, dur:150 }],       powerText:'命中 35% 緩速敵人' },
+  thunder_stave: { id:'thunder_stave', name:'雷霆法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'虛空深淵', powers:[{ type:'chain', chance:0.32, mul:0.5 }],      powerText:'命中 32% 連鎖閃電' },
+  gale_boots:    { id:'gale_boots',    name:'疾風之靴', kind:'boots',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'stat' }],                            powerText:'極高移速、必帶跳躍' }
+};
+const UNIQUE_LIST = Object.values(UNIQUE_DEFS);
+function uniqueDef(id) { return id ? UNIQUE_DEFS[id] : null; }
+function uniqueIdsFor(slot, cls, r) {
+  return UNIQUE_LIST.filter(u => u.kind === slot && (u.cls === 'any' || u.cls === cls) && r >= (u.minR || 3)).map(u => u.id);
+}
+function gearColor(it) {
+  if (it && it.unique) return UNIQUE_COLOR;
+  const set = it && GEAR_SET_BY_ID[it.setId];
+  return set ? set.color : RARITY_COL[(it && it.r) || 0];
+}
 function setIdsForClass(cls) { return GEAR_SETS.filter(s => s.cls === cls).map(s => s.id); }
 function equippedSetCounts(eq) {
   const counts = {};
