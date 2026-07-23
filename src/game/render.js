@@ -135,22 +135,35 @@ function render() {
     ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
     ctx.fillText(portal.kind === 'chapter' ? '章節結算' : (floor + 1) % 5 === 0 ? '挑戰 BOSS' : '選擇路線', portal.x, portal.y - ph - 8);
   }
-  // gear drops
+  // gear drops：依稀有度發光（地面光暈 + 漸層光柱 + 傳奇星火）
   for (const gd of gearDrops) {
     const blink = gd.t < 150 && Math.floor(gd.t / 8) % 2 === 0;
-    if (!blink) {
-      const r = gd.it.r, col = gearColor(gd.it);
-      if (r >= 2) { // 稀有以上:發光柱,越高越亮
-        const gl = 0.12 + 0.06 * r + Math.sin(frame * 0.12) * 0.05;
-        ctx.fillStyle = col; ctx.globalAlpha = gl;
-        ctx.fillRect(gd.x - 3 - r, gd.y - 120, 6 + 2 * r, 120);
-        ctx.globalAlpha = 1;
-      }
-      const bob = Math.sin(frame * 0.15) * 2;
-      const iy = gd.y - 26 + bob, sz = 20;
-      // 品質色底光
-      ctx.fillStyle = col; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.ellipse(gd.x, gd.y - 2, 10, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-      drawItemIcon(gd.it, gd.x - sz / 2, iy, sz);
+    if (blink) continue;
+    const it = gd.it, col = gearColor(it);
+    const tier = it.unique ? 5 : it.r; // 傳奇當作比傳說更高一階的發光
+    const pulse = 0.5 + 0.5 * Math.sin(frame * 0.12);
+    if (tier >= 2) {
+      // 地面徑向光暈
+      const gr = 12 + tier * 5 + pulse * 4;
+      const halo = ctx.createRadialGradient(gd.x, gd.y - 2, 2, gd.x, gd.y - 2, gr);
+      halo.addColorStop(0, withAlpha(col, 0.34)); halo.addColorStop(1, withAlpha(col, 0));
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.ellipse(gd.x, gd.y - 2, gr, gr * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+      // 漸層光柱（底亮頂淡）
+      const bh = 66 + tier * 14, bw = 4 + tier * 2;
+      const beam = ctx.createLinearGradient(0, gd.y - bh, 0, gd.y);
+      beam.addColorStop(0, withAlpha(col, 0)); beam.addColorStop(1, withAlpha(col, (0.10 + 0.05 * tier) * (0.7 + 0.3 * pulse)));
+      ctx.fillStyle = beam; ctx.fillRect(gd.x - bw / 2, gd.y - bh, bw, bh);
+    } else {
+      ctx.fillStyle = col; ctx.globalAlpha = 0.22; ctx.beginPath(); ctx.ellipse(gd.x, gd.y - 2, 10, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    const bob = Math.sin(frame * 0.15) * 2;
+    const iy = gd.y - 26 + bob, sz = 20;
+    drawItemIcon(it, gd.x - sz / 2, iy, sz);
+    if (tier >= 4) { // 傳說／傳奇：星火閃爍
+      ctx.fillStyle = col;
+      const sp = [[-10, -12], [12, -6], [4, -22], [-9, 2]];
+      for (let i = 0; i < sp.length; i++) { const tw = Math.sin(frame * 0.2 + i * 1.7); if (tw > 0.3) { ctx.globalAlpha = tw; ctx.fillRect(gd.x + sp[i][0], iy + sp[i][1], 2, 2); } }
+      ctx.globalAlpha = 1;
     }
   }
   // potion drops
