@@ -550,11 +550,15 @@ function drawItemWin() {
     }
     extraY += Math.min(2, activeSets.length) * 14;
   }
-  // 已裝備的傳奇武器能力（背包列太窄，改在這裡顯示全文）
-  const uw = p.eq.weapon;
-  if (uw && uw.unique && typeof uniqueDef === 'function') {
-    const u = uniqueDef(uw.unique);
-    if (u && u.powerText) { ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillStyle = UNIQUE_COLOR; ctx.fillText('◈ ' + u.name + '：' + u.powerText, dx + 4, extraY); }
+  // 已裝備的傳奇裝能力全文（背包列太窄，改在這裡逐件顯示）
+  if (typeof uniqueDef === 'function') {
+    ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillStyle = UNIQUE_COLOR;
+    for (const slot of GEAR_PARTS) {
+      const it = p.eq[slot];
+      if (!it || !it.unique) continue;
+      const u = uniqueDef(it.unique);
+      if (u && u.powerText) { ctx.fillText('◈ ' + u.name + '：' + u.powerText, dx + 4, extraY); extraY += 12; }
+    }
   }
   const bx = x + 232, by = y + 36, bw = w - 244;
   ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';

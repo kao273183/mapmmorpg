@@ -42,7 +42,10 @@ const UNIQUE_DEFS = {
   bloodfang:     { id:'bloodfang',     name:'嗜血巨劍', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'通用',     powers:[{ type:'lifesteal', amount:0.12 }],          powerText:'攻擊吸血 12%' },
   frost_stave:   { id:'frost_stave',   name:'寒霜法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'冰霜凍原', powers:[{ type:'slow', chance:0.35, dur:150 }],       powerText:'命中 35% 緩速敵人' },
   thunder_stave: { id:'thunder_stave', name:'雷霆法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'虛空深淵', powers:[{ type:'chain', chance:0.32, mul:0.5 }],      powerText:'命中 32% 連鎖閃電' },
-  gale_boots:    { id:'gale_boots',    name:'疾風之靴', kind:'boots',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'stat' }],                            powerText:'極高移速、必帶跳躍' }
+  flame_blade:   { id:'flame_blade',   name:'烈焰之刃', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' },
+  gale_boots:    { id:'gale_boots',    name:'疾風之靴', kind:'boots',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'stat' }],                            powerText:'極高移速、必帶跳躍' },
+  thorn_plate:   { id:'thorn_plate',   name:'荊棘板甲', kind:'armor',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'thorns', amount:0.5 }],              powerText:'受擊反傷 50% 攻擊力' },
+  undying_ring:  { id:'undying_ring',  name:'不滅之戒', kind:'acc',                 cls:'any',     minR:3, biome:'通用',     powers:[{ type:'revive' }],                          powerText:'每場一次致命免死' }
 };
 const UNIQUE_LIST = Object.values(UNIQUE_DEFS);
 function uniqueDef(id) { return id ? UNIQUE_DEFS[id] : null; }

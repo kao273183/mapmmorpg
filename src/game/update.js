@@ -219,10 +219,12 @@ function update() {
 
   // monsters
   const MONSTER_MOVE_MUL = 0.72;
+  const burnHits = []; // 燃燒 DoT：迴圈中累積到期的 tick，迴圈後統一結算（避免遍歷中 splice）
   for (const m of mons) {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
     if (m.freezeT > 0) m.freezeT--;
+    if (m.burnT > 0) { m.burnT--; m.burnAcc = (m.burnAcc || 0) + 1; if (m.burnAcc >= 30) { m.burnAcc = 0; burnHits.push(m); } }
     if (m.vulnT > 0) m.vulnT--; else m.vulnMul = 1;
     const slowF = m.freezeT > 0 ? 0 : m.slowT > 0 ? 0.5 : 1;
     const moveF = slowF * MONSTER_MOVE_MUL;
@@ -378,6 +380,10 @@ function update() {
       if (m.type === 'icer') { p.chillT = 120; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }
       if (dmgPlayer({ amount:d, sourceName:monsterLabel(m) + '的碰撞攻擊', sourceX:m.x })) return;
     }
+  }
+  // 燃燒 DoT 結算(loop 外,避免遍歷中 splice)；走 hitMon 讓擊殺正常計經驗/靈魂
+  for (const m of burnHits) {
+    if (m.hp > 0 && mons.includes(m)) { burst(m.x, m.y - m.h / 2, '#ff6b2e', 3); hitMon(m, Math.max(1, m.burnDmg || 1), false, true); }
   }
   // bomber 引爆(loop 外處理,避免遍歷中 splice)
   for (const m of mons.slice()) {

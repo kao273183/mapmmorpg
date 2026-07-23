@@ -366,7 +366,7 @@ function resetRun() {
   p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
   p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0;
   p.skillCasts = {};
-  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.eventAtk = 0; p.eventRerolls = 0; p.aegisCd = 0; p.airJumped = false;
+  p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.uniqueReviveUsed = false; p.eventAtk = 0; p.eventRerolls = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;
   hitStopT = 0; shakeT = 0; shakeMaxT = 0; shakeAmp = 0; playerFlashT = 0; hurtVignetteT = 0;
   lastDamageSource = '未知攻擊';
@@ -525,6 +525,7 @@ function applyUniqueWeaponProcs(m, d, crit) { // 傳奇武器命中觸發（凍�
     else if (pw.type === 'slow') { if (Math.random() < pw.chance) { m.slowT = Math.max(m.slowT || 0, pw.dur); num(m.x, m.y - m.h - 20, '緩速', '#9fd8ff'); } }
     else if (pw.type === 'lifesteal') { player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * pw.amount)); }
     else if (pw.type === 'chain') { if (Math.random() < pw.chance) chainToNearby(m, Math.max(1, Math.round(d * (pw.mul || 0.5)))); }
+    else if (pw.type === 'burn') { if (Math.random() < pw.chance) { m.burnT = Math.max(m.burnT || 0, pw.dur); m.burnDmg = Math.max(m.burnDmg || 0, Math.round(d * (pw.dmgMul || 0.3))); num(m.x, m.y - m.h - 20, '燃燒', '#ff7a3c'); } }
   }
 }
 function hitMon(m, d, crit, noChain) {
