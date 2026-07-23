@@ -69,7 +69,14 @@ assert.ok(api.selectableJobs().indexOf('berserker') >= 0, '解鎖後應出現在
 const warSkills = api.classSkills('warrior');
 const berSkills = api.classSkills('berserker');
 assert.ok(warSkills.indexOf('slash') >= 0 && warSkills.indexOf('bloodrend') < 0, '劍士不應有狂戰士專屬技能');
-for (const id of warSkills) assert.ok(berSkills.indexOf(id) >= 0, '狂戰士應可用劍士技能 ' + id);
+// 進階職繼承基礎職技能，但基本技能由自己的取代（職業感從第一下攻擊就要不同）
+for (const id of warSkills) {
+  if (api.SKILL_DEFS[id].basic) continue;
+  assert.ok(berSkills.indexOf(id) >= 0, '狂戰士應可用劍士技能 ' + id);
+}
+assert.ok(berSkills.indexOf('slash') < 0, '狂戰士不該再用劍士的基本技能');
+assert.strictEqual(berSkills[0], 'rend', '狂戰士的基本技能應排在技能樹根節點');
+assert.ok(api.SKILL_DEFS.rend.basic, '狂戰士的 rend 應標記為基本技能');
 assert.ok(berSkills.indexOf('bloodrend') >= 0 && berSkills.indexOf('warcry') >= 0, '狂戰士應有專屬技能');
 assert.ok(berSkills.indexOf('fire') < 0, '狂戰士不應有法師技能');
 assert.ok(api.loadouts.berserker && api.loadouts.berserker.length === 3, '進階職應有出戰欄');

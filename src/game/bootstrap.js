@@ -120,7 +120,8 @@ const SKILL_ICON_FILES = {
   slash:11, spin:21, dash:52, quake:42, rage:62,
   fire:25, bolt:7, ice:59, meteor:1, shield:3,
   bloodrend:33, warcry:45,
-  bulwark:5, smite:9, elemburst:27, chainstorm:14, plague:38, soulleech:66
+  bulwark:5, smite:9, elemburst:27, chainstorm:14, plague:38, soulleech:66,
+  rend:17, holystrike:23, elembolt:49, shadowbolt:55
 };
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {

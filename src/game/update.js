@@ -118,7 +118,7 @@ function update() {
 
   // projectiles
   for (const pr of projs.slice()) {
-    if (pr.kind === 'fire' && pr.aimT > 0) {
+    if ((pr.kind === 'fire' || pr.kind === 'elem' || pr.kind === 'shadow') && pr.aimT > 0) { // 追蹤型飛彈
       pr.aimT--;
       const target = pr.aimTarget, face = pr.vx < 0 ? -1 : 1;
       const forward = target && mons.includes(target) ? (target.x - pr.x) * face : -1;
@@ -141,7 +141,32 @@ function update() {
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
         hitMon(m, r.d, r.crit);
-        if (pr.kind === 'ice') {
+        if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果
+          const doFire = pr.elemAll || pr.elem === 'fire';
+          const doIce = pr.elemAll || pr.elem === 'ice';
+          const doBolt = pr.elemAll || pr.elem === 'bolt';
+          const boost = tt.mechanic && tt.branch === 0 ? 1.6 : 1; // 共鳴：元素效果強化
+          if (doFire) { m.burnT = Math.max(m.burnT || 0, Math.round(100 * boost)); m.burnDmg = Math.max(m.burnDmg || 0, Math.max(1, Math.round(r.d * 0.07 * boost))); }
+          if (doIce && !(m.ccT > 0)) m.slowT = Math.max(m.slowT || 0, Math.round(120 * boost));
+          if (doBolt && typeof chainToNearby === 'function') {
+            chainToNearby(m, Math.round(r.d * 0.16 * boost));
+            if (tt.mechanic && tt.branch === 1) chainToNearby(m, Math.round(r.d * 0.25 * boost)); // 連動：多跳一次
+          }
+          burst(pr.x, pr.y, doIce && !doFire ? '#71c9e8' : doBolt && !doFire ? '#e9d45a' : '#ff7a36', 9);
+          playSkillAnim(doIce && !doFire ? 'iceSpikes' : 'impact', m.x, m.y - m.h / 2, { scale:1 });
+          gone = true; break;
+        } else if (pr.kind === 'shadow') {              // 咒術師基本技：疊加腐蝕
+          const maxStacks = tt.mechanic && tt.branch === 0 ? 6 : 4;
+          m.corrode = Math.min(maxStacks, (m.corrode || 0) + 1);
+          m.burnT = Math.max(m.burnT || 0, 200);
+          m.burnDmg = Math.max(m.burnDmg || 0, Math.max(1, Math.round(r.d * 0.065 * m.corrode)));
+          m.burnSpread = tt.ultimate && tt.branch === 0;   // 腐蝕：死亡傳染
+          if (tt.mechanic && tt.branch === 1) player.mp = Math.min(player.mmp, player.mp + 2); // 汲取：命中回MP
+          if (tt.ultimate && tt.branch === 1) player.corrodeLeech = 1;
+          num(m.x, m.y - m.h - 16, '腐蝕 ' + m.corrode, '#a35ad0', { size:10 });
+          burst(pr.x, pr.y, '#a35ad0', 9);
+          gone = true; break;
+        } else if (pr.kind === 'ice') {
           pr.pierceN = (pr.pierceN || 0) + 1;
           m.slowT = tt.mechanic && tt.branch === 0 ? 300 : 180;
           if (tt.ultimate && tt.branch === 0) { m.freezeT = Math.max(m.freezeT || 0, 90); num(m.x, m.y - m.h - 18, '凍結', '#d8f4ff'); }
@@ -386,7 +411,15 @@ function update() {
   }
   // 燃燒 DoT 結算(loop 外,避免遍歷中 splice)；走 hitMon 讓擊殺正常計經驗/靈魂
   for (const m of burnHits) {
-    if (m.hp > 0 && mons.includes(m)) { burst(m.x, m.y - m.h / 2, '#ff6b2e', 3); hitMon(m, Math.max(1, m.burnDmg || 1), false, true); }
+    if (m.hp > 0 && mons.includes(m)) {
+      const dot = Math.max(1, m.burnDmg || 1);
+      burst(m.x, m.y - m.h / 2, m.corrode > 0 ? '#a35ad0' : '#ff6b2e', 3);
+      hitMon(m, dot, false, true);
+      if (player.corrodeLeech && m.corrode > 0) { // 咒術師「汲取」終極：腐蝕目標的持續傷害為你回血
+        const heal = Math.min(player.mhp - player.hp, Math.max(1, Math.round(dot * 0.35)));
+        if (heal > 0) { player.hp += heal; num(player.x, player.y - player.h - 30, '+' + heal, '#c99ae8', { size:10 }); }
+      }
+    }
   }
   // bomber 引爆(loop 外處理,避免遍歷中 splice)
   for (const m of mons.slice()) {

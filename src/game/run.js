@@ -364,7 +364,7 @@ function resetRun() {
   p.inv = 0; p.cast = 0; p.slotCd = [0, 0, 0]; p.potCd = 0; p.slashT = 0; p.spinT = 0;
   p.dashT = 0; p.dashCd = 0; p.dashDir = 1;
   p.rageT = 0; p.rageAtk = 0; p.rageSpd = 0; p.rageLifesteal = 0; p.rageExtend = 0; p.rageBlood = false; p.rageUltimate = false;
-  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0; p.holyGuardT = 0; p.ccImmuneT = 0;
+  p.shieldHp = 0; p.shieldT = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; p.chillT = 0; p.hazardSlowT = 0; p.holyGuardT = 0; p.ccImmuneT = 0; p.corrodeLeech = 0;
   p.skillCasts = {};
   p.perk = {}; p.revives = 0; p.affixDeathUsed = false; p.uniqueReviveUsed = false; p.eventAtk = 0; p.eventRerolls = 0; p.aegisCd = 0; p.airJumped = false;
   p.itemWin = false; statsOpen = false;

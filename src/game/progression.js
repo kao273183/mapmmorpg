@@ -247,15 +247,19 @@ const SKILL_DEFS = {
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
   shield: { cls:'mage', name:'魔法盾', mp:16, cd:480, desc:'護盾吸收30%最大HP的傷害' },
   // 進階職：狂戰士（沿用劍士技能，另有專屬技能）
+  rend:      { cls:'berserker', name:'裂顱斬', mp:4, cd:42, minCd:18, basic:true, desc:'粗暴的橫斬,血量越低威力越高' },
   bloodrend: { cls:'berserker', name:'血怒斬', mp:11, cd:150, desc:'消耗自身HP,對前方造成1.9倍傷害;血越低傷害越高' },
   warcry:    { cls:'berserker', name:'戰吼',   mp:14, cd:420, desc:'威嚇周圍敵人使其緩速,自身狂暴並回復MP' },
   // 進階職：聖騎士（劍士系，防禦持續）
+  holystrike:{ cls:'paladin', name:'聖印斬', mp:5, cd:48, minCd:20, basic:true, desc:'穩健的聖光斬擊,每第三擊回復自身HP' },
   bulwark:   { cls:'paladin', name:'聖盾壁壘', mp:16, cd:420, desc:'展開聖盾吸收傷害,期間受到的傷害降低' },
   smite:     { cls:'paladin', name:'制裁光錘', mp:12, cd:150, desc:'前方神聖打擊,每命中一名敵人回復自身HP' },
   // 進階職：元素師（法師系，多元素範圍）
+  elembolt:  { cls:'elementalist', name:'元素飛彈', mp:8, cd:45, minCd:18, basic:true, desc:'依序射出火/冰/雷飛彈,各自附帶元素效果' },
   elemburst: { cls:'elementalist', name:'元素爆發', mp:18, cd:200, desc:'以自身為中心引爆火冰雷三環,附加隨機元素效果' },
   chainstorm:{ cls:'elementalist', name:'連鎖風暴', mp:18, cd:260, desc:'雷球在敵人之間連鎖跳躍,每次跳躍略微衰減' },
   // 進階職：咒術師（法師系，詛咒消耗）
+  shadowbolt:{ cls:'warlock', name:'暗影箭', mp:7, cd:48, minCd:20, basic:true, desc:'直傷較低,但會疊加腐蝕的持續傷害' },
   plague:    { cls:'warlock', name:'疫咒', mp:14, cd:180, desc:'散布疫病使範圍敵人持續受傷並陷入虛弱' },
   soulleech: { cls:'warlock', name:'汲魂', mp:16, cd:240, desc:'抽取前方直線敵人的生命,回復自身HP與MP' }
 };
@@ -267,6 +271,8 @@ const BRANCH_NAMES = {
   slash:['重擊','連擊'], spin:['龍捲','利刃'], dash:['疾影','破陣'], quake:['餘震','崩裂'], rage:['血怒','戰意'],
   fire:['爆裂','連鎖'], bolt:['雷暴','聚雷'], ice:['霜寒','冰刺'], meteor:['天火','隕擊'], shield:['壁壘','荊棘'],
   bloodrend:['嗜血','裂創'], warcry:['威壓','戰意'],
+  rend:['撕裂','狂亂'], holystrike:['守護','制裁'],
+  elembolt:['共鳴','連動'], shadowbolt:['腐蝕','汲取'],
   bulwark:['庇護','反擊'], smite:['審判','聖療'],
   elemburst:['三重','熾炎'], chainstorm:['連鎖','聚能'],
   plague:['蔓延','衰敗'], soulleech:['吸血','奪魂']
@@ -284,6 +290,10 @@ const TALENT_EFFECTS = {
   shield:[{ lv3:'護盾量45%且延長5秒', lv5:'破盾時回復12 MP' }, { lv3:'吸收時反彈20%攻擊', lv5:'破盾引發奧術爆破' }],
   bloodrend:[{ lv3:'消耗HP降低', lv5:'擊殺回復消耗的HP' }, { lv3:'低血時傷害再提升', lv5:'造成流血持續傷害' }],
   warcry:[{ lv3:'緩速範圍擴大', lv5:'附加短暫定身' }, { lv3:'狂暴時間延長', lv5:'狂暴期間吸血' }],
+  rend:[{ lv3:'命中造成流血', lv5:'流血傷害翻倍' }, { lv3:'目標上限+2', lv5:'低血時大幅縮短冷卻' }],
+  holystrike:[{ lv3:'治療量提升一倍', lv5:'治療時附加短暫護盾' }, { lv3:'對已受傷目標加傷', lv5:'第三擊必定爆擊' }],
+  elembolt:[{ lv3:'元素效果強化', lv5:'每輪最後一發改為三元素齊發' }, { lv3:'雷擊連鎖多跳一次', lv5:'火冰雷效果同時附加' }],
+  shadowbolt:[{ lv3:'腐蝕層數上限提高', lv5:'目標死亡時腐蝕傳染' }, { lv3:'命中回復MP', lv5:'腐蝕中的目標受傷時為你回血' }],
   bulwark:[{ lv3:'護盾量提升並回復HP', lv5:'護盾期間免疫緩速與凍結' }, { lv3:'吸收時反彈25%傷害', lv5:'破盾時範圍爆發並震懾' }],
   smite:[{ lv3:'命中使目標受傷+20%', lv5:'必定爆擊並擴大範圍' }, { lv3:'治療量提升一倍', lv5:'命中額外回復MP' }],
   elemburst:[{ lv3:'爆發範圍擴大', lv5:'追加第二段爆發' }, { lv3:'火焰傷害提升並燃燒', lv5:'燃燒會蔓延給鄰近敵人' }],
@@ -293,11 +303,17 @@ const TALENT_EFFECTS = {
 };
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
-const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], berserker: ['slash', null, null], paladin: ['slash', null, null], elementalist: ['fire', null, null], warlock: ['fire', null, null] };
+const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], berserker: ['rend', null, null], paladin: ['holystrike', null, null], elementalist: ['elembolt', null, null], warlock: ['shadowbolt', null, null] };
 let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
-function classSkills(cls) { // 進階職可用「基礎職技能 + 自身專屬技能」
+function classSkills(cls) { // 進階職＝基礎職技能 + 自身專屬技能；若自己有基本技能，就取代繼承來的那個
   const base = baseOf(cls);
-  return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === base || SKILL_DEFS[id].cls === cls);
+  if (cls === base) return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls);
+  const own = SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls);
+  const ownBasic = own.filter(id => SKILL_DEFS[id].basic);
+  if (!ownBasic.length) return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === base || SKILL_DEFS[id].cls === cls);
+  // 基本技能固定排在最前面（技能樹的根節點），其餘沿用基礎職順序
+  const inherited = SKILL_IDS.filter(id => SKILL_DEFS[id].cls === base && !SKILL_DEFS[id].basic);
+  return ownBasic.concat(inherited, own.filter(id => !SKILL_DEFS[id].basic));
 }
 function isJobUnlocked(job) { // 基礎職永遠可選；進階職需基礎職精通達門檻
   const def = (typeof CLASSES !== 'undefined') ? CLASSES[job] : null;

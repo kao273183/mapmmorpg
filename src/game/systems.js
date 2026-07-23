@@ -526,6 +526,80 @@ const SKILL_FX = {
     burst(p.x, p.y - p.h / 2, '#ff5a5a', 20);
     beep(200, 0.2, 'square', 0.05);
   },
+  rend(t) { // 狂戰士基本技：粗暴橫斬，血越低越痛
+    const p = player;
+    p.cast = 10; p.slashT = 10;
+    playSkillAnim('slashBeam', p.x + p.face * 40, p.y - 30, { scale:1.0 * t.area, flip:p.face < 0, rotation:p.face < 0 ? 0.12 : -0.12 });
+    playSfx('swordSwing'); beep(190, 0.07, 'sawtooth', 0.035);
+    const missing = 1 - p.hp / p.mhp;
+    const lowMul = 1 + missing * 0.5;                       // 滿血 1.0 → 空血 1.5
+    const maxTargets = t.mechanic && t.branch === 1 ? 5 : 3;
+    let hit = 0;
+    for (const m of mons.slice()) {
+      const dx = (m.x - p.x) * p.face;
+      if (dx <= -12 || dx >= 80 * t.area || Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) >= 55 || hit >= maxTargets) continue;
+      hit++;
+      const r = skillDmg(t.dmg * lowMul);
+      hitMon(m, r.d, r.crit);
+      if (t.mechanic && t.branch === 0 && mons.includes(m)) {  // 撕裂：流血
+        m.burnT = Math.max(m.burnT || 0, 120);
+        m.burnDmg = Math.max(m.burnDmg || 0, Math.max(1, Math.round(r.d * (t.ultimate ? 0.24 : 0.12))));
+      }
+    }
+    if (hit && t.ultimate && t.branch === 1 && p.hp < p.mhp * 0.4) { // 狂亂：低血時攻速暴增
+      const i = loadouts[p.cls].indexOf('rend');
+      if (i >= 0) p.slotCd[i] = Math.round(p.slotCd[i] * 0.45);
+    }
+    if (hit) burst(p.x + p.face * 34, p.y - p.h / 2, '#c02f3a', 6);
+  },
+  holystrike(t) { // 聖騎士基本技：穩健的聖光斬，每第三擊回血
+    const p = player;
+    p.cast = 10; p.slashT = 10;
+    playSkillAnim('slashBeam', p.x + p.face * 42, p.y - 30, { scale:1.05 * t.area, flip:p.face < 0 });
+    playSfx('swordSwing'); beep(660, 0.07, 'sine', 0.032);
+    p.skillCasts.holystrike = (p.skillCasts.holystrike || 0) + 1;
+    const third = p.skillCasts.holystrike % 3 === 0;
+    let hit = 0;
+    for (const m of mons.slice()) {
+      const dx = (m.x - p.x) * p.face;
+      if (dx <= -12 || dx >= 85 * t.area || Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) >= 55 || hit >= 3) continue;
+      hit++;
+      const hurt = t.mechanic && t.branch === 1 && m.hp < m.mhp * 0.99 ? 1.15 : 1; // 制裁：對已受傷目標加傷
+      const r = skillDmg(t.dmg * hurt);
+      hitMon(m, r.d, r.crit || (third && t.ultimate && t.branch === 1));
+    }
+    if (hit && third && !(t.branch === 1)) {                 // 守護：第三擊回復
+      const heal = Math.min(p.mhp - p.hp, Math.round(p.mhp * (t.mechanic && t.branch === 0 ? 0.05 : 0.025)));
+      if (heal > 0) { p.hp += heal; num(p.x, p.y - p.h - 26, '+' + heal, '#8fe6a0', { size:11 }); }
+      if (t.ultimate && t.branch === 0) { p.shieldHp = Math.max(p.shieldHp, Math.round(p.mhp * 0.08)); p.shieldT = Math.max(p.shieldT, 180); }
+      burst(p.x, p.y - p.h / 2, '#ffe9a8', 8);
+    }
+    if (hit) playSkillAnim('impact', p.x + p.face * 52, p.y - p.h / 2, { scale:0.7 });
+  },
+  elembolt(t) { // 元素師基本技：火→冰→雷輪替的飛彈
+    const p = player;
+    p.cast = 12;
+    p.skillCasts.elembolt = (p.skillCasts.elembolt || 0) + 1;
+    const cycle = p.skillCasts.elembolt % 3;                  // 1火 2冰 0雷
+    const elem = cycle === 1 ? 'fire' : cycle === 2 ? 'ice' : 'bolt';
+    const all = t.ultimate && t.branch === 1;                 // 連動終極：三元素同時附加
+    const x = p.x + p.face * 20, y = p.y - 30;
+    const aim = fireballAim(p, x, y), speed = 7.8;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:aim.target ? 90 : 70, mult:t.dmg, kind:'elem', elem, elemAll:all, talent:t,
+      aimTarget:aim.target, aimT:aim.target ? 24 : 0 });
+    playSfx(elem === 'ice' ? 'spellIce' : elem === 'bolt' ? 'spellLightning' : 'fire', 0.7);
+  },
+  shadowbolt(t) { // 咒術師基本技：直傷偏低，靠疊加腐蝕
+    const p = player;
+    p.cast = 12;
+    const x = p.x + p.face * 20, y = p.y - 30;
+    const aim = fireballAim(p, x, y), speed = 7.2;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:aim.target ? 90 : 70, mult:0.8 * t.dmg, kind:'shadow', talent:t,
+      aimTarget:aim.target, aimT:aim.target ? 24 : 0 });
+    playSfx('fire', 0.45); beep(180, 0.09, 'triangle', 0.035);
+  },
   bloodrend(t) { // 狂戰士：消耗自身HP換取高傷，血越低傷害越高
     const p = player;
     const cost = Math.max(1, Math.round(p.mhp * (t.branch === 0 ? (t.ultimate ? 0.06 : 0.08) : 0.10))); // 以血換傷：HP 才是真正的代價

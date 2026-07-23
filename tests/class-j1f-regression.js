@@ -138,6 +138,10 @@ for (const job of Object.keys(old.CLASSES)) {
   assert.strictEqual(old.isJobUnlocked(job), false, job + ' 在舊存檔上不該已解鎖');
   for (const id of old.classSkills(job)) {
     if (old.SKILL_DEFS[id].cls !== job) continue;
+    if (old.SKILL_DEFS[id].basic) { // 基本技能與 slash/fire 一樣預設可用，否則進去沒得打
+      assert.strictEqual(old.skillState[id].unl, 1, job + ' 的基本技能 ' + id + ' 應預設可用');
+      continue;
+    }
     assert.strictEqual(old.skillState[id].unl, 0, job + ' 的專屬技能 ' + id + ' 不該預設解鎖');
   }
   const slot0 = old.loadouts[job][0];
