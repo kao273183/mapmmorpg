@@ -45,7 +45,15 @@ const UNIQUE_DEFS = {
   flame_blade:   { id:'flame_blade',   name:'烈焰之刃', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' },
   gale_boots:    { id:'gale_boots',    name:'疾風之靴', kind:'boots',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'stat' }],                            powerText:'極高移速、必帶跳躍' },
   thorn_plate:   { id:'thorn_plate',   name:'荊棘板甲', kind:'armor',               cls:'any',     minR:3, biome:'通用',     powers:[{ type:'thorns', amount:0.5 }],              powerText:'受擊反傷 50% 攻擊力' },
-  undying_ring:  { id:'undying_ring',  name:'不滅之戒', kind:'acc',                 cls:'any',     minR:3, biome:'通用',     powers:[{ type:'revive' }],                          powerText:'每場一次致命免死' }
+  undying_ring:  { id:'undying_ring',  name:'不滅之戒', kind:'acc',                 cls:'any',     minR:3, biome:'通用',     powers:[{ type:'revive' }],                          powerText:'每場一次致命免死' },
+  // — I1-C 擴充：群系主題 + 頭盔類 —
+  dawn_crown:    { id:'dawn_crown',    name:'曦光頭冠', kind:'helmet',              cls:'any',     minR:3, biome:'翠綠草原', powers:[{ type:'critBonus', amount:0.10 }],          powerText:'爆擊率 +10%' },
+  shadow_hood:   { id:'shadow_hood',   name:'窟影兜帽', kind:'helmet',              cls:'any',     minR:3, biome:'幽暗洞窟', powers:[{ type:'moveBonus', amount:0.6 }],           powerText:'移速大幅提升' },
+  verdant_blade: { id:'verdant_blade', name:'翠風劍',   kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'翠綠草原', powers:[{ type:'slow', chance:0.35, dur:150 }],       powerText:'命中 35% 緩速敵人' },
+  venom_fang:    { id:'venom_fang',    name:'劇毒之牙', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'幽暗洞窟', powers:[{ type:'burn', chance:0.32, dur:180, dmgMul:0.28 }], powerText:'命中 32% 劇毒（持續傷害）' },
+  rift_blade:    { id:'rift_blade',    name:'裂空劍',   kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'虛空深淵', powers:[{ type:'chain', chance:0.32, mul:0.5 }],      powerText:'命中 32% 連鎖閃電' },
+  soulreaper:    { id:'soulreaper',    name:'奪魂杖',   kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'幽暗洞窟', powers:[{ type:'lifesteal', amount:0.10 }],          powerText:'法擊吸血 10%' },
+  pyro_stave:    { id:'pyro_stave',    name:'炎爆法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' }
 };
 const UNIQUE_LIST = Object.values(UNIQUE_DEFS);
 function uniqueDef(id) { return id ? UNIQUE_DEFS[id] : null; }

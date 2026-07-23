@@ -192,11 +192,12 @@ function atkMultiplier() {
   return m;
 }
 function atkPow() { return atkBase() * atkMultiplier(); }
-function critRate() { return Math.min(1, 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit') + curseRewardV('broken_hourglass')); }
+function uniquePassiveV(type) { const pw = (typeof equippedUniquePower === 'function') ? equippedUniquePower(type) : null; return pw ? (pw.amount || 0) : 0; } // 傳奇被動屬性值
+function critRate() { return Math.min(1, 0.08 + 0.06 * player.cd.crit + 0.005 * meta.up.crit + accV('crit') + affixV('crit') + curseRewardV('broken_hourglass') + uniquePassiveV('critBonus')); }
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def + curseRewardV('leaden_steps'));
 }
-function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (1 - curseRiskV('leaden_steps')) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + uniquePassiveV('moveBonus') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (1 - curseRiskV('leaden_steps')) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0) + blessingV('aerial_grace'); }
 function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (1 + blessingV('arcane_tide')) * (1 + curseRewardV('mana_leak')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste) * (1 + curseRiskV('broken_hourglass')); }

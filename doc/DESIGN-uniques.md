@@ -93,7 +93,7 @@
 
 - **I1-A：難度稀有度上限**（Part 1）— ✅ 已完成（v0.29.22）：`maxRarity` 設定 + `dungeonMaxRarity()` + genGear 夾值 + 停套裝 + 基地標明。一般模式頂多藍裝。
 - **I1-B：元素狀態層**（Part 2）— ✅ 已完成（v0.29.26 + v0.29.27）：`applyUniqueWeaponProcs` 接 freeze/slow/lifesteal/chain；新增 burn DoT（`m.burnT`/`m.burnDmg`，迴圈外結算走 hitMon 讓擊殺正常計經驗）；armor/acc 被動經 `equippedUniquePower` 接進 dmgPlayer（thorns 反傷、revive 免死）。
-- **I1-C：Unique 資料與掉落（8 件）**（Part 3）— ✅ 已完成：`UNIQUE_DEFS` 8 件（冰霜劍/嗜血巨劍/寒霜法杖/雷霆法杖/烈焰之刃/疾風之靴/荊棘板甲/不滅之戒）+ genGear 高稀有度轉 Unique + 職業過濾 + 取代套裝 + 只困難掉。⏳ 待做：擴充更多群系主題 Unique、頭盔類。
+- **I1-C：Unique 資料與掉落（15 件）**（Part 3）— ✅ 已完成：`UNIQUE_DEFS` 15 件涵蓋武器/防具/頭盔/鞋子/飾品五部位、五大群系皆有主題掉落；頭盔以被動屬性（爆擊/移速，`uniquePassiveV` 掛進 critRate/moveSpd）。genGear 職業過濾 + 取代套裝 + 只困難掉。⏳ 待做：更多群系深化（各群系各職業武器補齊）。
 - **I1-D：顯示（部分）**（Part 4）— ✅ 基本完成（v0.29.26）：專屬金橙色（gearColor）、背包列 ◈ 標記、紙娃娃底部能力全文。⏳ 待做：接 H1 圖鑑、掉落發光、詳細 tooltip。
 - **I1-E：平衡與回歸** — ⏳ 待做：proc 觸發率／冷卻上限調校、Unique 不破壞曲線；固定種子 smoke、桌機／手機／低特效、舊存檔相容全回歸。
 
