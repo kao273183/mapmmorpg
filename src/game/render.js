@@ -370,7 +370,7 @@ function render() {
   const bossM = mons.find(m => m.type === 'boss');
   if (bossM) {
     const bossDef = dungeonBossDef(bossM.bossId);
-    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, bossDef.color, bossDef.name + '  第' + bossM.phase + '階段');
+    bar(W / 2 - 180, 38, 360, 16, bossM.hp / bossM.mhp, bossDef.color, bossDef.name + '  ' + Math.ceil(Math.max(0, bossM.hp)) + ' / ' + bossM.mhp + '  第' + bossM.phase + '階段');
     ctx.textAlign = 'left';
   }
 

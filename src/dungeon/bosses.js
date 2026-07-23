@@ -94,9 +94,10 @@ function dungeonBossPhaseConfig(boss, phase) {
 
 function createDungeonBoss(definition, atFloor, scale) {
   const def = definition || dungeonBossDefForFloor(atFloor);
-  const strengthMul = typeof dungeonBossStrengthMul === 'function' ? dungeonBossStrengthMul() : 1;
-  const baseHp = 800 * scale * def.hpMultiplier * strengthMul;
-  const baseDamage = 15 * scale * def.damageMultiplier * strengthMul;
+  const hpMul = typeof dungeonBossHpMul === 'function' ? dungeonBossHpMul() : 1;
+  const dmgMul = typeof dungeonBossDmgMul === 'function' ? dungeonBossDmgMul() : 1;
+  const baseHp = 800 * scale * def.hpMultiplier * hpMul;
+  const baseDamage = 15 * scale * def.damageMultiplier * dmgMul;
   const hp = Math.round(typeof dungeonCurseBossStat === 'function' ? dungeonCurseBossStat(baseHp) : baseHp);
   const damage = Math.round(typeof dungeonCurseBossStat === 'function' ? dungeonCurseBossStat(baseDamage) : baseDamage);
   return {

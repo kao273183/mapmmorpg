@@ -26,10 +26,11 @@ function dungeonHazardSoulBonus(atFloor) {
 // 「一般」保留反應型地形（荊棘、落石、熔岩）的「看提示→閃開」核心，
 // 但移除會改變移動規則的地形（冰面滑行、虛空平台消失），並降低陷阱密度與傷害。
 // 「複雜」＝現行完整地形系統。設定存於本瀏覽器，不影響存檔碼。
-// hazardChanceMul：險境房出現機率倍率；bossStrengthMul：Boss 生命與傷害倍率。
+// hazardChanceMul：險境房出現機率倍率；bossHpMul／bossDmgMul：Boss 生命／傷害倍率（分開調，一般模式傷害降更多）。
+// maxRarity：掉落稀有度上限（0普通 1精良藍 2稀有黃 3史詩紫 4傳說橙）。一般模式頂多藍裝，不掉稀有以上與套裝。
 const TERRAIN_MODE_DEFS = {
-  normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossStrengthMul:0.85, dropMul:0.7 },
-  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossStrengthMul:1,    dropMul:1 }
+  normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossHpMul:0.72, bossDmgMul:0.55, dropMul:0.7, maxRarity:1, xpMul:1.25 },
+  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossHpMul:1,    bossDmgMul:1,    dropMul:1,   maxRarity:4, xpMul:1 }
 };
 const TERRAIN_MODE_KEY = 'pixelrogue_terrain_mode';
 let terrainMode = 'normal';
@@ -56,10 +57,15 @@ function terrainHazardIsMovementType(hazardId) {
 }
 // 一般模式降低險境房出現機率。
 function dungeonHazardChanceMul() { return terrainModeConfig().hazardChanceMul; }
-// 一般模式降低 Boss 生命與傷害。
-function dungeonBossStrengthMul() { return terrainModeConfig().bossStrengthMul; }
+// 一般模式降低 Boss 生命與傷害（傷害降更多，減少被秒的挫折）。
+function dungeonBossHpMul() { const m = terrainModeConfig().bossHpMul; return Number.isFinite(m) ? m : 1; }
+function dungeonBossDmgMul() { const m = terrainModeConfig().bossDmgMul; return Number.isFinite(m) ? m : 1; }
 // 一般模式降低裝備與藥水掉落機率（簡單模式的報酬取捨）。
 function dungeonDropMul() { const m = terrainModeConfig().dropMul; return Number.isFinite(m) ? m : 1; }
+// 掉落稀有度上限（一般模式頂多藍裝 rarity 1）。
+function dungeonMaxRarity() { const m = terrainModeConfig().maxRarity; return Number.isFinite(m) ? m : 4; }
+// 一般模式升等較快（經驗值加成）。
+function dungeonXpMul() { const m = terrainModeConfig().xpMul; return Number.isFinite(m) ? m : 1; }
 
 const DUNGEON_BIOME_DEFS = [
   { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },

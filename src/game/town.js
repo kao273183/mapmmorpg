@@ -805,7 +805,7 @@ function renderMenu() {
   diffBtn(db1, 'terrainNormal', '一般（推薦）', terrainNormal);
   diffBtn(db2, 'terrainComplex', '複雜', !terrainNormal);
   ctx.textAlign = 'left'; ctx.fillStyle = '#ffb45e'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText(terrainNormal ? '一般：掉落機率偏低、Boss 較弱、無滑冰／消失平台、陷阱少' : '複雜：掉落較高、完整地形與 Boss 全強度、險境較多', left.x + 18, left.y + 296);
+  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '複雜：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 296);
   ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 304, left.w - 36, 1);
   const bw2 = left.w - 36, bh2 = 48;
   startBtn = { x: left.x + 18, y: left.y + 312, w: bw2, h: bh2 };

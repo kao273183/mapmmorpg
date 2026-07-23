@@ -593,8 +593,9 @@ function hitMon(m, d, crit, noChain) {
 }
 function gainXp(n) {
   const p = player;
-  p.xp += n;
-  num(p.x, p.y - p.h - 14, '+' + n + ' EXP', '#9ecbff');
+  const g = Math.max(1, Math.round(n * (typeof dungeonXpMul === 'function' ? dungeonXpMul() : 1))); // 一般模式升等較快
+  p.xp += g;
+  num(p.x, p.y - p.h - 14, '+' + g + ' EXP', '#9ecbff');
   while (p.xp >= xpNeed(p.lv)) {
     p.xp -= xpNeed(p.lv);
     p.lv++;

@@ -650,10 +650,12 @@ function createGear(n, slot, cls, rarity, setId) {
   return it;
 }
 function genGear(n, forceR, source) {
+  const cap = typeof dungeonMaxRarity === 'function' ? dungeonMaxRarity() : 4; // 一般模式頂多藍裝
   const slots = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
   const slot = pick(slots);
-  const baseR = forceR != null ? forceR : rollRarity(n);
-  const rate = n >= 5 && SET_PARTS.includes(slot) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
+  const baseR = Math.min(cap, forceR != null ? forceR : rollRarity(n));
+  // 套裝為史詩以上；上限低於 3 的模式（一般）不掉套裝。
+  const rate = (cap >= 3 && n >= 5 && SET_PARTS.includes(slot)) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
   const setIds = setIdsForClass(player.cls);
   const setId = setIds.length && Math.random() < rate ? pick(setIds) : null;
   return createGear(n, slot, player.cls, baseR, setId);
