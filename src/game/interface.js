@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.32';
+const GAME_VERSION = '0.29.33';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.33', date:'2026-07-23', title:'修正 PWA 卡舊版無法更新',
+    items:['修正 Service Worker：index.html／導覽改為「網路優先」，線上一律取得最新版本（原本一律回快取導致卡在舊版、偵測不到更新）。','版本化資產維持快取優先，離線仍可遊玩；新版部署後重開 App 即會更新。','此修正部署後，舊 App 重開一次會自動換上新 SW，之後即可正常更新。']
+  },
   {
     version:'0.29.32', date:'2026-07-23', title:'裝備詳細 tooltip',
     items:['桌機在裝備視窗把滑鼠移到裝備欄或背包裝備上，會顯示詳細資訊卡。','資訊卡含稀有度、完整數值、詞綴、傳奇能力與出處、套裝效果與職業限制。','資訊卡跟隨滑鼠並自動避開邊界，邊框依稀有度上色。']
