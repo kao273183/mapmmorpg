@@ -1,0 +1,17 @@
+Pixel art sword slash effect
+============================
+
+Sources:
+- https://opengameart.org/content/pixel-art-sword-slash-effect
+- 直接下載：https://opengameart.org/sites/default/files/pixel_art_sword_slash_sprites.png
+
+Author: tbbk (https://opengameart.org/users/tbbk)
+License: CC0 1.0 Universal (public domain dedication)
+          http://creativecommons.org/publicdomain/zero/1.0/
+Retrieved: （待填，下載後補上日期）
+
+作者備註：Credits appreciated but not needed.
+
+規格：單張 sprite sheet，每格 64x47（非正方形）。
+      注意 SKILL_VFX_DEFS 的 frame 欄位目前假設每格為正方形，
+      接入時需先確認切格方式或把圖補成正方形。
