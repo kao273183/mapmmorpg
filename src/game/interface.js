@@ -60,8 +60,16 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.23';
+const GAME_VERSION = '0.29.25';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.25', date:'2026-07-23', title:'難度「複雜」改名為「困難」',
+    items:['難度模式「複雜」顯示名稱改為「困難」；內部設定相容，既有選擇不受影響。','未來規劃：困難將擴充為秘境式分層難度（可選層級、越高越強、獎勵更好）。']
+  },
+  {
+    version:'0.29.24', date:'2026-07-23', title:'更新紀錄版面修正',
+    items:['更新項目間隔改為依實際行數動態調整，單行項目不再空一大截。','更新紀錄視窗高度依內容自動縮放，消除下方大片空白。']
+  },
   {
     version:'0.29.23', date:'2026-07-23', title:'一般模式升等較快',
     items:['一般模式經驗值 ×1.25，升等更快；跳字直接顯示加成後的 EXP。','複雜模式維持原經驗值。','基地難度提示補上「升等較快」。']
@@ -217,12 +225,13 @@ function renderSettingsUpdates(mx, my, mw, mh) {
   ctx.fillText('v' + note.version + '　' + note.date, W / 2, my + 78);
   ctx.fillStyle = '#f2f3ff'; ctx.font = 'bold 17px "Courier New",monospace';
   ctx.fillText(note.title, W / 2, my + 108);
+  let iy = my + 146;
   for (let i = 0; i < note.items.length; i++) {
-    const y = my + 150 + i * 62;
     ctx.fillStyle = '#b98cff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.textAlign = 'left';
-    ctx.fillText('◆', mx + 42, y);
+    ctx.fillText('◆', mx + 42, iy);
     ctx.fillStyle = '#c8cdec'; ctx.font = '13px "Courier New",monospace'; ctx.textAlign = 'center';
-    wrapText(note.items[i], W / 2 + 10, y, mw - 112, 18);
+    const lines = wrapText(note.items[i], W / 2 + 10, iy, mw - 112, 18);
+    iy += lines * 18 + 18; // 依實際行數動態間隔，1 行的不再空一大截
   }
   ctx.textAlign = 'center'; ctx.fillStyle = '#777e9f'; ctx.font = '11px "Courier New",monospace';
   ctx.fillText((settingsUpdateIndex + 1) + ' / ' + GAME_UPDATE_NOTES.length, W / 2, my + mh - 76);
@@ -332,7 +341,16 @@ function renderSettingsBenchmark(mx, my, mw, mh) {
 function renderSettings() {
   settingsBtns.length = 0;
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
-  const mw = 580, mh = 470, mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
+  const mw = 580;
+  let mh = 470;
+  if (settingsPage === 'updates') {
+    // 更新頁高度依內容自動縮放，避免下方大片空白
+    const note = GAME_UPDATE_NOTES[settingsUpdateIndex] || GAME_UPDATE_NOTES[0];
+    let itemsH = 0;
+    for (const it of note.items) itemsH += measureWrapLines(it, mw - 112) * 18 + 18;
+    mh = Math.max(320, Math.min(470, 146 + itemsH + 84));
+  }
+  const mx = W / 2 - mw / 2, my = H / 2 - mh / 2;
   ctx.fillStyle = '#1a1c2c'; ctx.fillRect(mx, my, mw, mh);
   ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
   ctx.textAlign = 'center';

@@ -791,7 +791,7 @@ function renderMenu() {
     ctx.fillStyle = id ? '#dfe3f5' : '#6c728f'; ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText(id ? SKILL_DEFS[id].name : '尚未裝備', ix + 30, iy - 3);
     ctx.fillStyle = '#686f90'; ctx.font = '9px ' + STAT_FONT; ctx.fillText('技能 ' + (i + 1), ix + 30, iy + 13);
   }
-  // 本次難度（一般／複雜）— 與設定頁同步，per-run 可在此切換。
+  // 本次難度（一般／困難）— 與設定頁同步，per-run 可在此切換。
   const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
   ctx.fillText('本次難度', left.x + 18, left.y + 250);
@@ -803,9 +803,9 @@ function renderMenu() {
     ctx.textAlign = 'center'; ctx.fillStyle = on ? '#f0dcfa' : '#858ba8'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(label, x + dbW / 2, dby + 17);
   };
   diffBtn(db1, 'terrainNormal', '一般（推薦）', terrainNormal);
-  diffBtn(db2, 'terrainComplex', '複雜', !terrainNormal);
+  diffBtn(db2, 'terrainComplex', '困難', !terrainNormal);
   ctx.textAlign = 'left'; ctx.fillStyle = '#ffb45e'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '複雜：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 296);
+  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '困難：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 296);
   ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 304, left.w - 36, 1);
   const bw2 = left.w - 36, bh2 = 48;
   startBtn = { x: left.x + 18, y: left.y + 312, w: bw2, h: bh2 };

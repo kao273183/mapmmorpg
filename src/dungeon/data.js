@@ -22,15 +22,16 @@ function dungeonHazardSoulBonus(atFloor) {
   return Math.max(base, Math.round(base * DUNGEON_D3C_CALIBRATION.hazardSoulMultiplier));
 }
 
-// ---------- 地形難度模式（一般 / 複雜）----------
+// ---------- 地形難度模式（一般 / 困難）----------
+// 註：內部 id 仍為 'complex'（相容既有存檔與設定），顯示名稱為「困難」。未來將擴充為秘境式分層難度。
 // 「一般」保留反應型地形（荊棘、落石、熔岩）的「看提示→閃開」核心，
 // 但移除會改變移動規則的地形（冰面滑行、虛空平台消失），並降低陷阱密度與傷害。
-// 「複雜」＝現行完整地形系統。設定存於本瀏覽器，不影響存檔碼。
+// 「困難」＝現行完整地形系統。設定存於本瀏覽器，不影響存檔碼。
 // hazardChanceMul：險境房出現機率倍率；bossHpMul／bossDmgMul：Boss 生命／傷害倍率（分開調，一般模式傷害降更多）。
 // maxRarity：掉落稀有度上限（0普通 1精良藍 2稀有黃 3史詩紫 4傳說橙）。一般模式頂多藍裝，不掉稀有以上與套裝。
 const TERRAIN_MODE_DEFS = {
   normal:  { id:'normal',  name:'一般', maxPerRoomMul:0.6, damageMul:0.8, movementHazards:false, hazardChanceMul:0.5, bossHpMul:0.72, bossDmgMul:0.55, dropMul:0.7, maxRarity:1, xpMul:1.25 },
-  complex: { id:'complex', name:'複雜', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossHpMul:1,    bossDmgMul:1,    dropMul:1,   maxRarity:4, xpMul:1 }
+  complex: { id:'complex', name:'困難', maxPerRoomMul:1,   damageMul:1,   movementHazards:true,  hazardChanceMul:1,   bossHpMul:1,    bossDmgMul:1,    dropMul:1,   maxRarity:4, xpMul:1 }
 };
 const TERRAIN_MODE_KEY = 'pixelrogue_terrain_mode';
 let terrainMode = 'normal';
@@ -44,7 +45,7 @@ function setTerrainMode(mode) {
   try { localStorage.setItem(TERRAIN_MODE_KEY, terrainMode); } catch (e) {}
   return terrainMode;
 }
-// 冰面滑行與虛空平台消失只在「複雜」模式生效。
+// 冰面滑行與虛空平台消失只在「困難」模式生效。
 function terrainMovementHazardsEnabled() { return terrainModeConfig().movementHazards; }
 // 依模式縮放每房陷阱數量下限保持 1，避免整房完全無地形。
 function terrainHazardMaxPerRoom(def) {

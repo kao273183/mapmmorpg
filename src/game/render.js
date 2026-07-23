@@ -680,12 +680,24 @@ function drawStatsPanel() {
 
 // ---------- overlays ----------
 function wrapText(text, cx, y, maxW, lh) {
-  let line = '', yy = y;
+  let line = '', yy = y, count = 0;
   for (const ch of text) {
-    if (ctx.measureText(line + ch).width > maxW && line) { ctx.fillText(line, cx, yy); line = ch; yy += lh; }
+    if (ctx.measureText(line + ch).width > maxW && line) { ctx.fillText(line, cx, yy); line = ch; yy += lh; count++; }
     else line += ch;
   }
-  if (line) ctx.fillText(line, cx, yy);
+  if (line) { ctx.fillText(line, cx, yy); count++; }
+  return count; // 回傳實際行數，供動態間隔用
+}
+// 只量行數不繪製（供動態高度計算）；以 13px 更新項目字型量測。
+function measureWrapLines(text, maxW) {
+  ctx.font = '13px "Courier New",monospace';
+  let line = '', count = 0;
+  for (const ch of text) {
+    if (ctx.measureText(line + ch).width > maxW && line) { line = ch; count++; }
+    else line += ch;
+  }
+  if (line) count++;
+  return count || 1;
 }
 function drawPick() {
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
