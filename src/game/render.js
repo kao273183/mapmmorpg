@@ -510,51 +510,68 @@ function withAlpha(hex, a) { // #rrggbb → rgba，供稀有度底色暈染
 function slotBox(sx, sy, slot, label) {
   const it = player.eq[slot];
   const col = it ? gearColor(it) : '#3a3450';
-  ctx.fillStyle = it && it.r >= 2 ? withAlpha(col, 0.10) : 'rgba(255,255,255,0.05)';
-  ctx.fillRect(sx, sy, 44, 44);
-  if (it && (it.unique || it.r >= 3)) { ctx.shadowColor = col; ctx.shadowBlur = 8; } // 傳奇/高稀有發光
-  ctx.strokeStyle = col; ctx.lineWidth = 2;
-  ctx.strokeRect(sx, sy, 44, 44);
-  ctx.shadowBlur = 0;
-  if (it) drawItemIcon(it, sx + 6, sy + 6, 32);
+  fillRoundRect(sx, sy, 44, 44, 6, it && it.r >= 2 ? withAlpha(col, 0.12) : 'rgba(255,255,255,0.05)', null, 0);
+  if (it && (it.unique || it.r >= 3)) { ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 9; fillRoundRect(sx, sy, 44, 44, 6, null, col, 2); ctx.restore(); }
+  else fillRoundRect(sx, sy, 44, 44, 6, null, col, 2);
   ctx.textAlign = 'center';
-  ctx.font = '10px "Courier New",monospace';
-  ctx.fillStyle = it ? col : '#667';
-  ctx.fillText(it ? gearLabel(it) : label, sx + 22, sy + 56);
+  if (it) {
+    drawItemIcon(it, sx + 6, sy + 6, 32);
+    ctx.font = '10px "Courier New",monospace'; ctx.fillStyle = col;
+    ctx.fillText(gearLabel(it), sx + 22, sy + 56);
+  } else {
+    ctx.font = '11px ' + STAT_FONT; ctx.fillStyle = 'rgba(120,126,160,0.5)';
+    ctx.fillText(label, sx + 22, sy + 27); // 空欄:部位提示置中
+  }
   ctx.textAlign = 'left';
 }
 function drawItemWin() {
   const p = player;
   itemBtns.length = 0;
   const x = W / 2 - 230, y = 40, w = 460, h = 440;
-  ctx.fillStyle = 'rgba(16,14,24,0.96)'; ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+  // 圓角主面板 + 外陰影
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 7;
+  fillRoundRect(x, y, w, h, 12, '#16131f', null, 0);
+  ctx.restore();
+  fillRoundRect(x, y, w, h, 12, null, '#8a6d3b', 2);
+  // 標題列漸層 + 分隔線
+  const hg = ctx.createLinearGradient(x, y, x, y + 38);
+  hg.addColorStop(0, 'rgba(138,109,59,0.28)'); hg.addColorStop(1, 'rgba(138,109,59,0)');
+  roundRectPath(x + 1, y + 1, w - 2, 38, 11); ctx.fillStyle = hg; ctx.fill();
+  ctx.strokeStyle = 'rgba(138,109,59,0.45)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 12, y + 32); ctx.lineTo(x + w - 12, y + 32); ctx.stroke();
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 16px "Courier New",monospace';
-  ctx.fillText('裝 備', x + 14, y + 24);
+  ctx.fillStyle = '#f0d9a8'; ctx.font = 'bold 16px "Courier New",monospace';
+  ctx.fillText('⚔ 裝 備', x + 14, y + 22);
   ctx.fillStyle = '#8890b8'; ctx.font = '12px "Courier New",monospace';
-  ctx.fillText('[I] 關閉', x + w - 70, y + 24);
+  ctx.fillText('[I] 關閉', x + w - 70, y + 22);
   const dx = x + 12, dy = y + 36, dw = 206, dh = 320;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(dx, dy, dw, dh);
-  ctx.strokeStyle = '#3a3450'; ctx.lineWidth = 1; ctx.strokeRect(dx, dy, dw, dh);
-  const cx = dx + dw / 2;
+  // 紙娃娃圓角框 + 角色背後光暈
+  fillRoundRect(dx, dy, dw, dh, 8, 'rgba(0,0,0,0.42)', '#3a3450', 1);
+  const cx = dx + dw / 2, gcy = dy + 150;
+  const glow = ctx.createRadialGradient(cx, gcy, 6, cx, gcy, 84);
+  glow.addColorStop(0, 'rgba(216,179,101,0.15)'); glow.addColorStop(1, 'rgba(216,179,101,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, gcy, 84, 0, Math.PI * 2); ctx.fill();
   drawSprite(p.cls === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false);
   slotBox(cx - 22, dy + 10, 'helmet', '頭盔');
   slotBox(dx + 12, dy + 100, 'weapon', '武器');
   slotBox(dx + dw - 56, dy + 100, 'armor', '防具');
   slotBox(dx + dw - 56, dy + 10, 'acc', '飾品');
   slotBox(cx - 22, dy + dh - 76, 'boots', '鞋子');
+  // 屬性子面板
+  fillRoundRect(dx, dy + dh + 6, dw, y + h - (dy + dh + 6) - 10, 6, 'rgba(255,255,255,0.035)', '#2e3350', 1);
+  ctx.textAlign = 'left';
   ctx.font = '11px "Courier New",monospace';
   ctx.fillStyle = '#9ecbff';
-  ctx.fillText('攻擊 ' + Math.round(atkPow()) + '  爆擊 ' + (critRate() * 100).toFixed(1) + '%', dx + 4, dy + dh + 18);
-  ctx.fillText('減傷 ' + armorDef() + '  移速 ' + moveSpd().toFixed(1) + '  HP ' + p.mhp, dx + 4, dy + dh + 34);
+  ctx.fillText('攻擊 ' + Math.round(atkPow()) + '  爆擊 ' + (critRate() * 100).toFixed(1) + '%', dx + 8, dy + dh + 20);
+  ctx.fillText('減傷 ' + armorDef() + '  移速 ' + moveSpd().toFixed(1) + '  HP ' + p.mhp, dx + 8, dy + dh + 34);
   const activeSets = Object.entries(equippedSetCounts(p.eq)).filter(([, count]) => count >= 2);
   let extraY = dy + dh + 50;
   if (activeSets.length) {
     ctx.font = 'bold 10px ' + STAT_FONT;
     for (let i = 0; i < Math.min(2, activeSets.length); i++) {
       const [setId, count] = activeSets[i], set = GEAR_SET_BY_ID[setId];
-      ctx.fillStyle = set.color; ctx.fillText('⬟ ' + set.name + ' ' + count + '/4　套裝效果已啟動', dx + 4, extraY + i * 14);
+      ctx.fillStyle = set.color; ctx.fillText('⬟ ' + set.name + ' ' + count + '/4　套裝效果已啟動', dx + 8, extraY + i * 14);
     }
     extraY += Math.min(2, activeSets.length) * 14;
   }
@@ -565,7 +582,7 @@ function drawItemWin() {
       const it = p.eq[slot];
       if (!it || !it.unique) continue;
       const u = uniqueDef(it.unique);
-      if (u && u.powerText) { ctx.fillText('◈ ' + u.name + '：' + u.powerText, dx + 4, extraY); extraY += 12; }
+      if (u && u.powerText) { ctx.fillText('◈ ' + u.name + '：' + u.powerText, dx + 8, extraY); extraY += 12; }
     }
   }
   const bx = x + 232, by = y + 36, bw = w - 244;
@@ -588,9 +605,8 @@ function drawItemWin() {
     let rbg = 'rgba(255,255,255,0.04)';
     if (it.unique) rbg = withAlpha(rcol, 0.16);
     else if (it.r >= 2) rbg = withAlpha(rcol, 0.10);
-    ctx.fillStyle = pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : rbg;
-    ctx.fillRect(bx - 4, ry - 13, bw, 24);
-    ctx.fillStyle = rcol; ctx.fillRect(bx - 4, ry - 13, 3, 24); // 稀有度／傳奇色條
+    fillRoundRect(bx - 4, ry - 13, bw, 23, 4, pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : rbg, null, 0);
+    ctx.fillStyle = rcol; fillRoundRect(bx - 4, ry - 13, 3, 23, 1.5, rcol, null, 0); // 稀有度／傳奇色條
     if (!eqd) {
       itemBtns.push({ x: bx - 4, y: ry - 13, w: bw - 44, h: 24, it: it });
       delBtns.push({ x: bx + bw - 46, y: ry - 13, w: 42, h: 24, it: it });
