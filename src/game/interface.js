@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.39';
+const GAME_VERSION = '0.29.40';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.40', date:'2026-07-23', title:'精通外觀獎勵：稱號與配色（J1-E）',
+    items:['每個職業的精通軌新增四項外觀獎勵：Lv5／Lv10 給角色配色，Lv15／Lv20 給職業稱號，六個職業共 12 配色 + 12 稱號。','配色會直接換掉角色的甲冑／長袍與金屬鑲邊顏色；稱號顯示在城鎮角色頭上與角色能力面板。','精通分頁下方改成可互動的外觀獎勵軌：點上方職業卡切換檢視，已解鎖的直接點擊選用，再點一次取消。','達到等級即自動發放，舊存檔會回溯補發。外觀一律零局內戰力。']
+  },
   {
     version:'0.29.39', date:'2026-07-23', title:'四大進階職與選角改版（J1-D）',
     items:['新增三個進階職：聖騎士（護盾減傷、命中回血）、元素師（火冰雷三環爆發、雷球連鎖）、咒術師（疫病持續傷害與虛弱、汲取生命）。','選角頁改版：上方固定兩張基礎職大卡，下方一列該系的「進階轉職」晶片；未達條件也會顯示灰晶片並標明解鎖門檻，不再是看不到就不知道有這回事。','進階職解鎖只看自己那一系的基礎職精通 Lv10；精通分頁與技能分頁都已排得下六個職業。','修正進階職讀檔後出戰欄被清空、開局沒有技能可用的問題。']
@@ -677,6 +681,21 @@ function handleTap(mx, my) {
     if (inside(backTownBtn)) { gameState = 'town'; setHint(HINT_TOWN); return; }
     for (const b of tabBtns) if (inside(b)) { menuTab = b.tab; pendingReset = null; return; }
     if (inside(gearBtn)) { openTownPanel('save'); return; }
+    if (menuTab === 'mastery') {
+      // 獎勵晶片優先於職業卡（晶片畫在卡片之外，但先比對較精確的目標）
+      for (const b of masteryBtns) {
+        if (b.act !== 'equip' || !inside(b)) continue;
+        const on = equippedCosmetic(b.type) === b.id;
+        if (on) { ensureCosmeticState().equipped[b.type] = COSMETIC_DEFAULT_EQUIPPED[b.type]; saveMeta(); }
+        else equipCosmetic(b.type, b.id);
+        playSfx('uiSelect', 0.7); return;
+      }
+      for (const b of masteryBtns) {
+        if (b.act !== 'focus' || !inside(b)) continue;
+        masteryFocusJob = b.job; playSfx('uiSelect', 0.6); return;
+      }
+      return;
+    }
     if (menuTab === 'skills') {
       if (inside(gachaBtn)) { drawSkillGacha(); return; }
       for (const b of skillBtns) if (inside(b)) { selSkill = b.id; pendingReset = null; playSfx('uiSelect', 0.7); return; }

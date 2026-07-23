@@ -40,6 +40,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 revalidateLoadouts(); // 職業表就緒後才驗證出戰欄（進階職沿用基礎職技能）
+syncMasteryCosmetics();  // 補發既有精通等級應得的稱號與配色（舊存檔回溯）
 recoverAbandonedDungeonBenchmark();
 calcStats();
 gameState = 'town'; setHint(HINT_TOWN);

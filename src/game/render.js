@@ -254,13 +254,13 @@ function render() {
   if (p.dashT > 0) {
     ctx.save();
     ctx.globalAlpha = 0.12 + p.dashT / DASH_DURATION * 0.18;
-    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0);
+    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0, false, equippedRecolor());
     ctx.restore();
   }
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
     const s = 3;
     const bob = (p.onGround && p.walk > 0) ? (Math.floor(p.walk / 6) % 2) : 0;
-    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0);
+    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0, equippedRecolor());
     const sx = p.x + p.face * 14;
     if (baseClassOf(p.cls) === 'mage') {
       const orb = p.eq.weapon ? gearColor(p.eq.weapon) : '#f2c14e';
@@ -566,7 +566,7 @@ function drawItemWin() {
   const glow = ctx.createRadialGradient(cx, gcy, 6, cx, gcy, 84);
   glow.addColorStop(0, 'rgba(216,179,101,0.15)'); glow.addColorStop(1, 'rgba(216,179,101,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, gcy, 84, 0, Math.PI * 2); ctx.fill();
-  drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false);
+  drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false, false, equippedRecolor());
   let tipItem = null; // hover tooltip 目標
   const slotDefs = [[cx - 22, dy + 10, 'helmet', '頭盔'], [dx + 12, dy + 100, 'weapon', '武器'], [dx + dw - 56, dy + 100, 'armor', '防具'], [dx + dw - 56, dy + 10, 'acc', '飾品'], [cx - 22, dy + dh - 76, 'boots', '鞋子']];
   for (const s of slotDefs) {
@@ -766,6 +766,8 @@ function drawStatsPanel() {
   ctx.fillText('角 色 能 力', x + 20, y + 32);
   ctx.fillStyle = '#dce0f2'; ctx.font = '13px ' + STAT_FONT;
   ctx.fillText((meta.playerName || '勇者') + '　Lv.' + p.lv + ' ' + CLASSES[p.cls].name + (gameState === 'play' ? '　即時數值' : '　最近角色數值'), x + 180, y + 31);
+  const titleTxt = equippedTitleText();
+  if (titleTxt) { ctx.fillStyle = equippedTitleColor(); ctx.font = 'bold 11px ' + STAT_FONT; ctx.fillText('「' + titleTxt + '」', x + 180, y + 48); }
   statsCloseBtn = { x: x + w - 92, y: y + 10, w: 76, h: 28 };
   ctx.fillStyle = 'rgba(226,59,59,0.18)'; ctx.fillRect(statsCloseBtn.x, statsCloseBtn.y, statsCloseBtn.w, statsCloseBtn.h);
   ctx.strokeStyle = '#a05060'; ctx.lineWidth = 1; ctx.strokeRect(statsCloseBtn.x, statsCloseBtn.y, statsCloseBtn.w, statsCloseBtn.h);

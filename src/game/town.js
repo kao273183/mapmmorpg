@@ -20,6 +20,7 @@ const TOWN_DECOR = [
   { x: 1140, y: 480, type: 'barrel' }, { x: 830, y: 250, type: 'barrel' }, { x: 700, y: 300, type: 'crate' }
 ];
 let townCamX = 0, townCamY = 0, nearNpc = null, fromTown = false;
+let masteryFocusJob = null, masteryBtns = []; // 精通分頁：目前檢視的職業與可點區域
 let townTargetX = null, townTargetY = null, townTargetNpc = null; // 點擊走動目標
 let chatMsgs = [{ name: '系統', text: '歡迎來到城鎮!走到 NPC 按 ↑ 互動,按 Enter 聊天。' }];
 let chatInput = '', chatting = false;
@@ -172,6 +173,8 @@ function renderTown() {
     if (e.self) {
       drawEquippedAura(townP.x, townP.y - 24, 26, 48);
       drawCharTile(PLAYER_CHAR, townP.x, townP.y);
+      const ttl = equippedTitleText();
+      if (ttl) { ctx.fillStyle = equippedTitleColor(); ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('「' + ttl + '」', townP.x, townP.y - 60); }
       ctx.fillStyle = '#7dffd6'; ctx.font = 'bold 12px "Courier New",monospace';
       ctx.fillText(meta.playerName || '勇者', townP.x, townP.y - 46);
     } else if (e.decor) {
@@ -660,6 +663,8 @@ function renderMasteryJobPanel(job, x, y, w, h) {
   const cls = CLASSES[job] || { name: job, col: '#8890b8' };
   const p = masteryProgress(job);
   drawStonePanel(x, y, w, h, cls.name + '  精 通');
+  masteryBtns.push({ x, y, w, h, act:'focus', job }); // 點卡片切換下方獎勵軌
+  if (masteryFocusJob === job) { ctx.strokeStyle = '#7dffd6'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2); }
   const compact = h < 176; // 職業變多時卡片變矮，內容跟著壓縮
   // 大字等級
   ctx.textAlign = 'left';
@@ -704,6 +709,7 @@ function renderMasteryJobPanel(job, x, y, w, h) {
   }
 }
 function renderMasteryTab() {
+  masteryBtns.length = 0;
   // 版面依職業數自適應：2 職維持雙欄大卡，3 職以上改三欄，並保留下方獎勵軌空間。
   const jobs = Object.keys(CLASSES);
   const top = 112, gap = 16, bottom = 504, railH = 96;
@@ -716,26 +722,31 @@ function renderMasteryTab() {
     const col = i % cols, row = Math.floor(i / cols);
     renderMasteryJobPanel(jobs[i], 24 + col * (pw + gap), top + row * (ph + gap), pw, ph);
   }
-  // 獎勵軌（外觀獎勵，K1 系列開放後接上）
+  // 獎勵軌：選一個職業看它的稱號／配色，已解鎖可直接點選用（J1-E）
   const ry = top + rows * (ph + gap), rh = bottom - ry;
-  drawStonePanel(24, ry, 912, rh, '精 通 獎 勵 軌  •  只給外觀與材料，不影響戰力');
-  const chapters = [
-    { range: 'Lv 1–10', name: '第一章', reward: '角色配色・材料・名牌框', col: '#7dffd6' },
-    { range: 'Lv 11–20', name: '第二章', reward: '職業稱號・技能外觀・基地旗幟', col: '#9ecbff' },
-    { range: 'Lv 21–30', name: '第三章', reward: '勝利姿勢・終極技能外觀・職業雕像', col: '#d9a8ff' }
-  ];
-  const bx0 = 36, bw = Math.floor((912 - 24 - 12 * 2) / 3);
-  for (let i = 0; i < chapters.length; i++) {
-    const c = chapters[i], bx = bx0 + i * (bw + 12), by = ry + 30;
-    const reached = jobs.some(j => masteryChapterOf(masteryProgress(j).lv) >= i);
-    ctx.fillStyle = reached ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.022)';
-    ctx.fillRect(bx, by, bw, 52);
-    ctx.strokeStyle = reached ? c.col : '#33364a'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 52);
-    ctx.textAlign = 'left'; ctx.fillStyle = reached ? c.col : '#5d6076'; ctx.font = 'bold 11px ' + STAT_FONT;
-    ctx.fillText(c.name + '　' + c.range, bx + 10, by + 19);
-    ctx.fillStyle = reached ? '#aeb2ca' : '#54576b'; ctx.font = '9px ' + STAT_FONT;
-    ctx.fillText(c.reward, bx + 10, by + 36);
-    ctx.fillStyle = '#5d6076'; ctx.fillText(reached ? '（獎勵於後續版本開放）' : '尚未解鎖', bx + 10, by + 41);
+  if (!masteryFocusJob || !CLASSES[masteryFocusJob]) masteryFocusJob = baseClassOf(chosenCls);
+  const fdef = CLASSES[masteryFocusJob], flv = masteryProgress(masteryFocusJob).lv;
+  drawStonePanel(24, ry, 912, rh, fdef.name + '  外 觀 獎 勵  •  點上方職業卡切換　只給外觀，不影響戰力');
+  const rewards = masteryRewardsFor(masteryFocusJob);
+  const bx0 = 36, bw = Math.floor((912 - 24 - 10 * (rewards.length - 1)) / Math.max(1, rewards.length));
+  for (let i = 0; i < rewards.length; i++) {
+    const r = rewards[i], bx = bx0 + i * (bw + 10), by = ry + 26, bh = 46;
+    const owned = ownsCosmetic(r.type, r.id), on = equippedCosmetic(r.type) === r.id;
+    if (owned) masteryBtns.push({ x:bx, y:by, w:bw, h:bh, act:'equip', type:r.type, id:r.id });
+    ctx.fillStyle = on ? 'rgba(125,255,214,0.14)' : owned ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.022)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = on ? '#7dffd6' : owned ? r.color : '#33364a'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(bx, by, bw, bh);
+    ctx.textAlign = 'left'; ctx.fillStyle = owned ? r.color : '#5d6076'; ctx.font = 'bold 11px ' + STAT_FONT;
+    ctx.fillText((r.type === 'title' ? '稱號' : '配色') + '　' + (owned ? r.name : '？？？'), bx + 10, by + 16);
+    if (r.type === 'color' && owned) { // 配色小色塊
+      const c = cosmeticDef('color', r.id);
+      ctx.fillStyle = c.map.r; ctx.fillRect(bx + bw - 30, by + 8, 9, 9);
+      ctx.fillStyle = c.map['8']; ctx.fillRect(bx + bw - 19, by + 8, 9, 9);
+    }
+    ctx.fillStyle = owned ? '#aeb2ca' : '#54576b'; ctx.font = '9px ' + STAT_FONT;
+    ctx.fillText('Lv ' + r.lv + ' 解鎖', bx + 10, by + 30);
+    ctx.fillStyle = on ? '#7dffd6' : owned ? '#7f85a4' : '#54576b';
+    ctx.fillText(on ? '✓ 使用中　（再點一次取消）' : owned ? '點擊選用' : '尚差 ' + (r.lv - flv) + ' 級', bx + 10, by + 42);
   }
   ctx.textAlign = 'left'; ctx.fillStyle = '#6f7492'; ctx.font = '9px ' + STAT_FONT;
   ctx.fillText('精通經驗來自樓層深度、擊殺與成功撤退；首次以該職業擊敗某 Boss 有額外加成，未突破該職最深紀錄時收益降低。', 36, ry + rh - 7);
@@ -833,17 +844,17 @@ function renderMenu() {
   }
   ctx.fillStyle = '#343850'; ctx.fillRect(24, 103, 912, 1);
   if (menuTab === 'skills') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
+    selBtns.length = 0; masteryBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
     renderSkillTab();
     return;
   }
   if (menuTab === 'stash') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; activityBtns.length = 0;
+    selBtns.length = 0; masteryBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; activityBtns.length = 0;
     renderStashTab();
     return;
   }
   if (menuTab === 'activity') {
-    selBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
+    selBtns.length = 0; masteryBtns.length = 0; metaBtns.length = 0; startBtn = null; diffBtns.length = 0; skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0;
     renderActivityTab();
     return;
   }
@@ -852,7 +863,7 @@ function renderMenu() {
     renderMasteryTab();
     return;
   }
-  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0;
+  skillBtns.length = 0; skillActBtns.length = 0; gachaBtn = null; stashBtns.length = 0; stashActBtns.length = 0; activityBtns.length = 0; masteryBtns.length = 0;
   // 基地主頁：左側準備出戰，右側永久成長。
   const left = { x: 24, y: 116, w: 430, h: 388 };
   const right = { x: 470, y: 116, w: 466, h: 388 };

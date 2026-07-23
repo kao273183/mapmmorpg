@@ -76,7 +76,14 @@
   - 精通分頁改為 3 欄 × 2 列 compact 卡；技能分頁職業切換列改用到技能秘典鈕之前的完整寬度（6 職 97px）。
   - **修正載入順序 bug**：`applyAdvancedSkillState` 在 `loadMeta()`（早於 systems.js）呼叫 `classSkills()`，此時 `CLASSES`/`baseClassOf` 未定義，會把進階職出戰欄裡的基礎職技能濾掉 → 進階職開局空手。改為載入時只做不依賴職業表的檢查，職業歸屬交給 `revalidateLoadouts()`（main.js 於全部載入後呼叫）。
   - 附 `tests/advance-j1d-smoke.js`；`tests/advance-j1c-smoke.js` 改為直接抽取 systems.js 真正的 `CLASSES`，新增職業時自動納入檢查。
-- **J1-E 外觀獎勵**：稱號 + 角色配色系統（精通解鎖、可選用套用），接精通獎勵軌。
+- **J1-E 外觀獎勵** — ✅ 已完成（v0.29.40）：
+  - `MASTERY_COSMETIC_TABLE` 定義每職 4 項獎勵：**Lv5／Lv10 角色配色，Lv15／Lv20 職業稱號**，六職共 12 配色 + 12 稱號。由此表自動生成 K1-A 預留的 `COLOR_DEFS`／`TITLE_DEFS`。
+  - **配色**走 `drawSprite` 既有的 `recolor` 參數：每個配色帶一張字元對照表 `{ r, '4', '8' }`（`r`＝劍士系甲冑、`4`＝法師系長袍、`8`＝共用金屬鑲邊），所以同一個配色對兩系都有效。`equippedRecolor()` 掛進 render.js 的三處玩家繪製。
+  - **稱號**顯示在城鎮角色頭上與角色能力面板抬頭（`equippedTitleText()`／`equippedTitleColor()`）。
+  - `syncMasteryCosmetics(job?)` 依目前等級補發，達標即給、不需領取；`recordMasteryRun` 升級時呼叫並把新解鎖回傳（供之後做結算提示），main.js 啟動時全量呼叫一次做舊存檔回溯。重複呼叫不會重複發。
+  - 精通分頁下方的靜態三章說明改成**可互動的外觀獎勵軌**：點上方職業卡切換檢視職業（`masteryFocusJob`，卡片有青色外框），已解鎖的獎勵晶片可點擊選用、再點一次取消；未解鎖顯示「？？？」與尚差級數。新增 `masteryBtns` 與對應的點擊處理。
+  - 附 `tests/cosmetics-j1e-smoke.js`：資料完整性（每職都有、id/名稱不重複）、門檻剛好達標才發、不會被別職帶解、重複同步不膨脹、未解鎖不可選用，以及**配色對照表必須真的涵蓋精靈圖用到的字元**（否則穿了等於沒穿）與玩家繪製一定要傳 `equippedRecolor()`。
+  - 仍待後續（K1 章三）：勝利姿勢、終極技能外觀、職業雕像（Lv21–30 獎勵）。
 - **J1-F 平衡與回歸**：確認零戰力、進階職平衡不破壞曲線、遞減合理；固定種子 smoke、桌機/手機/低特效、舊存檔相容。
 - （後續）**J2**：弓箭手基礎職 + 其進階職（接 DESIGN-classes 第三職業）。
 
