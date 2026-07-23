@@ -254,15 +254,15 @@ function render() {
   if (p.dashT > 0) {
     ctx.save();
     ctx.globalAlpha = 0.12 + p.dashT / DASH_DURATION * 0.18;
-    drawSprite(p.cls === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0);
+    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0);
     ctx.restore();
   }
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
     const s = 3;
     const bob = (p.onGround && p.walk > 0) ? (Math.floor(p.walk / 6) % 2) : 0;
-    drawSprite(p.cls === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0);
+    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0);
     const sx = p.x + p.face * 14;
-    if (p.cls === 'mage') {
+    if (baseClassOf(p.cls) === 'mage') {
       const orb = p.eq.weapon ? gearColor(p.eq.weapon) : '#f2c14e';
       ctx.fillStyle = PAL['a'];
       if (p.cast > 0) {
@@ -490,7 +490,7 @@ function bar(x, y, w, h, ratio, color, label) {
 function drawGlyph(kind, gx, gy, col) {
   ctx.fillStyle = col;
   if (kind === 'weapon') {
-    if (player.cls === 'mage') {
+    if (baseClassOf(player.cls) === 'mage') {
       ctx.fillStyle = '#a05a2c'; ctx.fillRect(gx - 1, gy - 6, 3, 16);
       ctx.fillStyle = col; ctx.fillRect(gx - 4, gy - 12, 8, 8);
     } else {
@@ -566,7 +566,7 @@ function drawItemWin() {
   const glow = ctx.createRadialGradient(cx, gcy, 6, cx, gcy, 84);
   glow.addColorStop(0, 'rgba(216,179,101,0.15)'); glow.addColorStop(1, 'rgba(216,179,101,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, gcy, 84, 0, Math.PI * 2); ctx.fill();
-  drawSprite(p.cls === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false);
+  drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false);
   let tipItem = null; // hover tooltip 目標
   const slotDefs = [[cx - 22, dy + 10, 'helmet', '頭盔'], [dx + 12, dy + 100, 'weapon', '武器'], [dx + dw - 56, dy + 100, 'armor', '防具'], [dx + dw - 56, dy + 10, 'acc', '飾品'], [cx - 22, dy + dh - 76, 'boots', '鞋子']];
   for (const s of slotDefs) {
@@ -724,7 +724,7 @@ function drawStatColumn(x, y, w, title, color, rows) {
 function drawStatsPanel() {
   const p = player;
   const atk = atkPow(), crit = critRate(), gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
-  const hpBase = 60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp;
+  const hpBase = 60 + (baseClassOf(p.cls) === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp;
   const recvMul = (1 + 0.25 * perkV('glass')) * (1 - 0.01 * meta.up.guard);
   const recoveryMul = 1 + 0.1 * meta.up.recovery;
   const combatRows = [

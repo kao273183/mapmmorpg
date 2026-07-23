@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.37';
+const GAME_VERSION = '0.29.38';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.38', date:'2026-07-23', title:'轉職框架與首個進階職（J1-C）',
+    items:['新增進階職「狂戰士」：劍士精通 Lv10 後解鎖，出戰選單與技能分頁都會多出一張職業卡。','狂戰士沿用劍士的屬性、裝備與技能，另有兩個專屬技能——血怒斬（消耗 HP，血越低傷害越高）與戰吼（群體緩速並自我狂暴回 MP）。','技能樹版面改為依技能數自適應，進階專屬技能排在最右一層；精通分頁與獎勵軌也改成多職業版面。','進階職精通獨立累積，不影響基礎職；既有存檔的技能與天賦完全沿用，不需重點。']
+  },
   {
     version:'0.29.37', date:'2026-07-23', title:'精通分頁（J1-B）',
     items:['選單新增「★ 精通」分頁：各職業等級、經驗進度條、累積經驗、最深樓層與首殺 Boss 數。','顯示進階轉職解鎖條件（精通 Lv10）與尚差級數。','精通獎勵軌三章一覽（配色／稱號／技能外觀等），標明只給外觀與材料、不影響戰力。']
@@ -545,8 +549,7 @@ window.addEventListener('keydown', e => {
     return; // 走動/互動由 keys[] + updateTown 處理
   }
   if (gameState === 'select') {
-    if (k === '1') chosenCls = 'warrior';
-    if (k === '2') chosenCls = 'mage';
+    if (k >= '1' && k <= '9') { const jobs = selectableJobs(), n = parseInt(k, 10) - 1; if (jobs[n]) chosenCls = jobs[n]; } // 含已解鎖進階職
     if (k === 'escape' && fromTown) { gameState = 'town'; setHint(HINT_TOWN); return; }
     if (k === 'enter' && menuTab === 'base') resetRun();
     return;

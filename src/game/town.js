@@ -431,7 +431,8 @@ function drawEnchantAnim() {
 }
 const SKILL_COLORS = {
   slash:'#d9c7a2', spin:'#e8a84c', dash:'#8ec9df', quake:'#c98b59', rage:'#d95745',
-  fire:'#ff7a36', bolt:'#e9d45a', ice:'#71c9e8', meteor:'#d85132', shield:'#9575d5'
+  fire:'#ff7a36', bolt:'#e9d45a', ice:'#71c9e8', meteor:'#d85132', shield:'#9575d5',
+  bloodrend:'#c02f3a', warcry:'#ff9b45'
 };
 function drawSkillSigil(id, x, y, r, active, locked) {
   const col = SKILL_COLORS[id] || '#d8b365';
@@ -503,18 +504,20 @@ function renderSkillTab() {
   skillBtns.length = 0; skillActBtns.length = 0;
   if (pendingReset && (frame - pendingReset.f > 150 || pendingReset.id !== selSkill)) pendingReset = null;
   const list = classSkills(chosenCls), lo = loadouts[chosenCls];
-  if (!selSkill || !SKILL_DEFS[selSkill] || SKILL_DEFS[selSkill].cls !== chosenCls) selSkill = list[0];
+  if (!selSkill || list.indexOf(selSkill) < 0) selSkill = list[0]; // 進階職沿用基礎職技能,以清單判定而非 cls
 
   // 頂部職業切換與技能秘典
-  const clsList = ['warrior', 'mage'];
-  for (let i = 0; i < 2; i++) {
-    const b = { x: 30 + i * 128, y: 118, w: 118, h: 34, act: 'cls', cls: clsList[i] };
+  const clsList = selectableJobs();
+  const clsW = Math.min(118, Math.floor((380 - (clsList.length - 1) * 10) / Math.max(1, clsList.length)));
+  for (let i = 0; i < clsList.length; i++) {
+    const b = { x: 30 + i * (clsW + 10), y: 118, w: clsW, h: 34, act: 'cls', cls: clsList[i] };
     skillActBtns.push(b);
     const on = chosenCls === clsList[i];
     ctx.fillStyle = on ? 'rgba(124,55,32,0.8)' : 'rgba(18,17,19,0.78)'; ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.strokeStyle = on ? '#c88a4b' : '#51483d'; ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(b.x, b.y, b.w, b.h);
     ctx.fillStyle = on ? '#f0d8ad' : '#80766a'; ctx.font = 'bold 13px ' + STAT_FONT; ctx.textAlign = 'center';
-    ctx.fillText((i === 0 ? '⚔ ' : '✦ ') + CLASSES[clsList[i]].name, b.x + b.w / 2, b.y + 22);
+    ctx.font = 'bold ' + (clsW < 100 ? 11 : 13) + 'px ' + STAT_FONT;
+    ctx.fillText((isAdvancedClass(clsList[i]) ? '★ ' : i === 0 ? '⚔ ' : '✦ ') + CLASSES[clsList[i]].name, b.x + b.w / 2, b.y + 22);
   }
   gachaBtn = { x: 676, y: 118, w: 254, h: 34 };
   const pool = list.filter(id => !(skillState[id].unl && skillState[id].pts >= 5));
@@ -527,16 +530,26 @@ function renderSkillTab() {
   // 技能樹石板
   const tx = 28, ty = 162, tw = 508, th = 274;
   drawStonePanel(tx, ty, tw, th, '技 能 樹  •  點選節點查看與配點');
-  const pos = [[78,142],[208,84],[208,204],[382,84],[382,204]];
-  const edges = [[0,1],[0,2],[1,3],[2,4],[1,4]];
+  // 節點座標／連線依技能數切換：進階職多出兩個專屬節點，排在最右側作為進階層。
+  const TREE_LAYOUTS = {
+    5: { pos: [[78,142],[208,84],[208,204],[382,84],[382,204]],
+         edges: [[0,1],[0,2],[1,3],[2,4],[1,4]] },
+    7: { pos: [[58,144],[172,84],[172,204],[292,84],[292,204],[412,84],[412,204]],
+         edges: [[0,1],[0,2],[1,3],[2,4],[1,4],[3,5],[4,6],[5,6]] }
+  };
+  const layout = TREE_LAYOUTS[list.length] || TREE_LAYOUTS[5];
+  const pos = layout.pos, edges = layout.edges;
   for (const e of edges) {
     const a = pos[e[0]], b = pos[e[1]];
+    if (!a || !b || !list[e[0]] || !list[e[1]]) continue;
     const lit = skillState[list[e[0]]].unl && skillState[list[e[1]]].unl;
     ctx.strokeStyle = lit ? 'rgba(190,139,72,0.72)' : '#34302c'; ctx.lineWidth = lit ? 3 : 2;
     ctx.beginPath(); ctx.moveTo(tx + a[0], ty + a[1]); ctx.lineTo(tx + b[0], ty + b[1]); ctx.stroke();
   }
   for (let i = 0; i < list.length; i++) {
-    const id = list[i], s = skillState[id], p = pos[i], cx = tx + p[0], cy = ty + p[1];
+    const id = list[i], s = skillState[id], p = pos[i];
+    if (!p) continue;
+    const cx = tx + p[0], cy = ty + p[1];
     const selected = selSkill === id, canSpend = s.unl && s.pts > s.spent;
     skillBtns.push({ x: cx - 39, y: cy - 39, w: 78, h: 88, act: 'sel', id });
     if (canSpend) { ctx.strokeStyle = '#f0c76b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 38 + Math.sin(frame * 0.1) * 2, 0, Math.PI * 2); ctx.stroke(); }
@@ -644,18 +657,19 @@ function renderMasteryJobPanel(job, x, y, w, h) {
   const cls = CLASSES[job] || { name: job, col: '#8890b8' };
   const p = masteryProgress(job);
   drawStonePanel(x, y, w, h, cls.name + '  精 通');
+  const compact = h < 176; // 職業變多時卡片變矮，內容跟著壓縮
   // 大字等級
   ctx.textAlign = 'left';
-  ctx.fillStyle = cls.col; ctx.font = 'bold 34px ' + STAT_FONT;
-  ctx.fillText('Lv ' + p.lv, x + 16, y + 62);
+  ctx.fillStyle = cls.col; ctx.font = 'bold ' + (compact ? 26 : 34) + 'px ' + STAT_FONT;
+  ctx.fillText('Lv ' + p.lv, x + 16, y + (compact ? 52 : 62));
   ctx.fillStyle = '#6f7492'; ctx.font = '11px ' + STAT_FONT;
-  ctx.fillText('/ ' + MASTERY_MAX_LEVEL, x + 16 + ctx.measureText('Lv ' + p.lv).width + 74, y + 62);
+  ctx.fillText('/ ' + MASTERY_MAX_LEVEL, x + 16 + ctx.measureText('Lv ' + p.lv).width + (compact ? 56 : 74), y + (compact ? 52 : 62));
   // 章節標示
   const chapter = masteryChapterOf(p.lv), chapterNames = ['第一章', '第二章', '第三章'];
   ctx.textAlign = 'right'; ctx.fillStyle = '#9da1bc'; ctx.font = 'bold 10px ' + STAT_FONT;
   ctx.fillText(chapterNames[chapter], x + w - 16, y + 34);
   // 進度條
-  const barX = x + 16, barY = y + 78, barW = w - 32;
+  const barX = x + 16, barY = y + (compact ? 62 : 78), barW = w - 32;
   ctx.fillStyle = '#17192a'; ctx.fillRect(barX, barY, barW, 14);
   const g = ctx.createLinearGradient(barX, 0, barX + barW, 0);
   g.addColorStop(0, cls.col); g.addColorStop(1, '#7dffd6');
@@ -665,36 +679,49 @@ function renderMasteryJobPanel(job, x, y, w, h) {
   ctx.fillText(p.max ? '已達精通上限' : (p.into + ' / ' + p.need + '  EXP'), barX + barW / 2, barY + 11);
   // 統計
   ctx.textAlign = 'left'; ctx.fillStyle = '#8c92b1'; ctx.font = '10px ' + STAT_FONT;
-  ctx.fillText('累積精通 ' + p.xp + ' EXP', x + 16, y + 112);
-  ctx.fillText('最深 ' + p.best + ' 層　首殺 Boss ' + p.bosses.length + ' 種', x + 16, y + 130);
+  if (compact) {
+    ctx.fillText(p.xp + ' EXP　最深 ' + p.best + ' 層　Boss ' + p.bosses.length, x + 16, y + 92);
+  } else {
+    ctx.fillText('累積精通 ' + p.xp + ' EXP', x + 16, y + 112);
+    ctx.fillText('最深 ' + p.best + ' 層　首殺 Boss ' + p.bosses.length + ' 種', x + 16, y + 130);
+  }
   // 進階轉職解鎖狀態
   const unlocked = p.lv >= MASTERY_ADVANCE_LEVEL;
-  const ay = y + 144, ah = 34;
+  const ay = y + (compact ? 100 : 144), ah = compact ? 26 : 34;
   ctx.fillStyle = unlocked ? 'rgba(255,230,128,0.12)' : 'rgba(255,255,255,0.028)';
   ctx.fillRect(x + 14, ay, w - 28, ah);
   ctx.strokeStyle = unlocked ? '#c8a64f' : '#35374b'; ctx.strokeRect(x + 14, ay, w - 28, ah);
   ctx.fillStyle = unlocked ? '#ffe680' : '#74778e'; ctx.font = 'bold 10px ' + STAT_FONT;
-  ctx.fillText(unlocked ? '★ 進階轉職條件已達成' : '進階轉職：Lv ' + MASTERY_ADVANCE_LEVEL + '（還差 ' + (MASTERY_ADVANCE_LEVEL - p.lv) + ' 級）', x + 24, ay + 15);
-  ctx.fillStyle = '#64677b'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText('進階職業將於後續版本開放', x + 24, ay + 28);
+  ctx.fillText(unlocked ? '★ 進階轉職條件已達成' : '進階轉職：Lv ' + MASTERY_ADVANCE_LEVEL + '（還差 ' + (MASTERY_ADVANCE_LEVEL - p.lv) + ' 級）', x + 24, ay + (compact ? 17 : 15));
+  if (!compact) {
+    const adv = (typeof advancedJobsFor === 'function') ? advancedJobsFor(job) : [];
+    const names = adv.map(id => CLASSES[id].name).join('、');
+    ctx.fillStyle = '#64677b'; ctx.font = '9px ' + STAT_FONT;
+    ctx.fillText(names ? (unlocked ? '可轉職：' + names : '可轉職：' + names + '（未達條件）') : '進階職業將於後續版本開放', x + 24, ay + 28);
+  }
 }
 function renderMasteryTab() {
+  // 版面依職業數自適應：2 職維持雙欄大卡，3 職以上改三欄，並保留下方獎勵軌空間。
   const jobs = Object.keys(CLASSES);
-  const top = 112, ph = 192, gap = 16;
-  const pw = Math.floor((912 - gap * (Math.min(2, jobs.length) - 1)) / Math.min(2, jobs.length));
+  const top = 112, gap = 16, bottom = 504, railH = 96;
+  const cols = jobs.length <= 2 ? Math.max(1, jobs.length) : (jobs.length <= 6 ? 3 : 4);
+  const rows = Math.ceil(jobs.length / cols);
+  const pw = Math.floor((912 - gap * (cols - 1)) / cols);
+  const avail = bottom - top - railH - gap;
+  const ph = Math.min(192, Math.floor((avail - gap * (rows - 1)) / rows));
   for (let i = 0; i < jobs.length; i++) {
-    const col = i % 2, row = Math.floor(i / 2);
+    const col = i % cols, row = Math.floor(i / cols);
     renderMasteryJobPanel(jobs[i], 24 + col * (pw + gap), top + row * (ph + gap), pw, ph);
   }
   // 獎勵軌（外觀獎勵，K1 系列開放後接上）
-  const ry = top + Math.ceil(jobs.length / 2) * (ph + gap), rh = 504 - ry;
+  const ry = top + rows * (ph + gap), rh = bottom - ry;
   drawStonePanel(24, ry, 912, rh, '精 通 獎 勵 軌  •  只給外觀與材料，不影響戰力');
   const chapters = [
     { range: 'Lv 1–10', name: '第一章', reward: '角色配色・材料・名牌框', col: '#7dffd6' },
     { range: 'Lv 11–20', name: '第二章', reward: '職業稱號・技能外觀・基地旗幟', col: '#9ecbff' },
     { range: 'Lv 21–30', name: '第三章', reward: '勝利姿勢・終極技能外觀・職業雕像', col: '#d9a8ff' }
   ];
-  const bw = 288, bx0 = 36;
+  const bx0 = 36, bw = Math.floor((912 - 24 - 12 * 2) / 3);
   for (let i = 0; i < chapters.length; i++) {
     const c = chapters[i], bx = bx0 + i * (bw + 12), by = ry + 30;
     const reached = jobs.some(j => masteryChapterOf(masteryProgress(j).lv) >= i);
@@ -834,30 +861,40 @@ function renderMenu() {
 
   // 更有辨識度的職業卡。
   selBtns.length = 0;
-  const cls = ['warrior', 'mage'];
-  for (let i = 0; i < 2; i++) {
+  const cls = selectableJobs();
+  const inner = left.w - 36, gapC = 12, n = Math.max(1, cls.length);
+  const cw = Math.floor((inner - gapC * (n - 1)) / n), ch = 118;
+  const wide = cw >= 170; // 兩職業時維持原本橫式排版，較多職業時改直式精簡卡
+  for (let i = 0; i < cls.length; i++) {
     const c = cls[i];
-    const cw = 190, ch = 118;
-    const cx = left.x + 18 + i * 202, cy = left.y + 56;
-    const sel = chosenCls === c;
+    const cx = left.x + 18 + i * (cw + gapC), cy = left.y + 56;
+    const sel = chosenCls === c, def = CLASSES[c] || { name: c, col: '#8890b8' };
     if (sel) { ctx.shadowColor = '#7dffd6'; ctx.shadowBlur = 9; }
-    fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : '#3c4058', sel ? 2 : 1);
+    fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : (isAdvancedClass(c) ? '#8a5a3b' : '#3c4058'), sel ? 2 : 1);
     ctx.shadowBlur = 0;
     selBtns.push({ x: cx, y: cy, w: cw, h: ch, cls: c });
-    drawSprite(c === 'mage' ? MAGE : WAR, cx + 16, cy + 22, 3, false);
-    ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
-    ctx.fillText(CLASSES[c].name, cx + 86, cy + 36);
-    ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT;
-    ctx.fillText(c === 'warrior' ? '近戰  •  高生存' : '遠程  •  高爆發', cx + 86, cy + 57);
-    ctx.fillStyle = '#6f7695'; ctx.font = '10px ' + STAT_FONT;
-    ctx.fillText(c === 'warrior' ? '穩定推進，正面迎敵' : '掌控距離，範圍清場', cx + 86, cy + 77);
-    if (sel) {
-      fillRoundRect(cx + 86, cy + 92, 78, 24, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
-      ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 108);
-    } else {
-      ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 108);
+    if (isAdvancedClass(c)) { ctx.textAlign = 'right'; ctx.fillStyle = '#ffb45e'; ctx.font = 'bold 9px ' + STAT_FONT; ctx.fillText('★ 進階', cx + cw - 8, cy + 14); }
+    if (wide) {
+      drawSprite(baseClassOf(c) === 'mage' ? MAGE : WAR, cx + 16, cy + 22, 3, false);
+      ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
+      ctx.fillText(def.name, cx + 86, cy + 36);
+      ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT; ctx.fillText(def.tag || '', cx + 86, cy + 57);
+      ctx.fillStyle = '#6f7695'; ctx.font = '10px ' + STAT_FONT; ctx.fillText(def.sub || '', cx + 86, cy + 77);
+      if (sel) {
+        fillRoundRect(cx + 86, cy + 92, 78, 24, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
+        ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 108);
+      } else {
+        ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 108);
+      }
+    } else { // 精簡直式卡（3 個以上職業）
+      drawSprite(baseClassOf(c) === 'mage' ? MAGE : WAR, cx + cw / 2 - 18, cy + 20, 3, false);
+      ctx.textAlign = 'center'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 13px ' + STAT_FONT;
+      ctx.fillText(def.name, cx + cw / 2, cy + 78);
+      ctx.fillStyle = '#7d84a4'; ctx.font = '9px ' + STAT_FONT;
+      ctx.fillText(sel ? '✓ 目前出戰' : '按 [' + (i + 1) + ']', cx + cw / 2, cy + 96);
     }
   }
+  ctx.textAlign = 'left';
 
   // 目前裝備的三個技能。
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;

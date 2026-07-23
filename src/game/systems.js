@@ -2,7 +2,16 @@
 // ---------- state ----------
 let gameState = 'select';
 let chosenCls = 'warrior';
-const CLASSES = { warrior: { name: '劍士', col: '#c84a4a' }, mage: { name: '法師', col: '#5a4ad0' } };
+// 職業：基礎職 + 進階職（advanced:true 且 base 指向基礎職；由精通 Lv10 解鎖）
+const CLASSES = {
+  warrior:   { name: '劍士', col: '#c84a4a', tag: '近戰  •  高生存', sub: '穩定推進，正面迎敵' },
+  mage:      { name: '法師', col: '#5a4ad0', tag: '遠程  •  高爆發', sub: '掌控距離，範圍清場' },
+  berserker: { name: '狂戰士', col: '#ff6b3d', base: 'warrior', advanced: true, tag: '近戰  •  高風險爆發', sub: '以血換傷，越危險越強' }
+};
+function baseClassOf(cls) { const c = CLASSES[cls]; return (c && c.base) || cls; } // 進階職對應回基礎職（裝備/屬性/外觀共用）
+function isAdvancedClass(cls) { return !!(CLASSES[cls] && CLASSES[cls].advanced); }
+function baseClassIds() { return Object.keys(CLASSES).filter(id => !CLASSES[id].advanced); }
+function advancedJobsFor(base) { return Object.keys(CLASSES).filter(id => CLASSES[id].base === base); }
 let frame = 0;
 let floor = 1, kills = 0, soulsRun = 0, floorT = 0, gearSeq = 1;
 let runBossIds = []; // 本局擊敗的 Boss id（精通首殺加成用）
@@ -182,7 +191,7 @@ function eqStat(slot, key) { const it = player.eq[slot]; return it && it[key] ? 
 function accV(f) { return eqStat('acc', f); }
 function atkBase() {
   const p = player;
-  return 8 + p.lv * 2.5 + eqStat('weapon', 'atk') + (p.cls === 'warrior' ? 4 : 0);
+  return 8 + p.lv * 2.5 + eqStat('weapon', 'atk') + (baseClassOf(p.cls) === 'warrior' ? 4 : 0);
 }
 function atkMultiplier() {
   const p = player;
@@ -212,8 +221,8 @@ const SOUL_DROP_CHANCE = 0.25;
 function calcStats() {
   const p = player;
   const gearHp = eqStat('armor', 'hp') + eqStat('helmet', 'hp');
-  p.mhp = Math.round((60 + (p.cls === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * (1 + blessingV('oak_heart')) * (1 - curseRiskV('frail_power')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
-  p.mmp = 30 + (p.cls === 'mage' ? 15 : 0) + p.lv * 4 + 15 * p.cd.mp;
+  p.mhp = Math.round((60 + (baseClassOf(p.cls) === 'warrior' ? 40 : 0) + p.lv * 8 + 20 * p.cd.hp + gearHp) * (1 + 0.08 * meta.up.vit) * (1 + affixV('hpPct')) * (1 + blessingV('oak_heart')) * (1 - curseRiskV('frail_power')) * Math.max(0.4, 1 - 0.15 * perkV('bloodpact')));
+  p.mmp = 30 + (baseClassOf(p.cls) === 'mage' ? 15 : 0) + p.lv * 4 + 15 * p.cd.mp;
   if (p.hp > p.mhp) p.hp = p.mhp;
   if (p.mp > p.mmp) p.mp = p.mmp;
 }
@@ -513,6 +522,51 @@ const SKILL_FX = {
     burst(p.x, p.y - p.h / 2, '#ff5a5a', 20);
     beep(200, 0.2, 'square', 0.05);
   },
+  bloodrend(t) { // 狂戰士：消耗自身HP換取高傷，血越低傷害越高
+    const p = player;
+    const cost = Math.max(1, Math.round(p.mhp * (t.branch === 0 ? (t.ultimate ? 0.03 : 0.05) : 0.06)));
+    if (p.hp <= cost + 1) { num(p.x, p.y - p.h - 10, 'HP不足', '#ff8a8a'); return false; }
+    p.hp -= cost;
+    num(p.x, p.y - p.h - 26, '-' + cost, '#ff5a5a', { kind:'hurt', size:12 });
+    const missing = 1 - p.hp / p.mhp;                       // 越殘血越強
+    const lowMul = 1 + missing * (t.mechanic && t.branch === 1 ? 1.1 : 0.75);
+    p.cast = 12; p.slashT = 12;
+    playSkillAnim('slashBeam', p.x + p.face * 46, p.y - 30, { scale:1.3 * t.area, flip:p.face < 0 });
+    playSfx('swordSwing'); beep(150, 0.14, 'sawtooth', 0.05);
+    let hit = 0;
+    const range = 150 * t.area;
+    for (const m of mons.slice()) {
+      const dx = (m.x - p.x) * p.face;
+      if (dx > -16 && dx < range && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 74) {
+        hit++;
+        const r = skillDmg(2.4 * t.dmg * lowMul);
+        hitMon(m, r.d, r.crit);
+        if (t.ultimate && t.branch === 1) { m.burnT = Math.max(m.burnT || 0, 150); m.burnDmg = Math.max(m.burnDmg || 0, Math.round(r.d * 0.2)); } // 裂創：流血
+      }
+    }
+    if (hit && t.ultimate && t.branch === 0) p.hp = Math.min(p.mhp, p.hp + cost); // 嗜血：擊中回補消耗
+    burst(p.x + p.face * 40, p.y - p.h / 2, '#ff4d4d', 16);
+  },
+  warcry(t) { // 狂戰士：威嚇周圍敵人並自我狂暴
+    const p = player;
+    const range = 190 * t.area;
+    let hit = 0;
+    for (const m of mons) {
+      if (Math.abs(m.x - p.x) > range || Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) > 110) continue;
+      hit++;
+      m.slowT = Math.max(m.slowT || 0, t.branch === 0 ? 210 : 150);
+      if (t.ultimate && t.branch === 0 && !(m.ccT > 0)) { m.freezeT = Math.max(m.freezeT || 0, 40); m.ccT = 112; num(m.x, m.y - m.h - 18, '震懾', '#ffd36a'); }
+    }
+    p.rageT = Math.max(p.rageT, Math.round((t.branch === 1 ? 420 : 300) * t.area));
+    p.rageAtk = Math.max(p.rageAtk, 0.25); p.rageSpd = Math.max(p.rageSpd, 0.6);
+    if (t.ultimate && t.branch === 1) p.rageLifesteal = Math.max(p.rageLifesteal, 0.06);
+    p.mp = Math.min(p.mmp, p.mp + 10);
+    p.cast = 10;
+    playSkillAnim('groundBurst', p.x, p.y - 31, { scale:1.6 * t.area, layer:'back' });
+    burst(p.x, p.y - p.h / 2, '#ffb45e', 22);
+    beep(140, 0.24, 'square', 0.055);
+    if (hit) num(p.x, p.y - p.h - 34, '威嚇 ' + hit, '#ffd36a');
+  },
   fire(t) {
     const p = player;
     p.cast = 12;
@@ -624,7 +678,7 @@ const GEAR_PRE = [
 const GEAR_SUF = ['之王', '・末日', '・不朽', '之怒', '・終焉'];
 function pick(a) { return a[(Math.random() * a.length) | 0]; }
 function gearName(kind, r, cls) {
-  const bases = kind === 'weapon' ? GEAR_BASE.weapon[cls] : GEAR_BASE[kind];
+  const bases = kind === 'weapon' ? GEAR_BASE.weapon[baseClassOf(cls)] : GEAR_BASE[kind]; // 進階職沿用基礎職武器名
   const base = bases[Math.min(r, bases.length - 1)];
   let name = pick(GEAR_PRE[r]) + base;
   if (r >= 3) name += pick(GEAR_SUF);
@@ -639,6 +693,7 @@ function rollRarity(n) {
   return 0;                  // 普通
 }
 function createGear(n, slot, cls, rarity, setId, uniqueId) {
+  cls = baseClassOf(cls); // 裝備一律標記基礎職，進階職才穿得到自己掉的裝
   const uniq = (typeof uniqueDef === 'function') ? uniqueDef(uniqueId) : null;
   const set = GEAR_SET_BY_ID[setId];
   const r = uniq ? Math.max(uniq.minR || 3, rarity) : (set ? Math.max(3, rarity) : rarity);
@@ -647,7 +702,7 @@ function createGear(n, slot, cls, rarity, setId, uniqueId) {
   if (set) it.setId = set.id;
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
-    it.wpn = cls === 'mage' ? 'stave' : 'sword';
+    it.wpn = baseClassOf(cls) === 'mage' ? 'stave' : 'sword';
     it.desc = '攻擊+' + it.atk;
   } else if (slot === 'armor') {
     it.hp = Math.round((16 + n * 6) * m); it.def = Math.max(1, Math.round((1 + n * 0.4) * m));
@@ -696,7 +751,7 @@ function genGear(n, forceR, source) {
 }
 function forgeSetPiece(setId) {
   const set = GEAR_SET_BY_ID[setId];
-  if (!set || set.cls !== chosenCls) { menuMsg = { text:'請切換到套裝對應職業', color:'#ff8a8a', t:180 }; return; }
+  if (!set || set.cls !== baseClassOf(chosenCls)) { menuMsg = { text:'請切換到套裝對應職業', color:'#ff8a8a', t:180 }; return; }
   if (meta.stash.length >= STASH_CAP) { menuMsg = { text:'倉庫已滿，無法鍛造', color:'#ff8a8a', t:180 }; return; }
   if (meta.mats.set < SET_CRAFT_COST) { menuMsg = { text:'套裝核心不足（需要 ' + SET_CRAFT_COST + '）', color:'#ff8a8a', t:180 }; playSfx('uiError'); return; }
   const owned = new Set(meta.stash.filter(it => it.setId === setId).map(it => it.kind));

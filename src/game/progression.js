@@ -65,7 +65,7 @@ const UNIQUE_DEFS = {
 const UNIQUE_LIST = Object.values(UNIQUE_DEFS);
 function uniqueDef(id) { return id ? UNIQUE_DEFS[id] : null; }
 function uniqueIdsFor(slot, cls, r) {
-  return UNIQUE_LIST.filter(u => u.kind === slot && (u.cls === 'any' || u.cls === cls) && r >= (u.minR || 3)).map(u => u.id);
+  return UNIQUE_LIST.filter(u => u.kind === slot && (u.cls === 'any' || u.cls === baseOf(cls)) && r >= (u.minR || 3)).map(u => u.id);
 }
 function gearColor(it) {
   if (it && it.unique) return UNIQUE_COLOR;
@@ -98,7 +98,8 @@ function loadoutSetCount(setId) {
   }
   return count;
 }
-function gearUsableByClass(it, cls) { return !it || !it.cls || it.cls === cls; }
+function baseOf(cls) { return (typeof baseClassOf === 'function') ? baseClassOf(cls) : cls; } // systems.js 較晚載入時的安全退回
+function gearUsableByClass(it, cls) { return !it || !it.cls || it.cls === baseOf(cls); } // 進階職沿用基礎職裝備線
 const STASH_CAP = 30;
 const AFFIX_REROLL_COST = [5, 8, 12];
 const AFFIX_MAX_REROLLS = 3;
@@ -244,12 +245,19 @@ const SKILL_DEFS = {
   bolt:   { cls:'mage', name:'落雷術', mp:20, cd:170, desc:'範圍內最多4目標,1.8倍傷害' },
   ice:    { cls:'mage', name:'冰錐術', mp:10, cd:90,  desc:'穿透冰錐,命中緩速敵人' },
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
-  shield: { cls:'mage', name:'魔法盾', mp:16, cd:480, desc:'護盾吸收30%最大HP的傷害' }
+  shield: { cls:'mage', name:'魔法盾', mp:16, cd:480, desc:'護盾吸收30%最大HP的傷害' },
+  // 進階職：狂戰士（沿用劍士技能，另有專屬技能）
+  bloodrend: { cls:'berserker', name:'血怒斬', mp:6,  cd:150, desc:'消耗自身HP,對前方造成2.4倍傷害;血越低傷害越高' },
+  warcry:    { cls:'berserker', name:'戰吼',   mp:14, cd:420, desc:'威嚇周圍敵人使其緩速,自身狂暴並回復MP' }
 };
+// 存檔用的技能區塊固定為「基礎職技能」，新增進階職技能不會改變既有存檔長度（相容性關鍵）
+const LEGACY_SKILL_CLASSES = ['warrior', 'mage'];
 const SKILL_IDS = Object.keys(SKILL_DEFS); // 存檔順序,固定不可重排
+const LEGACY_SKILL_IDS = SKILL_IDS.filter(id => LEGACY_SKILL_CLASSES.indexOf(SKILL_DEFS[id].cls) >= 0); // 46 格存檔區塊只含基礎職
 const BRANCH_NAMES = {
   slash:['重擊','連擊'], spin:['龍捲','利刃'], dash:['疾影','破陣'], quake:['餘震','崩裂'], rage:['血怒','戰意'],
-  fire:['爆裂','連鎖'], bolt:['雷暴','聚雷'], ice:['霜寒','冰刺'], meteor:['天火','隕擊'], shield:['壁壘','荊棘']
+  fire:['爆裂','連鎖'], bolt:['雷暴','聚雷'], ice:['霜寒','冰刺'], meteor:['天火','隕擊'], shield:['壁壘','荊棘'],
+  bloodrend:['嗜血','裂創'], warcry:['威壓','戰意']
 };
 const TALENT_EFFECTS = {
   slash:[{ lv3:'擊退目標', lv5:'必定爆擊' }, { lv3:'目標上限+2', lv5:'第3擊強化且免費' }],
@@ -261,13 +269,25 @@ const TALENT_EFFECTS = {
   bolt:[{ lv3:'目標上限+2', lv5:'雷暴追加第二次落雷' }, { lv3:'集中單體傷害+60%', lv5:'必定爆擊並麻痺' }],
   ice:[{ lv3:'緩速延長為5秒', lv5:'命中凍結1.5秒' }, { lv3:'每穿透一體傷害提升', lv5:'命中噴發冰刺碎片' }],
   meteor:[{ lv3:'落地留下燃燒區', lv5:'天火區域擴大且延長' }, { lv3:'改為單顆巨型隕石', lv5:'落地0.4秒後二次衝擊' }],
-  shield:[{ lv3:'護盾量45%且延長5秒', lv5:'破盾時回復12 MP' }, { lv3:'吸收時反彈20%攻擊', lv5:'破盾引發奧術爆破' }]
+  shield:[{ lv3:'護盾量45%且延長5秒', lv5:'破盾時回復12 MP' }, { lv3:'吸收時反彈20%攻擊', lv5:'破盾引發奧術爆破' }],
+  bloodrend:[{ lv3:'消耗HP降低', lv5:'擊殺回復消耗的HP' }, { lv3:'低血時傷害再提升', lv5:'造成流血持續傷害' }],
+  warcry:[{ lv3:'緩速範圍擴大', lv5:'附加短暫定身' }, { lv3:'狂暴時間延長', lv5:'狂暴期間吸血' }]
 };
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
-const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null] };
+const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], berserker: ['slash', null, null] };
 let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
-function classSkills(cls) { return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === cls); }
+function classSkills(cls) { // 進階職可用「基礎職技能 + 自身專屬技能」
+  const base = baseOf(cls);
+  return SKILL_IDS.filter(id => SKILL_DEFS[id].cls === base || SKILL_DEFS[id].cls === cls);
+}
+function isJobUnlocked(job) { // 基礎職永遠可選；進階職需基礎職精通達門檻
+  const def = (typeof CLASSES !== 'undefined') ? CLASSES[job] : null;
+  if (!def) return false;
+  if (!def.advanced) return true;
+  return masteryLevel(def.base) >= MASTERY_ADVANCE_LEVEL;
+}
+function selectableJobs() { return (typeof CLASSES !== 'undefined' ? Object.keys(CLASSES) : []).filter(isJobUnlocked); }
 // Lv1 基礎數值、Lv2 流派、Lv3 機制、Lv4 冷卻、Lv5 終極效果。
 function talentOf(id) {
   const s = skillState[id];
@@ -349,16 +369,42 @@ function assignSkillSlot(id, slot) {
 }
 function skillsToNums() {
   const a = [];
-  for (const id of SKILL_IDS) { const t = skillState[id]; a.push(t.unl ? 1 : 0, t.pts, t.spent, t.branch + 1); }
-  for (const cls of ['warrior', 'mage']) {
+  for (const id of LEGACY_SKILL_IDS) { const t = skillState[id]; a.push(t.unl ? 1 : 0, t.pts, t.spent, t.branch + 1); }
+  for (const cls of LEGACY_SKILL_CLASSES) {
     const list = classSkills(cls);
     for (let i = 0; i < 3; i++) a.push(loadouts[cls][i] ? list.indexOf(loadouts[cls][i]) + 1 : 0);
   }
   return a; // 10技能×4 + 2職業×3槽 = 46
 }
+function advancedSkillState() { // 進階職技能與出戰欄另存，避免改動既有 46 格存檔區塊
+  const out = { s:{}, l:{} };
+  for (const id of SKILL_IDS) if (LEGACY_SKILL_IDS.indexOf(id) < 0) { const t = skillState[id]; out.s[id] = [t.unl ? 1 : 0, t.pts, t.spent, t.branch]; }
+  for (const job of Object.keys(loadouts)) if (LEGACY_SKILL_CLASSES.indexOf(job) < 0) out.l[job] = loadouts[job].slice();
+  return out;
+}
+function applyAdvancedSkillState(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.s) for (const id of Object.keys(d.s)) {
+    const t = skillState[id], v = d.s[id];
+    if (!t || !SKILL_DEFS[id] || !Array.isArray(v)) continue;
+    t.unl = SKILL_DEFS[id].basic ? 1 : (v[0] ? 1 : 0);
+    t.pts = Math.max(0, Math.min(5, v[1] | 0));
+    t.spent = Math.max(0, Math.min(t.pts, v[2] | 0));
+    t.branch = Math.max(-1, Math.min(1, v[3] | 0));
+    if (t.spent >= 2 && t.branch < 0) t.spent = 1;
+  }
+  if (d.l) for (const job of Object.keys(d.l)) {
+    if (!loadouts[job] || !Array.isArray(d.l[job])) continue;
+    const list = classSkills(job);
+    const next = d.l[job].slice(0, 3).map(id => (id && list.indexOf(id) >= 0 && skillState[id] && skillState[id].unl) ? id : null);
+    while (next.length < 3) next.push(null);
+    if (!next.some(Boolean)) next[0] = list.find(id => SKILL_DEFS[id].basic) || null;
+    loadouts[job] = next;
+  }
+}
 function applySkillNums(a) {
-  if (!Array.isArray(a) || a.length !== SKILL_IDS.length * 4 + 6) return;
-  SKILL_IDS.forEach((id, i) => {
+  if (!Array.isArray(a) || a.length !== LEGACY_SKILL_IDS.length * 4 + LEGACY_SKILL_CLASSES.length * 3) return;
+  LEGACY_SKILL_IDS.forEach((id, i) => {
     const s = skillState[id];
     s.unl = SKILL_DEFS[id].basic ? 1 : (a[i * 4] ? 1 : 0);
     s.pts = Math.max(0, Math.min(5, a[i * 4 + 1] | 0));
@@ -366,8 +412,8 @@ function applySkillNums(a) {
     s.branch = Math.max(-1, Math.min(1, (a[i * 4 + 3] | 0) - 1));
     if (s.spent >= 2 && s.branch < 0) s.spent = 1; // 沒選分支不可能超過第1點
   });
-  let o = SKILL_IDS.length * 4;
-  for (const cls of ['warrior', 'mage']) {
+  let o = LEGACY_SKILL_IDS.length * 4;
+  for (const cls of LEGACY_SKILL_CLASSES) {
     const list = classSkills(cls);
     for (let i = 0; i < 3; i++) {
       const v = a[o++] | 0;
@@ -396,7 +442,7 @@ function saveMeta() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
       st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName,
-      cs: meta.cosmetics, ms: meta.mastery
+      cs: meta.cosmetics, ms: meta.mastery, ax: advancedSkillState()
     }));
   } catch (e) {}
 }
@@ -417,6 +463,7 @@ function loadMeta() {
     }
     // 職業精通（結構清理交給 ensureMasteryState，舊存檔缺欄位＝從 0 開始）
     if (d && d.ms && typeof d.ms === 'object') meta.mastery = d.ms;
+    if (d && d.ax) applyAdvancedSkillState(d.ax); // 進階職技能狀態
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }

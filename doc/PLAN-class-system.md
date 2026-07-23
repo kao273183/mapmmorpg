@@ -60,7 +60,14 @@
 - **J1-A 精通基礎** — ✅ 已完成（v0.29.36）：`meta.mastery[job]={xp,bosses,best}`、30 級三章曲線（`masteryXpForNext`/`masteryLevel`/`masteryProgress`）、`addMasteryXp`/`calcMasteryGain`/`recordMasteryRun`、`ensureMasteryState` 補齊舊存檔、存檔 `ms` 欄位；`endRun` 入帳（基準局不計），`runBossIds` 記錄本局 Boss 供首殺加成，未突破該職最深紀錄時 ×0.6 衰減。零局內戰力。附 `tests/mastery-j1a-smoke.js`。
   - 實跑驗證：第 8 層/40 殺/首殺草原領主/撤退 → 275 XP（升 2 級）；同深度重跑僅 93 XP；法師不受影響；存檔往返正確。
 - **J1-B 精通分頁** — ✅ 已完成（v0.29.37）：選單新增「★ 精通」分頁（`renderMasteryTab`/`renderMasteryJobPanel`，town.js）。各職業顯示等級（依職業配色）、章節、經驗進度條、累積經驗、最深樓層、首殺 Boss 數；進階轉職解鎖狀態（Lv10 達成／尚差級數）；獎勵軌三章一覽（已達章節亮起），並標明只給外觀與材料、不影響戰力。
-- **J1-C 轉職框架 + 首個進階職**：`CLASSES`/`SKILL_DEFS`/選角頁/裝備映射支援進階職；精通 Lv10 解鎖；先做**狂戰士**打通整條管線（選得到、技能可用、裝備吃得到、精通獨立累積）。
+- **J1-C 轉職框架 + 首個進階職** — ✅ 已完成（v0.29.38）：
+  - `CLASSES` 新增 `berserker`（`base:'warrior'`、`advanced:true`），並加入 `baseClassOf`/`isAdvancedClass`/`baseClassIds`/`advancedJobsFor`；systems/render 內所有 `cls === 'warrior'|'mage'` 的屬性、精靈圖、武器種類、裝備與套裝分支一律改走 `baseClassOf`。
+  - 解鎖條件 `isJobUnlocked`（進階職需 `masteryLevel(base) >= 10`）與 `selectableJobs()`；出戰選單職業卡、技能分頁職業切換、數字鍵選職皆改用 `selectableJobs()`，並依職業數自適應排版。
+  - 兩個專屬技能：`bloodrend` 血怒斬（消耗 HP 的前方錐擊，傷害隨失血提升；分支 0 命中回血、分支 1 附加流血）、`warcry` 戰吼（範圍緩速 + 自我狂暴 + 回 MP；分支 0 附加冰凍並吃 CC 遞減）。
+  - 技能樹改為 `TREE_LAYOUTS` 依技能數選版面（5＝基礎職、7＝基礎職＋2 專屬），專屬技能排在最右一層；精通分頁改為依職業數決定欄數並保留獎勵軌空間，卡片矮於 176px 時自動壓縮內容。
+  - **存檔相容**：序列化區塊凍結在 `LEGACY_SKILL_IDS`/`LEGACY_SKILL_CLASSES`（維持 46 個數字，`V2_LEN`/`V3_LEN` 不動），進階職技能與出戰欄另存於新的 `ax` 欄位。
+  - 裝備一律以基礎職標記（`createGear` 正規化 `cls`、`gearName` 與裝備美術查表經 `baseClassOf`），進階職才穿得到自己掉的裝。
+  - 附 `tests/advance-j1c-smoke.js`（解鎖門檻／技能繼承／裝備沿用／技能樹版面涵蓋／46 格存檔不變）。
 - **J1-D 補齊第一批進階職**：聖騎士／元素師／咒術師，各自技能線與天賦。
 - **J1-E 外觀獎勵**：稱號 + 角色配色系統（精通解鎖、可選用套用），接精通獎勵軌。
 - **J1-F 平衡與回歸**：確認零戰力、進階職平衡不破壞曲線、遞減合理；固定種子 smoke、桌機/手機/低特效、舊存檔相容。

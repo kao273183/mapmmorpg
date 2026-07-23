@@ -68,7 +68,7 @@ function gearArtPath(it) {
   if (it.kind === 'acc') return GEAR_ART_ROOT + GEAR_ART.acc[rarity];
   const setFile = it.setId && GEAR_SET_ART[it.setId] && GEAR_SET_ART[it.setId][it.kind];
   if (setFile) return GEAR_ART_ROOT + 'weapons and armor/' + setFile;
-  const cls = it.cls || (it.wpn === 'stave' ? 'mage' : (typeof player !== 'undefined' && player.cls) || 'warrior');
+  const cls = baseClassOf(it.cls || (it.wpn === 'stave' ? 'mage' : (typeof player !== 'undefined' && player.cls) || 'warrior')); // 進階職沿用基礎職美術
   const file = GEAR_ART[cls] && GEAR_ART[cls][it.kind] && GEAR_ART[cls][it.kind][rarity];
   return file ? GEAR_ART_ROOT + 'weapons and armor/' + file : '';
 }
@@ -118,7 +118,8 @@ function drawPotionIcon(type, x, y, s) { if (itemsheetReady) ctx.drawImage(items
 // Skill artwork: 256px codex icons plus compact 72px horizontal VFX sheets.
 const SKILL_ICON_FILES = {
   slash:11, spin:21, dash:52, quake:42, rage:62,
-  fire:25, bolt:7, ice:59, meteor:1, shield:3
+  fire:25, bolt:7, ice:59, meteor:1, shield:3,
+  bloodrend:33, warcry:45
 };
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
