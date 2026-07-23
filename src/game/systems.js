@@ -377,18 +377,42 @@ function addSkillZone(kind, x, y, rx, ry, delay, duration, interval, mult, color
 function playSkillAnim(key, x, y, options) {
   if (!SKILL_VFX_DEFS[key]) return;
   const o = options || {}, life = o.life || SKILL_VFX_DEFS[key].frames * 4;
-  skillAnims.push({ key, x, y, life, maxLife:life, scale:o.scale || 1, flip:!!o.flip, rotation:o.rotation || 0, alpha:o.alpha == null ? 1 : o.alpha, layer:o.layer || 'front' });
+  skillAnims.push({ key, x, y, life, maxLife:life, scale:o.scale || 1, flip:!!o.flip, rotation:o.rotation || 0, alpha:o.alpha == null ? 1 : o.alpha, layer:o.layer || 'front', tint:o.tint || null });
 }
-function drawSkillVfxFrame(key, x, y, frameIndex, scale, flip, rotation, alpha) {
+// 染色快取：同一組圖集 × 同一個顏色只做一次離屏重繪。
+// 用 'color' 混合模式套用色相與飽和度、保留原本的明暗，比整片塗平好看得多。
+const skillVfxTintCache = new Map();
+function tintedSkillVfx(key, col) {
+  const cacheKey = key + '|' + col;
+  const hit = skillVfxTintCache.get(cacheKey);
+  if (hit) return hit;
+  const img = skillVfxImages[key];
+  if (!img || !img.complete || !img.naturalWidth) return null;
+  const cv = document.createElement('canvas');
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  const c = cv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.drawImage(img, 0, 0);
+  c.globalCompositeOperation = 'color';
+  c.fillStyle = col; c.fillRect(0, 0, cv.width, cv.height);
+  c.globalCompositeOperation = 'destination-in'; // 把透明區域還原回來
+  c.drawImage(img, 0, 0);
+  skillVfxTintCache.set(cacheKey, cv);
+  return cv;
+}
+function drawSkillVfxFrame(key, x, y, frameIndex, scale, flip, rotation, alpha, tint) {
   const def = SKILL_VFX_DEFS[key], img = skillVfxImages[key];
   if (!def || !img || !img.complete || !img.naturalWidth) return false;
+  const src = tint ? tintedSkillVfx(key, tint) : img;
+  if (!src) return false;
+  const fs = def.frame || 72;                       // 來源每格尺寸（新素材不一定是 72）
   const fi = Math.max(0, Math.min(def.frames - 1, frameIndex % def.frames));
-  const size = 72 * (scale || 1);
+  const size = 72 * (scale || 1);                   // 輸出一律 72，呼叫端的 scale 語意不變
   ctx.save(); ctx.translate(Math.round(x), Math.round(y));
   if (rotation) ctx.rotate(rotation);
   if (flip) ctx.scale(-1, 1);
   ctx.globalAlpha *= alpha == null ? 1 : alpha;
-  ctx.drawImage(img, fi * 72, 0, 72, 72, -size / 2, -size / 2, size, size);
+  ctx.drawImage(src, fi * fs, 0, fs, fs, -size / 2, -size / 2, size, size);
   ctx.restore();
   return true;
 }
@@ -397,7 +421,7 @@ function drawSkillAnimations(layer) {
     if (a.layer !== layer) continue;
     const def = SKILL_VFX_DEFS[a.key], elapsed = a.maxLife - a.life;
     const fi = Math.min(def.frames - 1, Math.floor(elapsed / a.maxLife * def.frames));
-    drawSkillVfxFrame(a.key, a.x, a.y, fi, a.scale, a.flip, a.rotation, a.alpha);
+    drawSkillVfxFrame(a.key, a.x, a.y, fi, a.scale, a.flip, a.rotation, a.alpha, a.tint);
   }
 }
 function playZoneAnim(z) {
@@ -663,7 +687,7 @@ const SKILL_FX = {
     if (guard) p.hp = Math.min(p.mhp, p.hp + Math.round(p.mhp * 0.12));
     if (t.ultimate && t.branch === 0) p.ccImmuneT = p.shieldT; // 庇護：免疫緩速與凍結
     p.cast = 12;
-    playSkillAnim('rune', p.x, p.y - p.h / 2, { scale:1.35, layer:'back', alpha:0.9 });
+    playSkillAnim('wardShield', p.x, p.y - p.h / 2, { scale:1.5, alpha:0.9, tint:'#ffd76a' });
     burst(p.x, p.y - p.h / 2, '#ffd76a', 20);
     playSfx('uiConfirm', 0.5, 0.9); beep(520, 0.18, 'sine', 0.045);
     num(p.x, p.y - p.h - 22, '聖盾 ' + p.shieldHp, '#ffe9a8');
@@ -744,7 +768,8 @@ const SKILL_FX = {
     const range = 200 * t.area * (t.mechanic && t.branch === 0 ? 1.3 : 1);
     const heavy = t.mechanic && t.branch === 1;
     p.cast = 12;
-    playSkillAnim('smoke', p.x, p.y - p.h / 2, { scale:1.8 * t.area, layer:'back', alpha:0.85 });
+    playSkillAnim('splash', p.x, p.y - 14, { scale:2.2 * t.area, layer:'back', alpha:0.9, tint:'#a35ad0' });
+    playSkillAnim('smoke', p.x, p.y - p.h / 2, { scale:1.8 * t.area, layer:'back', alpha:0.5 });
     playSfx('spellIce', 0.5); beep(180, 0.26, 'sawtooth', 0.045);
     let hit = 0;
     for (const m of mons.slice()) {

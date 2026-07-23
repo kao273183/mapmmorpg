@@ -81,7 +81,48 @@ const rangedKinds = rangedBasics.map(b => {
 assert.strictEqual(new Set(rangedKinds).size, rangedKinds.length,
   '遠程基本技能不可共用同一種投射物外觀：' + rangedBasics.map((b, i) => b.id + '=' + rangedKinds[i]).join(', '));
 
-// ── 4. 每個技能都要有可見的表現（動畫或粒子），不能是無聲無息的一下 ──────
+// ── 4. VFX 圖集：宣告的尺寸必須對得上實際檔案，且要有授權登記 ──────────────
+const bootSrc = read('src', 'game', 'bootstrap.js');
+const vfxBlock = bootSrc.match(/const SKILL_VFX_DEFS = \{[\s\S]*?\n\};/)[0];
+const vfxDefs = [];
+for (const m of vfxBlock.matchAll(/(\w+):\{ src:'([^']+)', frames:(\d+)(?:, frame:(\d+))?/g)) {
+  vfxDefs.push({ key: m[1], src: m[2], frames: +m[3], frame: m[4] ? +m[4] : 72 });
+}
+assert.ok(vfxDefs.length >= 13, 'SKILL_VFX_DEFS 應解析得到全部圖集，實際 ' + vfxDefs.length);
+const pngSize = file => { // 從 PNG IHDR 直接讀寬高，不需要外部套件
+  const buf = fs.readFileSync(file);
+  assert.strictEqual(buf.toString('ascii', 1, 4), 'PNG', file + ' 不是 PNG');
+  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+};
+for (const d of vfxDefs) {
+  const file = path.join(root, d.src);
+  assert.ok(fs.existsSync(file), d.key + ' 的圖集檔不存在：' + d.src);
+  const { w, h } = pngSize(file);
+  assert.strictEqual(h, d.frame, d.key + ' 宣告每格 ' + d.frame + 'px，實際圖高 ' + h + 'px');
+  assert.strictEqual(w, d.frame * d.frames,
+    d.key + ' 宣告 ' + d.frames + ' 格 × ' + d.frame + 'px，實際圖寬 ' + w + 'px（會切到錯的格）');
+}
+// 非 72px 的來源一定要宣告 frame，否則會被當成 72 切爛
+for (const d of vfxDefs) {
+  const { h } = pngSize(path.join(root, d.src));
+  if (h !== 72) assert.ok(/frame:/.test(vfxBlock.match(new RegExp(d.key + ':\\{[^}]*\\}'))[0]),
+    d.key + ' 的來源不是 72px，必須在 SKILL_VFX_DEFS 宣告 frame');
+}
+// 染色路徑要存在且有快取
+const sysForTint = systemsSrc;
+assert.ok(/function tintedSkillVfx\(key, col\)/.test(sysForTint), '應有染色函式');
+assert.ok(/skillVfxTintCache/.test(sysForTint), '染色結果必須快取，否則每幀重繪離屏畫布');
+assert.ok(/globalCompositeOperation = 'color'/.test(sysForTint), '染色應用 color 混合模式以保留明暗');
+// 授權登記：runtime 裡的圖集都要能在 LICENSE.md 找到，或屬於待補清單
+const skillLicense = read('assets', 'runtime', 'skills', 'LICENSE.md');
+for (const d of vfxDefs) {
+  const base = path.basename(d.src);
+  if (/^\d+(_\d+)?\.png$/.test(base)) continue; // 舊素材：已在 LICENSE.md 標為來源不明
+  assert.ok(skillLicense.includes(base), base + ' 未登記在 assets/runtime/skills/LICENSE.md');
+}
+assert.ok(/來源不明|待補/.test(skillLicense), 'LICENSE.md 應保留既有素材來源不明的警示');
+
+// ── 5. 每個技能都要有可見的表現（動畫或粒子），不能是無聲無息的一下 ──────
 for (const [id, body] of Object.entries(bodies)) {
   const hasVfx = /playSkillAnim\(|burst\(|addSkillZone\(|projs\.push\(|meteors\.push\(|bolts\.push\(|p\.slashT|p\.spinT/.test(body);
   assert.ok(hasVfx, '技能「' + id + '」沒有任何視覺表現');
@@ -89,4 +130,5 @@ for (const [id, body] of Object.entries(bodies)) {
 }
 
 console.log('✓ 技能特效 smoke 測試通過（' + kinds.size + ' 種投射物外觀・' +
-  Object.keys(arcs).length + ' 種刀光・' + basics.length + ' 個基本技能各自可辨識）');
+  Object.keys(arcs).length + ' 種刀光・' + basics.length + ' 個基本技能各自可辨識・' +
+  vfxDefs.length + ' 組圖集尺寸與授權已核對）');

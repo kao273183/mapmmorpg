@@ -143,7 +143,12 @@ const SKILL_VFX_DEFS = {
   iceSpikes:{ src:'assets/runtime/skills/vfx/7.png', frames:8 },
   roots:{ src:'assets/runtime/skills/vfx/8.png', frames:8 },
   smoke:{ src:'assets/runtime/skills/vfx/9.png', frames:8 },
-  teleport:{ src:'assets/runtime/skills/vfx/10.png', frames:6 }
+  teleport:{ src:'assets/runtime/skills/vfx/10.png', frames:6 },
+  // Pixel Art Spells (DevWizard, CC0)：來源每格尺寸不同，以 frame 標明；繪製時仍統一輸出 72px
+  arcaneBolt:{ src:'assets/runtime/skills/vfx/arcaneBolt.png', frames:6, frame:16 },
+  darkBolt:{ src:'assets/runtime/skills/vfx/darkBolt.png', frames:6, frame:16 },
+  wardShield:{ src:'assets/runtime/skills/vfx/wardShield.png', frames:6, frame:48 },
+  splash:{ src:'assets/runtime/skills/vfx/splash.png', frames:6, frame:32 }
 };
 const skillVfxImages = {};
 for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
