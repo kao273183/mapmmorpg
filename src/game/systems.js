@@ -528,7 +528,7 @@ const SKILL_FX = {
   },
   bloodrend(t) { // 狂戰士：消耗自身HP換取高傷，血越低傷害越高
     const p = player;
-    const cost = Math.max(1, Math.round(p.mhp * (t.branch === 0 ? (t.ultimate ? 0.03 : 0.05) : 0.06)));
+    const cost = Math.max(1, Math.round(p.mhp * (t.branch === 0 ? (t.ultimate ? 0.06 : 0.08) : 0.10))); // 以血換傷：HP 才是真正的代價
     if (p.hp <= cost + 1) { num(p.x, p.y - p.h - 10, 'HP不足', '#ff8a8a'); return false; }
     p.hp -= cost;
     num(p.x, p.y - p.h - 26, '-' + cost, '#ff5a5a', { kind:'hurt', size:12 });
@@ -543,7 +543,7 @@ const SKILL_FX = {
       const dx = (m.x - p.x) * p.face;
       if (dx > -16 && dx < range && Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < 74) {
         hit++;
-        const r = skillDmg(2.4 * t.dmg * lowMul);
+        const r = skillDmg(1.9 * t.dmg * lowMul);
         hitMon(m, r.d, r.crit);
         if (t.ultimate && t.branch === 1) { m.burnT = Math.max(m.burnT || 0, 150); m.burnDmg = Math.max(m.burnDmg || 0, Math.round(r.d * 0.2)); } // 裂創：流血
       }
@@ -636,14 +636,14 @@ const SKILL_FX = {
   chainstorm(t) { // 元素師：雷球在敵人之間連鎖跳躍
     const p = player;
     const focus = t.mechanic && t.branch === 1;
-    const jumps = focus ? 1 : (4 + (t.mechanic && t.branch === 0 ? 2 : 0));
-    const decay = (t.ultimate && t.branch === 0) ? 1 : 0.82;
+    const jumps = focus ? 1 : (5 + (t.mechanic && t.branch === 0 ? 2 : 0));
+    const decay = (t.ultimate && t.branch === 0) ? 1 : 0.85;
     let cur = null, bd = 1e9;
     for (const m of mons) { const d = Math.hypot(m.x - p.x, (m.y - m.h / 2) - (p.y - p.h / 2)); if (d < 420 && d < bd) { bd = d; cur = m; } }
     p.cast = 12;
     playSfx('spellLightning', 0.75); beep(760, 0.1, 'square', 0.05);
     if (!cur) { num(p.x, p.y - p.h - 14, '沒有目標', '#9aa2c8'); burst(p.x, p.y - p.h / 2, '#e9d45a', 10); return; }
-    let mul = focus ? 3.2 : 1.7;
+    let mul = focus ? 3.6 : 2.8;
     const seen = [];
     for (let j = 0; j <= jumps && cur; j++) {
       seen.push(cur);

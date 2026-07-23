@@ -10,13 +10,15 @@ function fixedDungeonBenchmarkGear(classId, tier) {
     chapter3:{ rarity:3, label:'第三章史詩全套', weapon:38, armorHp:110, armorDef:8, helmetHp:70, helmetDef:5, speed:0.8, atkMul:0.12, jump:1 }
   };
   const d = defs[tier] || defs.starter;
-  const weaponName = classId === 'mage' ? '固定法杖' : '固定長劍';
+  // 進階職沿用基礎職的裝備線：裝備一律標記基礎職，否則穿不上（與 createGear 同一規則）。
+  const base = (typeof baseClassOf === 'function') ? baseClassOf(classId) : classId;
+  const weaponName = base === 'mage' ? '固定法杖' : '固定長劍';
   return [
-    { id:'benchmark-' + classId + '-' + tier + '-weapon', kind:'weapon', r:d.rarity, cls:classId, name:weaponName, atk:d.weapon, wpn:classId === 'mage' ? 'stave' : 'sword', affixes:[], benchmark:true },
-    { id:'benchmark-' + classId + '-' + tier + '-armor', kind:'armor', r:d.rarity, cls:classId, name:'固定護甲', hp:d.armorHp, def:d.armorDef, affixes:[], benchmark:true },
-    { id:'benchmark-' + classId + '-' + tier + '-helmet', kind:'helmet', r:d.rarity, cls:classId, name:'固定頭盔', hp:d.helmetHp, def:d.helmetDef, affixes:[], benchmark:true },
-    { id:'benchmark-' + classId + '-' + tier + '-boots', kind:'boots', r:d.rarity, cls:classId, name:'固定戰靴', spd:d.speed, jmp:d.jump || 0, affixes:[], benchmark:true },
-    Object.assign({ id:'benchmark-' + classId + '-' + tier + '-acc', kind:'acc', r:d.rarity, cls:classId, name:'固定護符', affixes:[], benchmark:true }, d.atkMul ? { atkMul:d.atkMul } : { crit:d.crit })
+    { id:'benchmark-' + classId + '-' + tier + '-weapon', kind:'weapon', r:d.rarity, cls:base, name:weaponName, atk:d.weapon, wpn:base === 'mage' ? 'stave' : 'sword', affixes:[], benchmark:true },
+    { id:'benchmark-' + classId + '-' + tier + '-armor', kind:'armor', r:d.rarity, cls:base, name:'固定護甲', hp:d.armorHp, def:d.armorDef, affixes:[], benchmark:true },
+    { id:'benchmark-' + classId + '-' + tier + '-helmet', kind:'helmet', r:d.rarity, cls:base, name:'固定頭盔', hp:d.helmetHp, def:d.helmetDef, affixes:[], benchmark:true },
+    { id:'benchmark-' + classId + '-' + tier + '-boots', kind:'boots', r:d.rarity, cls:base, name:'固定戰靴', spd:d.speed, jmp:d.jump || 0, affixes:[], benchmark:true },
+    Object.assign({ id:'benchmark-' + classId + '-' + tier + '-acc', kind:'acc', r:d.rarity, cls:base, name:'固定護符', affixes:[], benchmark:true }, d.atkMul ? { atkMul:d.atkMul } : { crit:d.crit })
   ];
 }
 
@@ -26,8 +28,21 @@ const DUNGEON_BENCHMARK_PROFILES = [
   { id:'warrior-chapter2', classId:'warrior', tier:'chapter2', label:'劍士 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'mage-chapter2', classId:'mage', tier:'chapter2', label:'法師 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'warrior-chapter3', classId:'warrior', tier:'chapter3', label:'劍士 · 第三章', gearLabel:'史詩全套', seed:123011 },
-  { id:'mage-chapter3', classId:'mage', tier:'chapter3', label:'法師 · 第三章', gearLabel:'史詩全套', seed:123011 }
-].map(profile => Object.assign(profile, { gear:fixedDungeonBenchmarkGear(profile.classId, profile.tier) }));
+  { id:'mage-chapter3', classId:'mage', tier:'chapter3', label:'法師 · 第三章', gearLabel:'史詩全套', seed:123011 },
+  // 進階職以第二章入場（對應精通 Lv10 解鎖的時間點），與同系基礎職同種子可直接對照
+  { id:'berserker-chapter2', classId:'berserker', tier:'chapter2', label:'狂戰士 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'paladin-chapter2', classId:'paladin', tier:'chapter2', label:'聖騎士 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'elementalist-chapter2', classId:'elementalist', tier:'chapter2', label:'元素師 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'warlock-chapter2', classId:'warlock', tier:'chapter2', label:'咒術師 · 第二章', gearLabel:'稀有全套', seed:72007 }
+// 裝備改用惰性 getter：本檔比 systems.js 早載入，建表當下還沒有 baseClassOf，
+// 但 profile.gear 對所有呼叫端維持原本的用法。
+].map(profile => Object.defineProperty(profile, 'gear', {
+  enumerable: true, configurable: true,
+  get() {
+    if (!this._gear) this._gear = fixedDungeonBenchmarkGear(this.classId, this.tier);
+    return this._gear;
+  }
+}));
 
 const DUNGEON_BOSS_BENCHMARK_TARGETS = [
   { bossId:'meadow_lord', bossName:'草原領主', floor:5, tier:'starter', seed:31001, clearSec:[60,110], damage:[0,50] },
@@ -311,8 +326,11 @@ function dungeonBalanceReport(mode) {
   const reportMode = mode === 'benchmark' ? 'benchmark' : 'natural';
   const runs = dungeonBalanceRuns(reportMode);
   const summary = dungeonBalanceSummary(reportMode);
+  // 涵蓋所有出現過的職業（含進階職），基礎職即使沒跑過也保留欄位供對照。
   const classStats = {};
-  for (const classId of ['warrior','mage']) {
+  const classIds = ['warrior', 'mage'];
+  for (const run of runs) if (run.classId && classIds.indexOf(run.classId) < 0) classIds.push(run.classId);
+  for (const classId of classIds) {
     const list = runs.filter(run => run.classId === classId);
     const sum = (fn) => list.reduce((n, run) => n + (Number(fn(run)) || 0), 0);
     classStats[classId] = {

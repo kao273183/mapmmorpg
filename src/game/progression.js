@@ -247,14 +247,14 @@ const SKILL_DEFS = {
   meteor: { cls:'mage', name:'隕石術', mp:25, cd:300, desc:'呼喚3顆隕石,2.2倍範圍傷害' },
   shield: { cls:'mage', name:'魔法盾', mp:16, cd:480, desc:'護盾吸收30%最大HP的傷害' },
   // 進階職：狂戰士（沿用劍士技能，另有專屬技能）
-  bloodrend: { cls:'berserker', name:'血怒斬', mp:6,  cd:150, desc:'消耗自身HP,對前方造成2.4倍傷害;血越低傷害越高' },
+  bloodrend: { cls:'berserker', name:'血怒斬', mp:11, cd:150, desc:'消耗自身HP,對前方造成1.9倍傷害;血越低傷害越高' },
   warcry:    { cls:'berserker', name:'戰吼',   mp:14, cd:420, desc:'威嚇周圍敵人使其緩速,自身狂暴並回復MP' },
   // 進階職：聖騎士（劍士系，防禦持續）
   bulwark:   { cls:'paladin', name:'聖盾壁壘', mp:16, cd:420, desc:'展開聖盾吸收傷害,期間受到的傷害降低' },
   smite:     { cls:'paladin', name:'制裁光錘', mp:12, cd:150, desc:'前方神聖打擊,每命中一名敵人回復自身HP' },
   // 進階職：元素師（法師系，多元素範圍）
   elemburst: { cls:'elementalist', name:'元素爆發', mp:18, cd:200, desc:'以自身為中心引爆火冰雷三環,附加隨機元素效果' },
-  chainstorm:{ cls:'elementalist', name:'連鎖風暴', mp:22, cd:260, desc:'雷球在敵人之間連鎖跳躍,每次跳躍略微衰減' },
+  chainstorm:{ cls:'elementalist', name:'連鎖風暴', mp:18, cd:260, desc:'雷球在敵人之間連鎖跳躍,每次跳躍略微衰減' },
   // 進階職：咒術師（法師系，詛咒消耗）
   plague:    { cls:'warlock', name:'疫咒', mp:14, cd:180, desc:'散布疫病使範圍敵人持續受傷並陷入虛弱' },
   soulleech: { cls:'warlock', name:'汲魂', mp:16, cd:240, desc:'抽取前方直線敵人的生命,回復自身HP與MP' }

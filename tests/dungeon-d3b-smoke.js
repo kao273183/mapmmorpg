@@ -33,7 +33,9 @@ globalThis.d3bApi = {
 };`, context);
 
 const api = context.d3bApi;
-assert.strictEqual(api.profiles.length, 6);
+const PROFILE_COUNT = api.profiles.length; // 基準檔會隨職業增加，不寫死數量
+assert.ok(PROFILE_COUNT >= 6, '至少要有兩個基礎職 × 三階');
+assert.strictEqual(new Set(Array.from(api.profiles, p => p.id)).size, PROFILE_COUNT, '基準檔 id 不可重複');
 for (const classId of ['warrior','mage']) {
   const profiles = api.profiles.filter(profile => profile.classId === classId);
   assert.strictEqual(profiles.length, 3);
@@ -77,23 +79,28 @@ for (const profile of api.profiles) {
 const natural = api.report('natural');
 const benchmark = api.report('benchmark');
 assert.strictEqual(natural.summary.runs, 2);
-assert.strictEqual(benchmark.summary.runs, 6);
+assert.strictEqual(benchmark.summary.runs, PROFILE_COUNT);
 assert.strictEqual(benchmark.classStats.warrior.runs, 3);
 assert.strictEqual(benchmark.classStats.mage.runs, 3);
+for (const profile of api.profiles) {
+  assert.ok(benchmark.classStats[profile.classId], profile.classId + ' 應出現在基準統計裡');
+}
 assert.strictEqual(benchmark.classStats.warrior.averageFloor, 10);
 assert.strictEqual(benchmark.classStats.mage.averageFloor, 10);
-assert.strictEqual(benchmark.roomStats.safe.completions, 6);
-assert.strictEqual(benchmark.roomStats.hazard.choices, 6);
+assert.strictEqual(benchmark.roomStats.safe.completions, PROFILE_COUNT);
+assert.strictEqual(benchmark.roomStats.hazard.choices, PROFILE_COUNT);
 assert.strictEqual(benchmark.roomStats.hazard.averageClearSec, 240);
 assert.strictEqual(benchmark.damageShares[0].source, '熔岩噴口');
 assert.ok(benchmark.damageShares[0].share > 0.5);
-assert.strictEqual(benchmark.trialResults.success, 4);
-assert.strictEqual(benchmark.trialResults.failed, 2);
+// addRun 以 floor>=7 判定成功：只有 starter 階（floor 5）會失敗
+const starterCount = api.profiles.filter(p => p.tier === 'starter').length;
+assert.strictEqual(benchmark.trialResults.failed, starterCount);
+assert.strictEqual(benchmark.trialResults.success, PROFILE_COUNT - starterCount);
 
 const exported = JSON.parse(api.exportRecords());
 assert.strictEqual(exported.version, 3);
 assert.strictEqual(exported.natural.summary.runs, 2);
-assert.strictEqual(exported.benchmark.summary.runs, 6);
+assert.strictEqual(exported.benchmark.summary.runs, PROFILE_COUNT);
 
 const capProfile = api.profile('warrior-starter');
 for (let i = 0; i < 65; i++) {
@@ -109,4 +116,4 @@ assert.ok(gameSource.includes('startDungeonBenchmarkRun'));
 assert.ok(gameSource.includes('restoreDungeonBenchmarkProgress'));
 assert.ok(gameSource.includes("settingsBalanceMode = 'benchmark'"));
 
-console.log('dungeon D3-B benchmark smoke test passed (6 profiles, split reports, class/room/damage aggregates)');
+console.log('dungeon D3-B benchmark smoke test passed (' + PROFILE_COUNT + ' profiles, split reports, class/room/damage aggregates)');
