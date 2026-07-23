@@ -29,6 +29,13 @@
 - 進階職**沿用基礎職的裝備線**（狂戰士/聖騎士＝劍士裝；元素師/咒術師＝法師裝），避免裝備數量爆炸；`gearUsableByClass` 把進階職對應回其 base。
 - 每個進階職有**專屬 5 技能 + 天賦分支**（沿用現有 `SKILL_DEFS`/天賦系統，`cls` 設為進階職 id）。
 
+### 素材現況（實作時免再找素材）
+
+- **技能圖示：共 70 個，目前只用 10 個 → 尚餘約 60 個可用**（`assets/runtime/skills/icons/{normal,gray}/`，256px；對應表 `SKILL_ICON_FILES`，[bootstrap.js:118](../src/game/bootstrap.js)）。新進階職的技能**直接從中挑號**即可。
+- **技能特效 VFX：13 組逐格圖集**（`assets/runtime/skills/vfx/`，`SKILL_VFX_DEFS`）：groundBurst / rune / beam / slashBeam / fireball / fireballDiag / explosion / impact / groundImpact / iceSpikes / roots / smoke / teleport。`drawSkillVfxFrame()` 支援縮放、角度、翻轉、透明度，**可組合複用**做出新技能表現。
+- **法術音效**已有 fire / lightning / ice / meteor（`assets/runtime/audio/sfx/`）。
+- 只有需要**全新型態特效**（召喚、毒霧、鎖鏈等）時才需再找 CC0 特效包。
+
 ## 3. 精通機制（零戰力）
 
 - **狀態**：`meta.mastery[job] = { xp, claimed:[] }`（job 含基礎職與進階職）。

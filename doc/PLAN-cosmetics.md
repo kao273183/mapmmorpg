@@ -19,7 +19,13 @@
 | **稱號 title** | 顯示在名牌／結算的頭銜文字 | 城鎮名牌、死亡/撤退結算 |
 | **角色配色 color** | 重新著色玩家像素圖的配色方案 | `drawSprite(..., recolor)`（[bootstrap.js:322](../src/game/bootstrap.js) 已有 recolor 參數！） |
 | **光環 aura** | 角色周身光環（已存在） | `drawEquippedAura`（bootstrap.js:334） |
-| **技能外觀 skin** | 技能特效的配色/變體 | 技能特效繪製處（render.js 技能特效） |
+| **技能外觀 skin** | 技能特效的配色/變體 | `drawSkillVfxFrame()` + `SKILL_VFX_DEFS`（[bootstrap.js:130](../src/game/bootstrap.js)） |
+
+### 素材現況（技能外觀＝零新素材成本）
+
+- 已有 **13 組技能特效逐格圖集**（`assets/runtime/skills/vfx/`）：groundBurst / rune / beam / slashBeam / fireball / fireballDiag / explosion / impact / groundImpact / iceSpikes / roots / smoke / teleport。
+- `drawSkillVfxFrame()` 已支援**縮放、角度、翻轉、透明度**；技能外觀變體只要**換色（tint）或換用不同圖集**即可，**不需要新素材**。
+- 技能圖示另有 70 個（目前用 10 個），未用的可作為外觀/新技能素材。
 
 ## 2. 統一狀態與 API
 
