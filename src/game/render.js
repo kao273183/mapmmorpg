@@ -501,17 +501,25 @@ function drawGlyph(kind, gx, gy, col) {
     ctx.fillRect(gx - 2, gy - 9, 4, 4);
   }
 }
+function withAlpha(hex, a) { // #rrggbb → rgba，供稀有度底色暈染
+  const h = (hex || '#ffffff').replace('#', '');
+  const s = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(s, 16) || 0;
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
 function slotBox(sx, sy, slot, label) {
   const it = player.eq[slot];
-  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  const col = it ? gearColor(it) : '#3a3450';
+  ctx.fillStyle = it && it.r >= 2 ? withAlpha(col, 0.10) : 'rgba(255,255,255,0.05)';
   ctx.fillRect(sx, sy, 44, 44);
-  ctx.strokeStyle = it ? '#d8b365' : '#3a3450';
-  ctx.lineWidth = 2;
+  if (it && (it.unique || it.r >= 3)) { ctx.shadowColor = col; ctx.shadowBlur = 8; } // 傳奇/高稀有發光
+  ctx.strokeStyle = col; ctx.lineWidth = 2;
   ctx.strokeRect(sx, sy, 44, 44);
+  ctx.shadowBlur = 0;
   if (it) drawItemIcon(it, sx + 6, sy + 6, 32);
   ctx.textAlign = 'center';
   ctx.font = '10px "Courier New",monospace';
-  ctx.fillStyle = it ? gearColor(it) : '#667';
+  ctx.fillStyle = it ? col : '#667';
   ctx.fillText(it ? gearLabel(it) : label, sx + 22, sy + 56);
   ctx.textAlign = 'left';
 }
@@ -561,8 +569,10 @@ function drawItemWin() {
     }
   }
   const bx = x + 232, by = y + 36, bw = w - 244;
-  ctx.fillStyle = '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
-  ctx.fillText('背包(點擊換裝/✕分解+2魂)', bx, by + 12);
+  ctx.fillStyle = p.items.length >= 10 ? '#ffb45e' : '#d8b365'; ctx.font = 'bold 13px "Courier New",monospace';
+  ctx.fillText('背包 ' + p.items.length + '/12', bx, by + 12);
+  ctx.fillStyle = '#6b7290'; ctx.font = '9px "Courier New",monospace';
+  ctx.fillText('點擊換裝 · ✕分解+2魂', bx + 90, by + 12);
   if (p.items.length === 0) {
     ctx.fillStyle = '#667'; ctx.font = '12px "Courier New",monospace';
     ctx.fillText('(空的,打怪撿裝備吧)', bx + 4, by + 42);
@@ -574,8 +584,13 @@ function drawItemWin() {
     const ry = by + 36 + i * 26;
     const eqd = p.eq[it.kind] === it;
     const pend = pendingDel && pendingDel.it === it;
-    ctx.fillStyle = pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : 'rgba(255,255,255,0.04)';
+    const rcol = gearColor(it);
+    let rbg = 'rgba(255,255,255,0.04)';
+    if (it.unique) rbg = withAlpha(rcol, 0.16);
+    else if (it.r >= 2) rbg = withAlpha(rcol, 0.10);
+    ctx.fillStyle = pend ? 'rgba(226,59,59,0.25)' : eqd ? 'rgba(216,179,101,0.16)' : rbg;
     ctx.fillRect(bx - 4, ry - 13, bw, 24);
+    ctx.fillStyle = rcol; ctx.fillRect(bx - 4, ry - 13, 3, 24); // 稀有度／傳奇色條
     if (!eqd) {
       itemBtns.push({ x: bx - 4, y: ry - 13, w: bw - 44, h: 24, it: it });
       delBtns.push({ x: bx + bw - 46, y: ry - 13, w: 42, h: 24, it: it });
