@@ -31,7 +31,9 @@ const context = vm.createContext({
     createElement:() => ({ style:{}, value:'', addEventListener() {}, focus() {}, blur() {} })
   },
   window:{ devicePixelRatio:1, addEventListener() {}, prompt:() => null },
-  requestAnimationFrame() {}, setTimeout() {}, clearTimeout() {}
+  requestAnimationFrame() {}, setTimeout() {}, clearTimeout() {},
+  // 難度旋鈕（由 dungeon/data.js 提供，本測試不載入）：回預設值，不影響套裝掉落期望
+  dungeonDropMul:() => 1, dungeonMaxRarity:() => 4, uniqueIdsFor:() => []
 });
 
 vm.runInContext(source, context, { filename:'game.js' });

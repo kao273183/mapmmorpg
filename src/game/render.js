@@ -141,8 +141,9 @@ function render() {
     if (blink) continue;
     const it = gd.it, col = gearColor(it);
     const tier = it.unique ? 5 : it.r; // 傳奇當作比傳說更高一階的發光
+    const lowFx = typeof combatSettings !== 'undefined' && !combatSettings.flashes; // 低特效：省略漸層/星火
     const pulse = 0.5 + 0.5 * Math.sin(frame * 0.12);
-    if (tier >= 2) {
+    if (tier >= 2 && !lowFx) {
       // 地面徑向光暈
       const gr = 12 + tier * 5 + pulse * 4;
       const halo = ctx.createRadialGradient(gd.x, gd.y - 2, 2, gd.x, gd.y - 2, gr);
@@ -159,7 +160,7 @@ function render() {
     const bob = Math.sin(frame * 0.15) * 2;
     const iy = gd.y - 26 + bob, sz = 20;
     drawItemIcon(it, gd.x - sz / 2, iy, sz);
-    if (tier >= 4) { // 傳說／傳奇：星火閃爍
+    if (tier >= 4 && !lowFx) { // 傳說／傳奇：星火閃爍
       ctx.fillStyle = col;
       const sp = [[-10, -12], [12, -6], [4, -22], [-9, 2]];
       for (let i = 0; i < sp.length; i++) { const tw = Math.sin(frame * 0.2 + i * 1.7); if (tw > 0.3) { ctx.globalAlpha = tw; ctx.fillRect(gd.x + sp[i][0], iy + sp[i][1], 2, 2); } }

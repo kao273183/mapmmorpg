@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.33';
+const GAME_VERSION = '0.29.34';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.34', date:'2026-07-23', title:'傳奇裝備 I1-E 平衡與回歸',
+    items:['凍結加入遞減冷卻：凍結後短暫免疫，避免傳奇武器把一般怪／菁英永久鎖控（Boss 本就對硬 CC 免疫）。','低特效模式下裝備掉落改為簡化底光，省略漸層光柱與星火。','新增 I1 傳奇裝備 smoke 測試；修正並同步 28 項 smoke 測試全數通過。']
+  },
   {
     version:'0.29.33', date:'2026-07-23', title:'修正 PWA 卡舊版無法更新',
     items:['修正 Service Worker：index.html／導覽改為「網路優先」，線上一律取得最新版本（原本一律回快取導致卡在舊版、偵測不到更新）。','版本化資產維持快取優先，離線仍可遊玩；新版部署後重開 App 即會更新。','此修正部署後，舊 App 重開一次會自動換上新 SW，之後即可正常更新。']

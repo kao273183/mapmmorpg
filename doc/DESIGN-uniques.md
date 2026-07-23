@@ -95,7 +95,7 @@
 - **I1-B：元素狀態層**（Part 2）— ✅ 已完成（v0.29.26 + v0.29.27）：`applyUniqueWeaponProcs` 接 freeze/slow/lifesteal/chain；新增 burn DoT（`m.burnT`/`m.burnDmg`，迴圈外結算走 hitMon 讓擊殺正常計經驗）；armor/acc 被動經 `equippedUniquePower` 接進 dmgPlayer（thorns 反傷、revive 免死）。
 - **I1-C：Unique 資料與掉落（15 件）**（Part 3）— ✅ 已完成：`UNIQUE_DEFS` 15 件涵蓋武器/防具/頭盔/鞋子/飾品五部位、五大群系皆有主題掉落；頭盔以被動屬性（爆擊/移速，`uniquePassiveV` 掛進 critRate/moveSpd）。genGear 職業過濾 + 取代套裝 + 只困難掉。⏳ 待做：更多群系深化（各群系各職業武器補齊）。
 - **I1-D：顯示（部分）**（Part 4）— ✅ 基本完成（v0.29.26）：專屬金橙色（gearColor）、背包列 ◈ 標記、紙娃娃底部能力全文。⏳ 待做：接 H1 圖鑑、掉落發光、詳細 tooltip。
-- **I1-E：平衡與回歸** — ⏳ 待做：proc 觸發率／冷卻上限調校、Unique 不破壞曲線；固定種子 smoke、桌機／手機／低特效、舊存檔相容全回歸。
+- **I1-E：平衡與回歸** — ✅ 已完成（v0.29.34）：凍結加 CC 遞減（`m.ccT`，凍結後免疫窗，上限約 40% 避免鎖控；Boss 本就 CC 免疫）；低特效省略掉落漸層／星火；新增 I1 smoke 測試並修好全部 28 項 node smoke（含 bossStrengthMul→hp/dmg 改名、dropMul/maxRarity 依賴、版號一致性）。
 
 ### 已驗證（v0.29.26）
 困難 400 抽出 43 Unique、職業過濾正確、一般模式 0 Unique；冰霜劍凍結 25%、嗜血吸血 12%、寒霜緩速 35%、雷霆連鎖觸發且命中鄰近、巢狀 hitMon 無錯；顯示金色 + ◈ + 紙娃娃全文。

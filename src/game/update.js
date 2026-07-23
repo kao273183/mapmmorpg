@@ -224,6 +224,7 @@ function update() {
     if (m.hitT > 0) m.hitT--;
     if (m.slowT > 0) m.slowT--;
     if (m.freezeT > 0) m.freezeT--;
+    if (m.ccT > 0) m.ccT--; // CC 遞減冷卻（凍結後免疫窗）
     if (m.burnT > 0) { m.burnT--; m.burnAcc = (m.burnAcc || 0) + 1; if (m.burnAcc >= 30) { m.burnAcc = 0; burnHits.push(m); } }
     if (m.vulnT > 0) m.vulnT--; else m.vulnMul = 1;
     const slowF = m.freezeT > 0 ? 0 : m.slowT > 0 ? 0.5 : 1;

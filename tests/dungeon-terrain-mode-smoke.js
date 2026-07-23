@@ -39,7 +39,8 @@ const source = [
     terrainModeConfig,
     terrainMovementHazardsEnabled,
     terrainHazardMaxPerRoom,
-    dungeonBossStrengthMul,
+    dungeonBossHpMul,
+    dungeonBossDmgMul,
     dungeonHazardChanceMul,
     dungeonRouteTypeWeight,
     createBoss:createDungeonBoss,
@@ -163,18 +164,19 @@ const complexDmg = measure('complex');
 const normalDmg = measure('normal');
 assert.ok(normalDmg < complexDmg, '一般模式地形傷害應低於複雜模式');
 
-// 8. 難度旋鈕：一般模式降低 Boss 強度與險境房出現機率。
-assert.strictEqual(api.dungeonBossStrengthMul('normal') !== undefined, true);
+// 8. 難度旋鈕：一般模式降低 Boss 生命與傷害（分開倍率）與險境房出現機率。
 api.setTerrainMode('normal');
-assert.ok(api.dungeonBossStrengthMul() < 1, '一般模式 Boss 強度倍率應小於 1');
+assert.ok(api.dungeonBossHpMul() < 1, '一般模式 Boss 生命倍率應小於 1');
+assert.ok(api.dungeonBossDmgMul() < api.dungeonBossHpMul(), '一般模式 Boss 傷害倍率應比生命倍率更低');
 assert.ok(api.dungeonHazardChanceMul() < 1, '一般模式險境機率倍率應小於 1');
 assert.ok(api.dungeonRouteTypeWeight('hazard') < api.dungeonRouteTypeWeight('safe'), '一般模式險境權重應被壓低');
 const bossDef = api.bossForFloor(5);
 const normalBoss = api.createBoss(bossDef, 5, 2);
 api.setTerrainMode('complex');
-assert.ok(api.dungeonBossStrengthMul() === 1 && api.dungeonHazardChanceMul() === 1);
+assert.ok(api.dungeonBossHpMul() === 1 && api.dungeonBossDmgMul() === 1 && api.dungeonHazardChanceMul() === 1);
 const complexBoss = api.createBoss(bossDef, 5, 2);
 assert.ok(normalBoss.hp < complexBoss.hp, '一般模式 Boss 生命應較低');
+assert.ok(normalBoss.dmg < complexBoss.dmg, '一般模式 Boss 傷害應較低');
 assert.ok(normalBoss.dmg < complexBoss.dmg, '一般模式 Boss 傷害應較低');
 
 api.setTerrainMode('normal');
