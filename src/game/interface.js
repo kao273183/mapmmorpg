@@ -107,6 +107,14 @@ const GAME_UPDATE_NOTES = [
     items:['每個職業獨立累積精通經驗，共 30 級分三章；經驗來自樓層深度、擊殺與成功撤退。','首次以該職業擊敗某 Boss 給一次性加成；未突破該職最深紀錄時收益降低，避免重複刷淺層。','精通只用於外觀獎勵與日後解鎖轉職，零局內戰力；基準局不計。精通介面與獎勵於後續版本開放。']
   },
   {
+    version:'0.29.37', date:'2026-07-23', title:'手機逃走鈕更明顯',
+    items:['手機版逃走鈕原本擠在技能群旁、和藥水鈕長得一樣不易發現，現在改成右側獨立的紅色「逃」鈕。','長按逃走鈕會直接在按鈕上顯示蓄力進度，滿了即撤退回基地（受擊中斷）。','桌機仍為長按 Q；路線選擇畫面的「返回基地（R）」維持不變。']
+  },
+  {
+    version:'0.29.36', date:'2026-07-23', title:'祝福改版：更有個性的選擇',
+    items:['針對「祝福都差不多」的回報，讓每個祝福走不同玩法：新增「處決之刃」（對 HP 30% 以下敵人傷害 +100%）與「天穹恩典」二段跳。','「迅捷殘影」改為衝刺冷卻 -30% 且衝刺全程無敵；並全面提高日鋼鋒芒、獵手印記、古橡之心、逐風步等的數值，讓加成更有感。','數值仍守住既有平衡警戒線（靈魂與 Boss 傷害倍率 ≤ ×2）；同步更新祝福 smoke 與固定基準報表。']
+  },
+  {
     version:'0.29.35', date:'2026-07-23', title:'外觀系統地基（K1-A）',
     items:['建立統一外觀系統：稱號／角色配色／光環／技能外觀共用同一套擁有、選用與解鎖流程。','現有光環自動遷移到新系統，擁有與選用狀態不會遺失；外觀一律零局內戰力。','日後精通、成就、秘境與賽季的獎勵都由統一入口發放，稱號與配色將於後續版本開放。']
   },
@@ -872,7 +880,7 @@ const vbtns = [
   { x: 768, y: 330, w: 52, h: 52, label: 'S', tap: () => usePot('mp') },
   { x: 834, y: 330, w: 52, h: 52, label: 'I', tap: () => { player.itemWin = !player.itemWin; } },
   { x: 890, y: 330, w: 52, h: 52, label: 'P', tap: openStats },
-  { x: 636, y: 330, w: 52, h: 52, label: '逃', hold: 'q' },
+  { x: 886, y: 258, w: 58, h: 50, label: '逃', hold: 'q', danger: true },
 ];
 const touchMap = {}; // touch identifier -> virtual control
 function touchPos(t) {
@@ -969,6 +977,19 @@ function drawTouchUI() {
   ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = 'bold 11px "Courier New",monospace';
   ctx.fillText('移動', virtualJoystick.x, virtualJoystick.y + virtualJoystick.radius + 17);
   for (const b of vbtns) {
+    if (b.danger) {
+      // 逃走鈕：紅色醒目、獨立於技能群，並在長按時顯示蓄力進度。
+      ctx.fillStyle = held.has(b) ? 'rgba(226,59,59,0.5)' : 'rgba(60,18,22,0.55)';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      const prog = typeof fleeChannelProgress === 'function' ? fleeChannelProgress() : 0;
+      if (prog > 0) { ctx.fillStyle = 'rgba(255,120,120,0.6)'; ctx.fillRect(b.x, b.y + b.h * (1 - prog), b.w, b.h * prog); }
+      ctx.strokeStyle = '#ff8a8a'; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = '#ffe0e0'; ctx.font = 'bold 22px "Courier New",monospace';
+      ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 8);
+      ctx.fillStyle = 'rgba(255,220,220,0.75)'; ctx.font = 'bold 9px "Courier New",monospace';
+      ctx.fillText('長按撤退', b.x + b.w / 2, b.y + b.h - 4);
+      continue;
+    }
     ctx.fillStyle = held.has(b) ? 'rgba(125,255,214,0.35)' : 'rgba(20,22,43,0.35)';
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.strokeStyle = 'rgba(200,205,236,0.5)'; ctx.lineWidth = 2;

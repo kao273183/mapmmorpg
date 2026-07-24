@@ -53,7 +53,8 @@ function update() {
     const dir = mv || p.face || 1;
     p.dashDir = dir; p.face = dir; p.dashT = DASH_DURATION;
     p.dashCd = typeof dungeonBlessingDashCooldown === 'function' ? dungeonBlessingDashCooldown(DASH_COOLDOWN) : DASH_COOLDOWN;
-    p.inv = Math.max(p.inv, 8); p.vy *= 0.25; inputBuffer.dash = 0;
+    const dashInv = typeof dungeonBlessingDashInvincible === 'function' && dungeonBlessingDashInvincible() ? DASH_DURATION + 6 : 8;
+    p.inv = Math.max(p.inv, dashInv); p.vy *= 0.25; inputBuffer.dash = 0;
     burst(p.x - dir * 8, p.y - p.h / 2, '#bdefff', 8);
     playSkillAnim('smoke', p.x - dir * 10, p.y - 28, { scale:0.9, flip:dir < 0, layer:'back', alpha:0.65, life:18 });
     playSfx('swordSwing', 0.45, 1.35);
@@ -75,7 +76,7 @@ function update() {
         else { p.vy = -jumpV(); p.onGround = false; beep(300, 0.06, 'triangle', 0.02); }
       } else { p.vy = -jumpV(); p.onGround = false; beep(300, 0.06, 'triangle', 0.02); }
       coyoteT = 0; inputBuffer.jump = 0;
-    } else if ((perkV('djump') > 0 || affixV('doubleJump') > 0) && !p.airJumped) { // 羽翼卡/詞綴:二段跳
+    } else if ((perkV('djump') > 0 || affixV('doubleJump') > 0 || (typeof dungeonBlessingHasDoubleJump === 'function' && dungeonBlessingHasDoubleJump())) && !p.airJumped) { // 羽翼卡/詞綴/天穹恩典:二段跳
       p.vy = -jumpV() * 0.9; p.airJumped = true;
       burst(p.x, p.y - p.h / 2, '#c8f4ff', 8);
       beep(340, 0.06, 'triangle', 0.02);
