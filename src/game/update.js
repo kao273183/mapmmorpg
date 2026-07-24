@@ -119,7 +119,7 @@ function update() {
 
   // projectiles
   for (const pr of projs.slice()) {
-    if ((pr.kind === 'fire' || pr.kind === 'elem' || pr.kind === 'shadow') && pr.aimT > 0) { // 追蹤型飛彈
+    if ((pr.kind === 'fire' || pr.kind === 'elem' || pr.kind === 'shadow' || pr.kind === 'arrow') && pr.aimT > 0) { // 追蹤型飛彈
       pr.aimT--;
       const target = pr.aimTarget, face = pr.vx < 0 ? -1 : 1;
       const forward = target && mons.includes(target) ? (target.x - pr.x) * face : -1;
@@ -142,7 +142,15 @@ function update() {
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
         hitMon(m, r.d, r.crit);
-        if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果
+        if (pr.kind === 'arrow') {                     // 弓箭手：直傷；精準終極可穿透
+          const tt2 = pr.talent || {};
+          const vuln = tt2.mechanic && tt2.branch === 0 ? 1.15 : 1; // 精準：受傷+15%
+          const r = skillDmg((pr.mult || 1) * vuln);
+          hitMon(m, r.d, r.crit || (tt2.ultimate && tt2.branch === 0));
+          burst(pr.x, pr.y, '#cfe0a0', 6);
+          if (pr.pierce) { pr.hits.push(m); continue; } // 穿透：不消失，繼續飛
+          gone = true; break;
+        } else if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果
           const doFire = pr.elemAll || pr.elem === 'fire';
           const doIce = pr.elemAll || pr.elem === 'ice';
           const doBolt = pr.elemAll || pr.elem === 'bolt';

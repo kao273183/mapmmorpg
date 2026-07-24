@@ -439,7 +439,8 @@ const SKILL_COLORS = {
   bulwark:'#ffd76a', smite:'#ffe9a8',
   elemburst:'#4ad0c8', chainstorm:'#7ee0ff',
   plague:'#a35ad0', soulleech:'#c99ae8',
-  rend:'#e0555e', holystrike:'#ffeec0', elembolt:'#8fe0d8', shadowbolt:'#8f5ac0'
+  rend:'#e0555e', holystrike:'#ffeec0', elembolt:'#8fe0d8', shadowbolt:'#8f5ac0',
+  shoot:'#cfe0a0'
 };
 function drawSkillSigil(id, x, y, r, active, locked) {
   const col = SKILL_COLORS[id] || '#d8b365';
@@ -539,6 +540,7 @@ function renderSkillTab() {
   drawStonePanel(tx, ty, tw, th, '技 能 樹  •  點選節點查看與配點');
   // 節點座標／連線依技能數切換：進階職多出兩個專屬節點，排在最右側作為進階層。
   const TREE_LAYOUTS = {
+    1: { pos: [[240,144]], edges: [] },
     5: { pos: [[78,142],[208,84],[208,204],[382,84],[382,204]],
          edges: [[0,1],[0,2],[1,3],[2,4],[1,4]] },
     7: { pos: [[58,144],[172,84],[172,204],[292,84],[292,204],[412,84],[412,204]],
@@ -881,6 +883,7 @@ function renderMenu() {
   const bases = picks.bases, advList = picks.adv;
   const inner = left.w - 36, gapC = 12, nb = Math.max(1, bases.length);
   const cw = Math.floor((inner - gapC * (nb - 1)) / nb), ch = 96;
+  const wideCard = cw >= 170; // 兩職維持橫式大卡；三職以上改直式精簡卡
   for (let i = 0; i < bases.length; i++) {
     const c = bases[i];
     const cx = left.x + 18 + i * (cw + gapC), cy = left.y + 56;
@@ -889,17 +892,28 @@ function renderMenu() {
     fillRoundRect(cx, cy, cw, ch, 6, sel ? 'rgba(66,112,110,0.28)' : family ? 'rgba(30,40,54,0.72)' : 'rgba(13,15,31,0.72)', sel ? '#7dffd6' : family ? '#4d7d72' : '#3c4058', sel ? 2 : 1);
     ctx.shadowBlur = 0;
     selBtns.push({ x: cx, y: cy, w: cw, h: ch, cls: c });
-    drawSprite(c === 'mage' ? MAGE : WAR, cx + 16, cy + 18, 3, false);
-    ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
-    ctx.fillText(def.name, cx + 86, cy + 32);
-    ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT; ctx.fillText(def.tag || '', cx + 86, cy + 52);
-    if (sel) {
-      fillRoundRect(cx + 86, cy + 62, 78, 22, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
-      ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 77);
-    } else {
-      ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 77);
+    if (wideCard) {
+      drawSprite(classSprite(c), cx + 16, cy + 18, 3, false);
+      ctx.textAlign = 'left'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 17px ' + STAT_FONT;
+      ctx.fillText(def.name, cx + 86, cy + 32);
+      ctx.fillStyle = '#91bceb'; ctx.font = '11px ' + STAT_FONT; ctx.fillText(def.tag || '', cx + 86, cy + 52);
+      if (sel) {
+        fillRoundRect(cx + 86, cy + 62, 78, 22, 4, 'rgba(125,255,214,0.15)', '#5fae99', 1);
+        ctx.fillStyle = '#8affdc'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.fillText('✓ 目前出戰', cx + 96, cy + 77);
+      } else {
+        ctx.fillStyle = '#646b8c'; ctx.font = '10px ' + STAT_FONT; ctx.fillText('按 [' + (i + 1) + '] 選擇', cx + 86, cy + 77);
+      }
+    } else { // 直式精簡卡（三個以上基礎職）
+      drawSprite(classSprite(c), cx + cw / 2 - 18, cy + 6, 3, false);
+      ctx.textAlign = 'center'; ctx.fillStyle = sel ? '#fff' : '#b0b5cf'; ctx.font = 'bold 14px ' + STAT_FONT;
+      ctx.fillText(def.name, cx + cw / 2, cy + 62);
+      ctx.fillStyle = '#8f97b8'; ctx.font = '9px ' + STAT_FONT;
+      ctx.fillText((def.tag || '').split('•')[0].trim(), cx + cw / 2, cy + 77);
+      ctx.fillStyle = sel ? '#8affdc' : '#646b8c'; ctx.font = 'bold 9px ' + STAT_FONT;
+      ctx.fillText(sel ? '✓ 目前出戰' : '按 [' + (i + 1) + ']', cx + cw / 2, cy + 90);
     }
   }
+  ctx.textAlign = 'left';
   // 進階轉職晶片列（隨大卡選擇切換系別；未解鎖顯示條件）
   const chipY = left.y + 158, chipH = 26, labW = 40;
   ctx.textAlign = 'left'; ctx.fillStyle = '#7a819f'; ctx.font = 'bold 10px ' + STAT_FONT;

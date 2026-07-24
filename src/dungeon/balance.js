@@ -12,9 +12,9 @@ function fixedDungeonBenchmarkGear(classId, tier) {
   const d = defs[tier] || defs.starter;
   // 進階職沿用基礎職的裝備線：裝備一律標記基礎職，否則穿不上（與 createGear 同一規則）。
   const base = (typeof baseClassOf === 'function') ? baseClassOf(classId) : classId;
-  const weaponName = base === 'mage' ? '固定法杖' : '固定長劍';
+  const weaponName = base === 'mage' ? '固定法杖' : base === 'archer' ? '固定獵弓' : '固定長劍';
   return [
-    { id:'benchmark-' + classId + '-' + tier + '-weapon', kind:'weapon', r:d.rarity, cls:base, name:weaponName, atk:d.weapon, wpn:base === 'mage' ? 'stave' : 'sword', affixes:[], benchmark:true },
+    { id:'benchmark-' + classId + '-' + tier + '-weapon', kind:'weapon', r:d.rarity, cls:base, name:weaponName, atk:d.weapon, wpn:base === 'mage' ? 'stave' : base === 'archer' ? 'bow' : 'sword', affixes:[], benchmark:true },
     { id:'benchmark-' + classId + '-' + tier + '-armor', kind:'armor', r:d.rarity, cls:base, name:'固定護甲', hp:d.armorHp, def:d.armorDef, affixes:[], benchmark:true },
     { id:'benchmark-' + classId + '-' + tier + '-helmet', kind:'helmet', r:d.rarity, cls:base, name:'固定頭盔', hp:d.helmetHp, def:d.helmetDef, affixes:[], benchmark:true },
     { id:'benchmark-' + classId + '-' + tier + '-boots', kind:'boots', r:d.rarity, cls:base, name:'固定戰靴', spd:d.speed, jmp:d.jump || 0, affixes:[], benchmark:true },
@@ -29,6 +29,9 @@ const DUNGEON_BENCHMARK_PROFILES = [
   { id:'mage-chapter2', classId:'mage', tier:'chapter2', label:'法師 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'warrior-chapter3', classId:'warrior', tier:'chapter3', label:'劍士 · 第三章', gearLabel:'史詩全套', seed:123011 },
   { id:'mage-chapter3', classId:'mage', tier:'chapter3', label:'法師 · 第三章', gearLabel:'史詩全套', seed:123011 },
+  { id:'archer-starter', classId:'archer', tier:'starter', label:'弓箭手 · 新手', gearLabel:'新手全套', seed:31001 },
+  { id:'archer-chapter2', classId:'archer', tier:'chapter2', label:'弓箭手 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'archer-chapter3', classId:'archer', tier:'chapter3', label:'弓箭手 · 第三章', gearLabel:'史詩全套', seed:123011 },
   // 進階職以第二章入場（對應精通 Lv10 解鎖的時間點），與同系基礎職同種子可直接對照
   { id:'berserker-chapter2', classId:'berserker', tier:'chapter2', label:'狂戰士 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'paladin-chapter2', classId:'paladin', tier:'chapter2', label:'聖騎士 · 第二章', gearLabel:'稀有全套', seed:72007 },

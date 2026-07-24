@@ -260,6 +260,8 @@ const SKILL_DEFS = {
   chainstorm:{ cls:'elementalist', name:'連鎖風暴', mp:18, cd:260, desc:'雷球在敵人之間連鎖跳躍,每次跳躍略微衰減' },
   // 進階職：咒術師（法師系，詛咒消耗）
   shadowbolt:{ cls:'warlock', name:'暗影箭', mp:7, cd:48, minCd:20, basic:true, desc:'直傷較低,但會疊加腐蝕的持續傷害' },
+  // 弓箭手（基礎職）
+  shoot:     { cls:'archer', name:'射擊', mp:4, cd:40, minCd:16, basic:true, desc:'射出一箭,對命中的第一個敵人造成傷害' },
   plague:    { cls:'warlock', name:'疫咒', mp:14, cd:180, desc:'散布疫病使範圍敵人持續受傷並陷入虛弱' },
   soulleech: { cls:'warlock', name:'汲魂', mp:16, cd:240, desc:'抽取前方直線敵人的生命,回復自身HP與MP' }
 };
@@ -275,7 +277,8 @@ const BRANCH_NAMES = {
   elembolt:['共鳴','連動'], shadowbolt:['腐蝕','汲取'],
   bulwark:['庇護','反擊'], smite:['審判','聖療'],
   elemburst:['三重','熾炎'], chainstorm:['連鎖','聚能'],
-  plague:['蔓延','衰敗'], soulleech:['吸血','奪魂']
+  plague:['蔓延','衰敗'], soulleech:['吸血','奪魂'],
+  shoot:['精準','速射']
 };
 const TALENT_EFFECTS = {
   slash:[{ lv3:'擊退目標', lv5:'必定爆擊' }, { lv3:'目標上限+2', lv5:'第3擊強化且免費' }],
@@ -299,11 +302,12 @@ const TALENT_EFFECTS = {
   elemburst:[{ lv3:'爆發範圍擴大', lv5:'追加第二段爆發' }, { lv3:'火焰傷害提升並燃燒', lv5:'燃燒會蔓延給鄰近敵人' }],
   chainstorm:[{ lv3:'連鎖次數+2', lv5:'連鎖不再衰減' }, { lv3:'改為集中單體高傷', lv5:'命中麻痺目標' }],
   plague:[{ lv3:'疫病範圍擴大', lv5:'目標死亡時傳染鄰近敵人' }, { lv3:'虛弱效果加重', lv5:'虛弱目標受到的持續傷害翻倍' }],
-  soulleech:[{ lv3:'吸取的HP提升', lv5:'低血時吸取量再翻倍' }, { lv3:'額外回復MP', lv5:'擊殺立即重置冷卻' }]
+  soulleech:[{ lv3:'吸取的HP提升', lv5:'低血時吸取量再翻倍' }, { lv3:'額外回復MP', lv5:'擊殺立即重置冷卻' }],
+  shoot:[{ lv3:'命中使目標受傷+15%', lv5:'必定爆擊並穿透一名敵人' }, { lv3:'冷卻縮短、箭速加快', lv5:'一次射出兩箭' }]
 };
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
-const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], berserker: ['rend', null, null], paladin: ['holystrike', null, null], elementalist: ['elembolt', null, null], warlock: ['shadowbolt', null, null] };
+const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], archer: ['shoot', null, null], berserker: ['rend', null, null], paladin: ['holystrike', null, null], elementalist: ['elembolt', null, null], warlock: ['shadowbolt', null, null] };
 let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
 function classSkills(cls) { // 進階職＝基礎職技能 + 自身專屬技能；若自己有基本技能，就取代繼承來的那個
   const base = baseOf(cls);
@@ -651,6 +655,16 @@ const MASTERY_COSMETIC_TABLE = {
       { lv:20, id:'mag_arch',    name:'元素支配者', col:'#c0a8ff' }
     ]
   },
+  archer: {
+    colors: [
+      { lv:5,  id:'arc_forest', name:'森綠',   col:'#5a8c3a', trim:'#c8e0a0' },
+      { lv:10, id:'arc_hunter', name:'獵人褐', col:'#a05a2c', trim:'#e0b080' }
+    ],
+    titles: [
+      { lv:15, id:'arc_eagle',   name:'鷹眼',     col:'#9ab55c' },
+      { lv:20, id:'arc_hundred', name:'百步穿楊', col:'#c8e070' }
+    ]
+  },
   berserker: {
     colors: [
       { lv:5,  id:'ber_gore',   name:'血戰赤', col:'#a01f28', trim:'#ff8a7a' },
@@ -696,7 +710,7 @@ const TITLE_DEFS = {};
 const COLOR_DEFS = {};
 for (const job of Object.keys(MASTERY_COSMETIC_TABLE)) {
   const e = MASTERY_COSMETIC_TABLE[job];
-  for (const c of e.colors) COLOR_DEFS[c.id] = { name:c.name, color:c.col, job, lv:c.lv, map:{ r:c.col, '4':c.col, '8':c.trim } };
+  for (const c of e.colors) COLOR_DEFS[c.id] = { name:c.name, color:c.col, job, lv:c.lv, map:{ r:c.col, '4':c.col, g:c.col, '8':c.trim } };
   for (const t of e.titles) TITLE_DEFS[t.id] = { name:t.name, color:t.col, job, lv:t.lv };
 }
 const SKIN_DEFS = {};

@@ -6,6 +6,7 @@ let chosenCls = 'warrior';
 const CLASSES = {
   warrior:   { name: '劍士', col: '#c84a4a', tag: '近戰  •  高生存', sub: '穩定推進，正面迎敵' },
   mage:      { name: '法師', col: '#5a4ad0', tag: '遠程  •  高爆發', sub: '掌控距離，範圍清場' },
+  archer:    { name: '弓箭手', col: '#7a9b46', tag: '遠程  •  持續射擊', sub: '拉開距離，箭無虛發' },
   berserker:    { name: '狂戰士', col: '#ff6b3d', base: 'warrior', advanced: true, tag: '近戰  •  高風險爆發', sub: '以血換傷，越危險越強' },
   paladin:      { name: '聖騎士', col: '#ffd76a', base: 'warrior', advanced: true, tag: '近戰  •  防禦持續', sub: '護盾與治療，站得比誰都久' },
   elementalist: { name: '元素師', col: '#4ad0c8', base: 'mage',    advanced: true, tag: '遠程  •  多元素範圍', sub: '火冰雷齊發，成群清場' },
@@ -842,6 +843,23 @@ const SKILL_FX = {
     }
     if (kills && t.ultimate && t.branch === 1) { const i = loadouts[p.cls].indexOf('soulleech'); if (i >= 0) p.slotCd[i] = 0; } // 奪魂：擊殺重置
   },
+  shoot(t) { // 弓箭手基本技：射出一箭
+    const p = player;
+    p.cast = 10;
+    const x = p.x + p.face * 20, y = p.y - 30;
+    const aim = fireballAim(p, x, y), speed = 9.5;
+    const twin = t.ultimate && t.branch === 1; // 速射終極：兩箭
+    const pierce = t.ultimate && t.branch === 0; // 精準終極：穿透
+    const shots = twin ? 2 : 1;
+    for (let i = 0; i < shots; i++) {
+      const spread = twin ? (i === 0 ? -0.08 : 0.08) : 0;
+      const ang = aim.angle + spread;
+      projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
+        t:aim.target ? 100 : 80, mult:t.dmg, kind:'arrow', talent:t, pierce,
+        hits:pierce ? [] : null, aimTarget:aim.target, aimT:aim.target ? 20 : 0 });
+    }
+    playSfx('swordSwing', 0.5, 1.3); beep(520, 0.05, 'square', 0.03);
+  },
   fire(t) {
     const p = player;
     p.cast = 12;
@@ -937,7 +955,7 @@ function trySkill(i) {
 // ---------- gear generation ----------
 // 裝備命名:品質越高基名越霸氣 + 隨機詞綴,史詩以上加後綴
 const GEAR_BASE = {
-  weapon: { warrior: ['短劍', '長劍', '闊劍', '斬馬刀', '巨劍'], mage: ['法杖', '魔杖', '咒杖', '秘法杖', '權杖'] },
+  weapon: { warrior: ['短劍', '長劍', '闊劍', '斬馬刀', '巨劍'], mage: ['法杖', '魔杖', '咒杖', '秘法杖', '權杖'], archer: ['短弓', '獵弓', '長弓', '強弓', '風暴弓'] },
   armor:  ['皮甲', '鎖甲', '鎧甲', '板甲', '龍鱗甲'],
   helmet: ['皮帽', '鐵盔', '全盔', '頭冠', '龍首盔'],
   boots:  ['布鞋', '皮靴', '戰靴', '疾行靴', '踏空靴'],
@@ -977,7 +995,7 @@ function createGear(n, slot, cls, rarity, setId, uniqueId) {
   if (set) it.setId = set.id;
   if (slot === 'weapon') {
     it.atk = Math.max(1, Math.round((4 + n * 2) * m));
-    it.wpn = baseClassOf(cls) === 'mage' ? 'stave' : 'sword';
+    it.wpn = baseClassOf(cls) === 'mage' ? 'stave' : baseClassOf(cls) === 'archer' ? 'bow' : 'sword';
     it.desc = '攻擊+' + it.atk;
   } else if (slot === 'armor') {
     it.hp = Math.round((16 + n * 6) * m); it.def = Math.max(1, Math.round((1 + n * 0.4) * m));

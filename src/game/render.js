@@ -254,13 +254,13 @@ function render() {
   if (p.dashT > 0) {
     ctx.save();
     ctx.globalAlpha = 0.12 + p.dashT / DASH_DURATION * 0.18;
-    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0, false, equippedRecolor());
+    drawSprite(classSprite(p.cls), p.x - 18 - p.dashDir * 18, p.y - 48, 3, p.face < 0, false, equippedRecolor());
     ctx.restore();
   }
   if (p.inv === 0 || Math.floor(p.inv / 5) % 2 === 0) {
     const s = 3;
     const bob = (p.onGround && p.walk > 0) ? (Math.floor(p.walk / 6) % 2) : 0;
-    drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0, equippedRecolor());
+    drawSprite(classSprite(p.cls), p.x - 18, p.y - 48 + bob, s, p.face < 0, playerFlashT > 0, equippedRecolor());
     const sx = p.x + p.face * 14;
     if (baseClassOf(p.cls) === 'mage') {
       const orb = p.eq.weapon ? gearColor(p.eq.weapon) : '#f2c14e';
@@ -309,7 +309,16 @@ function render() {
   // projectiles
   const ELEM_PROJ_COL = { fire:['#ff7a36', '#ffd9a0'], ice:['#4ad0c8', '#d8fffb'], bolt:['#e9d45a', '#fff6c0'] };
   for (const pr of projs) {
-    if (pr.kind === 'ice') {
+    if (pr.kind === 'arrow') {                 // 弓箭手箭矢：DCSS 箭圖，依飛行方向旋轉
+      const ang = Math.atan2(pr.vy || 0, pr.vx) + Math.PI / 4; // 箭圖本身指右上(NE)
+      if (arrowImg && arrowImg.complete && arrowImg.naturalWidth) {
+        ctx.save(); ctx.translate(Math.round(pr.x), Math.round(pr.y)); ctx.rotate(ang);
+        ctx.drawImage(arrowImg, -14, -14, 28, 28); ctx.restore();
+      } else { // 後備：程式畫一根箭
+        ctx.strokeStyle = '#c8ccd0'; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.moveTo(pr.x - pr.vx * 1.6, pr.y - (pr.vy || 0) * 1.6); ctx.lineTo(pr.x, pr.y); ctx.stroke();
+      }
+    } else if (pr.kind === 'ice') {
       ctx.fillStyle = '#7dcfff'; ctx.fillRect(pr.x - 8, pr.y - 4, 16, 8);
       ctx.fillStyle = '#d8f4ff'; ctx.fillRect(pr.x - 3, pr.y - 2, 6, 4);
     } else if (pr.kind === 'elem') {           // 元素飛彈：同一組圖集依當前元素染色
@@ -591,7 +600,7 @@ function drawItemWin() {
   const glow = ctx.createRadialGradient(cx, gcy, 6, cx, gcy, 84);
   glow.addColorStop(0, 'rgba(216,179,101,0.15)'); glow.addColorStop(1, 'rgba(216,179,101,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, gcy, 84, 0, Math.PI * 2); ctx.fill();
-  drawSprite(baseClassOf(p.cls) === 'mage' ? MAGE : WAR, cx - 30, dy + 115, 5, false, false, equippedRecolor());
+  drawSprite(classSprite(p.cls), cx - 30, dy + 115, 5, false, false, equippedRecolor());
   let tipItem = null; // hover tooltip 目標
   const slotDefs = [[cx - 22, dy + 10, 'helmet', '頭盔'], [dx + 12, dy + 100, 'weapon', '武器'], [dx + dw - 56, dy + 100, 'armor', '防具'], [dx + dw - 56, dy + 10, 'acc', '飾品'], [cx - 22, dy + dh - 76, 'boots', '鞋子']];
   for (const s of slotDefs) {

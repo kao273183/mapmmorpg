@@ -87,7 +87,7 @@ const progressionSrc = read('src', 'game', 'progression.js');
 const defsBlock = progressionSrc.match(/const SKILL_DEFS = \{[\s\S]*?\n\};/)[0];
 const basics = [];
 for (const m of defsBlock.matchAll(/^\s*(\w+):\s*\{ cls:'(\w+)'[^}]*basic:true/gm)) basics.push({ id: m[1], cls: m[2] });
-assert.strictEqual(basics.length, 6, '六個職業各要有一個基本技能，實際 ' + basics.map(b => b.id).join('/'));
+assert.strictEqual(basics.length, 7, '七個職業各要有一個基本技能，實際 ' + basics.map(b => b.id).join('/'));
 
 const meleeBasics = basics.filter(b => arcs[b.id]);
 const rangedBasics = basics.filter(b => !arcs[b.id]);

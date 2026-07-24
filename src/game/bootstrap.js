@@ -41,6 +41,12 @@ const GEAR_ART = {
     helmet: ['mage hat (black).png', 'mage hat (purple).png', 'mage hat (red).png', 'mage hat (black).png', 'mage hat (purple).png'],
     boots:  ['armor - foot (leather).png', 'armor - foot (metal).png', 'armor - foot (gold).png', 'armor - foot (bone).png', 'armor - foot (gold).png']
   },
+  archer: {
+    weapon: ['bow - short.png', 'bow - recurve.png', 'bow - long.png', 'bow - great.png', 'bow - storm.png'],
+    armor:  ['armor - body (leather).png', 'armor - body (metal).png', 'armor - body (gold).png', 'armor - body (bone).png', 'armor - body (gold).png'],
+    helmet: ['armor - head (leather).png', 'armor - head (metal).png', 'armor - head (gold).png', 'armor - head (bone).png', 'armor - head (gold).png'],
+    boots:  ['armor - foot (leather).png', 'armor - foot (metal).png', 'armor - foot (gold).png', 'armor - foot (bone).png', 'armor - foot (gold).png']
+  },
   acc: ['items/amulet 1.png', 'items/ring 2.png', 'items/amulet 3.png', 'items/ring 8.png', 'items/amulet 6.png']
 };
 const GEAR_SET_ART = {
@@ -68,11 +74,11 @@ function gearArtPath(it) {
   if (it.kind === 'acc') return GEAR_ART_ROOT + GEAR_ART.acc[rarity];
   const setFile = it.setId && GEAR_SET_ART[it.setId] && GEAR_SET_ART[it.setId][it.kind];
   if (setFile) return GEAR_ART_ROOT + 'weapons and armor/' + setFile;
-  const cls = baseClassOf(it.cls || (it.wpn === 'stave' ? 'mage' : (typeof player !== 'undefined' && player.cls) || 'warrior')); // 進階職沿用基礎職美術
+  const cls = baseClassOf(it.cls || (it.wpn === 'stave' ? 'mage' : it.wpn === 'bow' ? 'archer' : (typeof player !== 'undefined' && player.cls) || 'warrior')); // 進階職沿用基礎職美術
   const file = GEAR_ART[cls] && GEAR_ART[cls][it.kind] && GEAR_ART[cls][it.kind][rarity];
   return file ? GEAR_ART_ROOT + 'weapons and armor/' + file : '';
 }
-for (const cls of ['warrior', 'mage']) {
+for (const cls of ['warrior', 'mage', 'archer']) {
   for (const part of ['weapon', 'armor', 'helmet', 'boots']) {
     for (const file of GEAR_ART[cls][part]) {
       const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
@@ -91,7 +97,7 @@ for (const file of GEAR_ART.acc) {
   const img = new Image(); img.src = path; gearArtImages[path] = img;
 }
 function itemIconIdx(it) {
-  if (it.kind === 'weapon') return it.wpn === 'stave' ? 1 : 0;
+  if (it.kind === 'weapon') return it.wpn === 'stave' ? 1 : it.wpn === 'bow' ? 2 : 0;
   if (it.kind === 'armor') return 2;
   if (it.kind === 'helmet') return 3;
   if (it.kind === 'boots') return 4;
@@ -121,8 +127,10 @@ const SKILL_ICON_FILES = {
   fire:25, bolt:7, ice:59, meteor:1, shield:3,
   bloodrend:33, warcry:45,
   bulwark:5, smite:9, elemburst:27, chainstorm:14, plague:38, soulleech:66,
-  rend:17, holystrike:23, elembolt:49, shadowbolt:55
+  rend:17, holystrike:23, elembolt:49, shadowbolt:55,
+  shoot:30
 };
+const arrowImg = new Image(); arrowImg.src = 'assets/runtime/skills/vfx/arrow.png'; // 弓箭手投射物（DCSS, CC0）
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
   const normal = new Image(), gray = new Image();
@@ -294,6 +302,15 @@ const WAR = [
   "...666666...","..rrrrrrrr..",".rrrrrrrrrr.",".rrrrrrrrrr.",".rr8888rrr..",
   ".rrrrrrrrrr.","..rrrrrrrr..","..rr....rr..","..11....11..","..11....11..","..11....11.."
 ];
+const ARC = [ // 弓箭手：綠尖兜帽 + 紅羽毛（羅賓漢風），基礎精靈不畫武器（與 WAR/MAGE 一致）
+  "....ggr.....","...ggggr....","..gg66gg....","..g6666g....","..g6767g....",
+  "..g6666g....","..gggggg....",".gggggggg...",".gg8888g....",".gggggggg...",
+  ".gggggggg...","..gggggg....","..gg..gg....","..11..11....","..11..11....","..11..11.."
+];
+function classSprite(cls) { // 依（基礎）職業取精靈圖
+  const base = (typeof baseClassOf === 'function') ? baseClassOf(cls) : cls;
+  return base === 'mage' ? MAGE : base === 'archer' ? ARC : WAR;
+}
 const SLIME = [
   "............","....3333....","..33333333..",".3333333333.",".3373333733.",
   "333333333333","333393393333",".9999999999."
