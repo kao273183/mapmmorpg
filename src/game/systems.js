@@ -449,12 +449,33 @@ function fireballAim(playerRef, originX, originY) {
   return { target, angle:Math.max(-0.65, Math.min(0.65, Math.atan2(dy, forward))) };
 }
 // 技能效果:回傳 false = 施放失敗(不扣MP不進CD)
+// 斬擊染色隨練度變化：4 階（未練 / 初階 / 進階Lv3 / 滿級Lv5），兩條分支不同色系。
+// 低階偏暗沉，越練越亮；分支 a=未選或分支0、b=分支1。貼圖與細弧線共用同一色。
+const SLASH_TINTS = {
+  slash:      { a:['#8891ad','#aab6d8','#d0dcf8','#ffffff'], b:['#8891ad','#9fc0dc','#bfe4f8','#e8ffff'] }, // 鋼白／擊退 vs 連擊藍白
+  rend:       { a:['#7a2830','#a01f28','#d83040','#ff5060'], b:['#7a3020','#c0402a','#ff6b3d','#ffa858'] }, // 撕裂血紅 vs 狂亂烈焰
+  spin:       { a:['#8a7838','#c0982e','#f0c848','#fff4b0'], b:['#8a7838','#b8a8c8','#dccef0','#f4ecff'] }, // 龍捲金 vs 利刃銀
+  holystrike: { a:['#8a7c58','#c8b068','#ffe490','#fff8d8'], b:['#8a7c58','#d4a848','#ffc848','#fff0b8'] }, // 守護聖金 vs 制裁金
+  bloodrend:  { a:['#6a1c24','#a01f28','#d02838','#ff4a5a'], b:['#6a2418','#b03a20','#e85028','#ff7844'] }, // 嗜血深紅 vs 裂創橙
+  smite:      { a:['#8a7c58','#d4b060','#ffe490','#fff8d8'], b:['#7a8a58','#a4d078','#c4ff98','#e4ffc8'] }, // 審判金 vs 聖療綠
+  dash:       { a:['#3d6e84','#5fa0b4','#8ec9df','#c4f2ff'], b:['#3d6e84','#7466a4','#a888d4','#d4b4ff'] }  // 疾影青 vs 破陣紫
+};
+function slashPalette(id, t) { // 依技能練度與分支回傳 { hex, rgb }
+  const R = SLASH_TINTS[id];
+  if (!R) return { hex:null, rgb:'255,255,255' };
+  const tier = t.ultimate ? 3 : t.level >= 3 ? 2 : t.level >= 1 ? 1 : 0;
+  const lane = t.branch === 1 ? R.b : R.a; // 未選分支(-1)走 a
+  const hex = lane[Math.min(lane.length - 1, tier)];
+  const n = parseInt(hex.slice(1), 16);
+  return { hex, rgb: (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) };
+}
 const SKILL_FX = {
   slash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
-    p.slashArc = { col:'255,255,255', r:52, spread:2.2, w:5 };
-    playSkillAnim('crescentBold', p.x + p.face * 38, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:'#e8ecff' });
+    const pal = slashPalette('slash', t);
+    p.slashArc = { col:pal.rgb, r:52, spread:2.2, w:5 };
+    playSkillAnim('crescentBold', p.x + p.face * 38, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:pal.hex });
     playSfx('swordSwing');
     p.skillCasts.slash = (p.skillCasts.slash || 0) + 1;
     const combo = t.ultimate && t.branch === 1 && p.skillCasts.slash % 3 === 0;
@@ -487,7 +508,7 @@ const SKILL_FX = {
     }
     if (hit === 0) { num(p.x, p.y - p.h - 10, '沒有目標', '#aaa'); return false; }
     p.cast = 12; p.spinT = 14;
-    playSkillAnim('crescentRing', p.x, p.y - 28, { scale:Math.max(1.9, radius / 42), rotation:frame * 0.2 });
+    playSkillAnim('crescentRing', p.x, p.y - 28, { scale:Math.max(1.9, radius / 42), rotation:frame * 0.2, tint:slashPalette('spin', t).hex });
     playSfx('swordSwing', 0.85, 0.82);
     if (t.ultimate && t.branch === 0) addSkillZone('whirlwind', p.x, p.y - 28, radius * 1.1, 85, 18, 1, 1, 1.2 * t.dmg, '#e8a84c', { knock:18 });
     if (t.ultimate && t.branch === 1 && kills > beforeKills) { num(p.x, p.y - p.h - 22, '利刃重置!', '#ffe680'); return { resetCd:true }; }
@@ -495,7 +516,8 @@ const SKILL_FX = {
   dash(t) {
     const p = player;
     p.cast = 10; p.slashT = 10;
-    p.slashArc = { col:'142,201,223', r:48, spread:1.4, w:6 }; // 突進：藍白短促殘影
+    const pal = slashPalette('dash', t);
+    p.slashArc = { col:pal.rgb, r:48, spread:1.4, w:6 }; // 突進：短促殘影，隨練度變色
     const x0 = p.x;
     const dashMul = t.mechanic && t.branch === 0 ? 1.35 : 1;
     const nx = Math.max(14, Math.min(worldW - 14, p.x + p.face * 130 * t.area * dashMul));
@@ -509,7 +531,7 @@ const SKILL_FX = {
       }
     }
     for (let i = 0; i < 8; i++) parts.push({ x: x0 + (nx - x0) * i / 8, y: p.y - 20, vx: 0, vy: -0.5, t: 14, color: '#c8cdec' });
-    playSkillAnim('streak', (x0 + nx) / 2, p.y - 28, { scale:1.7, flip:p.face < 0, tint:'#9ed6e8', layer:'back' });
+    playSkillAnim('streak', (x0 + nx) / 2, p.y - 28, { scale:1.7, flip:p.face < 0, tint:pal.hex, layer:'back' });
     playSkillAnim('teleport', nx, p.y - 30, { scale:1.05, flip:p.face < 0, alpha:0.8 });
     p.x = nx; p.inv = Math.max(p.inv, t.mechanic && t.branch === 0 ? 25 : 10);
     if (t.ultimate && t.branch === 0) addSkillZone('wind', (x0 + nx) / 2, p.y - 24, Math.abs(nx - x0) / 2 + 20, 52, 8, 1, 1, 1.1 * t.dmg, '#8ec9df');
@@ -557,9 +579,10 @@ const SKILL_FX = {
   rend(t) { // 狂戰士基本技：粗暴橫斬，血越低越痛
     const p = player;
     p.cast = 10; p.slashT = 10;
-    p.slashArc = { col:'224,85,94', r:44, spread:2.7, w:7 }; // 血紅粗弧，比揮砍更野
-    playSkillAnim('crescentBold', p.x + p.face * 40, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:'#e0555e' });
-    playSkillAnim('crescentBold', p.x + p.face * 50, p.y - 20, { scale:1.1 * t.area, flip:p.face > 0, rotation:0.4, alpha:0.65, tint:'#a01f28' }); // 第二道反刀，讀起來是兩下
+    const pal = slashPalette('rend', t);
+    p.slashArc = { col:pal.rgb, r:44, spread:2.7, w:7 }; // 粗弧，比揮砍更野，隨練度變色
+    playSkillAnim('crescentBold', p.x + p.face * 40, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:pal.hex });
+    playSkillAnim('crescentBold', p.x + p.face * 50, p.y - 20, { scale:1.1 * t.area, flip:p.face > 0, rotation:0.4, alpha:0.6, tint:pal.hex }); // 第二道反刀，讀起來是兩下
     playSfx('swordSwing'); beep(190, 0.07, 'sawtooth', 0.035);
     const missing = 1 - p.hp / p.mhp;
     const lowMul = 1 + missing * 0.5;                       // 滿血 1.0 → 空血 1.5
@@ -585,8 +608,9 @@ const SKILL_FX = {
   holystrike(t) { // 聖騎士基本技：穩健的聖光斬，每第三擊回血
     const p = player;
     p.cast = 10; p.slashT = 10;
-    p.slashArc = { col:'255,233,168', r:56, spread:1.7, w:4 }; // 金色細弧，收束乾淨
-    playSkillAnim('crescentThin', p.x + p.face * 40, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:'#ffe9a8' });
+    const pal = slashPalette('holystrike', t);
+    p.slashArc = { col:pal.rgb, r:56, spread:1.7, w:4 }; // 細弧收束乾淨，隨練度變色
+    playSkillAnim('crescentThin', p.x + p.face * 40, p.y - 30, { scale:1.5 * t.area, flip:p.face < 0, tint:pal.hex });
     playSfx('swordSwing'); beep(660, 0.07, 'sine', 0.032);
     p.skillCasts.holystrike = (p.skillCasts.holystrike || 0) + 1;
     const third = p.skillCasts.holystrike % 3 === 0;
@@ -640,8 +664,9 @@ const SKILL_FX = {
     const missing = 1 - p.hp / p.mhp;                       // 越殘血越強
     const lowMul = 1 + missing * (t.mechanic && t.branch === 1 ? 1.1 : 0.75);
     p.cast = 12; p.slashT = 12;
-    p.slashArc = { col:'192,47,58', r:60, spread:2.4, w:8 };
-    playSkillAnim('thrust', p.x + p.face * 50, p.y - 30, { scale:1.7 * t.area, flip:p.face < 0, tint:'#c02f3a' });
+    const bpal = slashPalette('bloodrend', t);
+    p.slashArc = { col:bpal.rgb, r:60, spread:2.4, w:8 };
+    playSkillAnim('thrust', p.x + p.face * 50, p.y - 30, { scale:1.7 * t.area, flip:p.face < 0, tint:bpal.hex });
     playSfx('swordSwing'); beep(150, 0.14, 'sawtooth', 0.05);
     let hit = 0;
     const range = 150 * t.area;
@@ -699,9 +724,10 @@ const SKILL_FX = {
     const wide = t.ultimate && t.branch === 0;
     const range = (140 + (wide ? 44 : 0)) * t.area;
     p.cast = 12; p.slashT = 12;
-    p.slashArc = { col:'255,242,184', r:58, spread:2.0, w:6 };
+    const spal = slashPalette('smite', t);
+    p.slashArc = { col:spal.rgb, r:58, spread:2.0, w:6 };
     playSkillAnim('groundImpact', p.x + p.face * 52, p.y - 12, { scale:1.25 * t.area, flip:p.face < 0 });
-    playSkillAnim('thrust', p.x + p.face * 46, p.y - 32, { scale:1.5 * t.area, flip:p.face < 0, rotation:0.6, tint:'#fff2b8' });
+    playSkillAnim('thrust', p.x + p.face * 46, p.y - 32, { scale:1.5 * t.area, flip:p.face < 0, rotation:0.6, tint:spal.hex });
     playSfx('swordSwing'); beep(880, 0.12, 'sine', 0.05);
     let hit = 0;
     for (const m of mons.slice()) {

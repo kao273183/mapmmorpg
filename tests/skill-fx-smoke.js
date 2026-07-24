@@ -39,20 +39,48 @@ for (const kind of kinds) {
     '投射物 kind「' + kind + '」在 update.js 沒有專屬命中處理，會套用火球的效果');
 }
 
-// ── 2. 設了 slashT 的技能都必須設自己的 slashArc ────────────────────────
+// ── 2. 設了 slashT 的技能都必須設自己的 slashArc（顏色可字面或走 slashPalette）──
 const arcs = {};
 for (const [id, body] of Object.entries(bodies)) {
   if (!/p\.slashT = /.test(body)) continue;
-  const m = body.match(/p\.slashArc = \{ col:'([\d, ]+)', r:(\d+), spread:([\d.]+), w:(\d+) \}/);
+  // col 可能是字面 '255,255,255'，也可能是隨練度變色的 pal.rgb / bpal.rgb 等
+  const m = body.match(/p\.slashArc = \{ col:('[\d, ]+'|\w+\.rgb), r:(\d+), spread:([\d.]+), w:(\d+) \}/);
   assert.ok(m, '近戰技能「' + id + '」設了 slashT 卻沒設 slashArc，會沿用上一個技能的刀光');
-  arcs[id] = { col: m[1], r: +m[2], spread: +m[3], w: +m[4] };
-  assert.ok(/^\d+,\d+,\d+$/.test(m[1].replace(/\s/g, '')), id + ' 的 slashArc 顏色應是 "r,g,b" 格式');
+  const dynamic = /\.rgb$/.test(m[1]);
+  arcs[id] = { col: m[1], dynamic, r: +m[2], spread: +m[3], w: +m[4] };
   assert.ok(arcs[id].r >= 30 && arcs[id].r <= 90, id + ' 的刀光半徑 ' + arcs[id].r + ' 超出合理範圍');
   assert.ok(arcs[id].spread > 0.5 && arcs[id].spread < 4, id + ' 的刀光弧度 ' + arcs[id].spread + ' 超出合理範圍');
+  // 動態變色的技能，貼圖染色也必須用同一個 palette（否則貼圖與弧線會不同步）
+  if (dynamic) {
+    const v = m[1].replace('.rgb', '');
+    assert.ok(new RegExp('tint:' + v + '\\.hex').test(body),
+      id + ' 的刀光走動態調色，貼圖 tint 也應用 ' + v + '.hex 保持同步');
+  }
 }
 assert.ok(Object.keys(arcs).length >= 4, '應有多個近戰技能設定刀光');
 assert.ok(/const arc = p\.slashArc \|\| \{/.test(renderSrc), 'render.js 應讀取 p.slashArc 並有預設值');
 assert.ok(/p\.slashArc = null/.test(read('src', 'game', 'run.js')), 'resetRun 應清掉 slashArc');
+
+// ── 2b. 隨練度變色：SLASH_TINTS 每個技能都要有兩分支 × 由暗到亮的色階 ──────
+const tintBlock = systemsSrc.match(/const SLASH_TINTS = \{[\s\S]*?\n\};/);
+assert.ok(tintBlock, '應有 SLASH_TINTS 調色表');
+assert.ok(/function slashPalette\(id, t\)/.test(systemsSrc), '應有 slashPalette 依練度取色');
+assert.ok(/t\.ultimate \? 3 : t\.level >= 3 \? 2 : t\.level >= 1 \? 1 : 0/.test(systemsSrc),
+  'slashPalette 應把練度分成 4 階（未練／初階／Lv3／滿級）');
+const slashTints = {};
+for (const m of tintBlock[0].matchAll(/(\w+):\s*\{ a:\[([^\]]+)\], b:\[([^\]]+)\]/g)) {
+  const parse = str => str.match(/#[0-9a-fA-F]{6}/g) || [];
+  slashTints[m[1]] = { a: parse(m[2]), b: parse(m[3]) };
+}
+for (const [id, r] of Object.entries(slashTints)) {
+  assert.strictEqual(r.a.length, 4, id + ' 的分支 a 應有 4 階色');
+  assert.strictEqual(r.b.length, 4, id + ' 的分支 b 應有 4 階色');
+  // 兩分支的滿級色要不同（否則選哪條分支看不出差別）
+  assert.notStrictEqual(r.a[3], r.b[3], id + ' 兩條分支的滿級色不該相同');
+  // 由暗到亮：滿級色的亮度應高於未練色
+  const lum = h => { const n = parseInt(h.slice(1), 16); return (n >> 16 & 255) * 0.3 + (n >> 8 & 255) * 0.59 + (n & 255) * 0.11; };
+  assert.ok(lum(r.a[3]) > lum(r.a[0]), id + ' 分支 a 應越練越亮');
+}
 
 // ── 3. 各職業的基本技能外觀必須彼此不同（否則職業感出不來）────────────────
 const progressionSrc = read('src', 'game', 'progression.js');
@@ -65,9 +93,11 @@ const meleeBasics = basics.filter(b => arcs[b.id]);
 const rangedBasics = basics.filter(b => !arcs[b.id]);
 assert.ok(meleeBasics.length >= 3 && rangedBasics.length >= 3, '基本技能應有近戰與遠程兩類');
 
-const arcCols = meleeBasics.map(b => arcs[b.id].col);
+// 顏色各異：動態變色的看 SLASH_TINTS 的滿級色，字面色的看 col 本身
+const arcCols = meleeBasics.map(b => arcs[b.id].dynamic ? (slashTints[b.id] && slashTints[b.id].a[3]) : arcs[b.id].col);
+assert.ok(arcCols.every(Boolean), '每個近戰基本技能都應有可辨識的刀光顏色');
 assert.strictEqual(new Set(arcCols).size, arcCols.length,
-  '近戰基本技能的刀光顏色必須各不相同：' + meleeBasics.map(b => b.id + '=' + arcs[b.id].col).join(', '));
+  '近戰基本技能的刀光顏色必須各不相同：' + meleeBasics.map((b, i) => b.id + '=' + arcCols[i]).join(', '));
 const arcShapes = meleeBasics.map(b => arcs[b.id].r + '/' + arcs[b.id].spread);
 assert.strictEqual(new Set(arcShapes).size, arcShapes.length,
   '近戰基本技能的刀光形狀也應不同（只有顏色不同在快節奏中不夠明顯）');
