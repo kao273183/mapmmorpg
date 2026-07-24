@@ -55,12 +55,25 @@ J1-C 當初把序列化區塊凍結在 `LEGACY_SKILL_IDS`（劍士＋法師的 1
 - 選角頁在「3 基礎職 × 各 2 進階職＝最多 9 職業」下的版面（晶片列已依系分組，主要壓力在三張基礎大卡 + 精通分頁欄數，兩者都已部分自適應，需複驗）。
 - 回歸：零局內戰力、舊存檔相容、箭矢投射物在低特效下的表現、手機版面。仿 `tests/class-j1f-regression.js`。
 
-## 需要的新素材
+## 素材盤點（2026-07-24 找過，全 CC0）
 
-- **弓箭手精靈圖**：可自己刻（像 WAR/MAGE）。
-- **弓的裝備美術**：`GEAR_ART` 目前只有 warrior/mage 兩套；弓可先沿用或找 CC0 弓圖。缺圖時 `gearArtPath` 有 fallback，不會崩。
-- **箭矢與弓特效**：找 CC0 箭矢 sprite（OpenGameArt 有數個 CC0 arrow/bow 特效），或用既有 `streak`/程式線條先頂著。染色系統已就緒。
-- 一律走 `assets/source/<pack>/` + `assets/runtime/skills/vfx/`，登記 `LICENSE.md`（[[github-dual-account-push]] 之外的既有規則）。
+不像劍士斬擊有一個包全包，弓箭手素材比較零散——沒有單一包給齊全部。分工如下：
+
+| 要用的 | 方案 | 授權 |
+|---|---|---|
+| **角色精靈圖** | 自己刻（像 WAR/MAGE，持弓）。這條沒有現成好用的側視像素弓箭手，自刻最省。 | — |
+| **飛行箭矢** | **建議程式繪製**（一根 shaft + 箭頭 + 羽尾），像 slashArc 那樣——箭是簡單形狀，還能跟斬擊一樣依練度/分支染色、依飛行方向轉向，零素材負擔。備選：Rotating Arrow。 | — |
+| **弓的裝備圖示** | [CC0 Ranged Icons](https://opengameart.org/content/cc0-ranged-icons)（AntumDeluge）——32×32 弓/箭/弩，多來源 CC0 匯整，取一把弓當 weapon 圖示。 | CC0 |
+| **放箭動畫（可選）** | [bow and arrow spritesheet](https://opengameart.org/content/bow-and-arrow-spritesheet)（johnnytal）——拉弓→放箭，24 格，可在角色手邊播一下增加「射」的手感。 | CC0 |
+| **箭雨／多重箭範圍特效** | 用箭矢素材組合，或箭雨沿用隕石的落下路徑改皮；染色系統已就緒。 | — |
+
+其他看過但不理想：
+- [Rotating Arrow Projectile](https://opengameart.org/content/rotating-arrow-projectile)（Randalinski, CC0, 64×64）——完整箭矢含羽尾，但是**直向旋轉**的，橫向射擊要自己轉，不如程式畫。
+- [CC0 Arrows](https://opengameart.org/content/cc0-arrows)（knekko, CC0）——**大多是 UI 方向箭頭**（游標指標），真正的弓箭沒幾個，不合用。
+
+**結論**：真正要下載的其實只有**弓的裝備圖示**（CC0 Ranged Icons）；箭矢建議程式畫（可染色、可轉向，跟斬擊 palette 同一套邏輯）；角色精靈圖自刻。放箭動畫是加分項。這樣新素材負擔很小。
+
+- 素材一律走 `assets/source/<pack>/` + `assets/runtime/`，登記 `LICENSE.md`。push 用 [[github-dual-account-push]]。
 
 ## 主要風險 / 待決
 
