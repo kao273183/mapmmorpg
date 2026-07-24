@@ -984,9 +984,11 @@ const SKILL_FX = {
     const p = player;
     p.cast = 10;
     p.deadeyeT = Math.round((t.mechanic && t.branch === 1 ? 480 : 360) * t.area);
-    p.deadeyeDmg = t.mechanic && t.branch === 0 ? 1.35 : 1.2;
+    // 速射分支的冷卻削減是乘在「所有」技能上的，和穿甲貫穿疊起來會讓群體輸出離群
+    // （J2-F 實測 0.6 時神射手群體 2512，比基礎職 +61%）；改為 0.75 並降低該分支的傷害加成。
+    p.deadeyeDmg = t.mechanic && t.branch === 0 ? 1.35 : 1.1;
     p.deadeyeCrit = t.mechanic && t.branch === 0 ? (t.ultimate ? 1 : 0.5) : 0.25;
-    p.deadeyeCdMul = t.mechanic && t.branch === 1 ? 0.6 : 1;
+    p.deadeyeCdMul = t.mechanic && t.branch === 1 ? 0.75 : 1;
     p.deadeyeFreeMp = t.ultimate && t.branch === 1;
     playSkillAnim('rune', p.x, p.y - p.h / 2, { scale:1.25, layer:'back', alpha:0.85, tint:'#ffd24a' });
     burst(p.x, p.y - p.h / 2, '#fff0b0', 18);
