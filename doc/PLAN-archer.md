@@ -39,16 +39,26 @@ J1-C 當初把序列化區塊凍結在 `LEGACY_SKILL_IDS`（劍士＋法師的 1
 - 技能圖示從既有 70 個挑號；配色進 `SKILL_COLORS`。
 - 平衡：持續輸出對齊劍士/法師基準（弓箭手定位＝遠程持續 + 範圍，單發不該贏近戰爆發）。
 
-### J2-C　精通外觀獎勵
+### J2-C　精通外觀獎勵 — ✅ 已完成（隨 v0.29.47 一併做掉）
 - `MASTERY_COSMETIC_TABLE.archer`：Lv5/10 配色、Lv15/20 稱號（例：翠羽綠／獵人褐；神射手、百步穿楊）。配色的重上色對照表要蓋到 ARC 精靈圖用到的字元（`tests/cosmetics-j1e-smoke.js` 會檢查）。
 
-### J2-D　進階職 1：遊俠（ranger）——陷阱／機動／多重射
+### J2-D　進階職 1：遊俠（ranger）——陷阱／機動 — ✅ 已完成（v0.29.49）
 - `CLASSES.ranger`（base:archer, advanced），archer 精通 Lv10 解鎖。
-- 3 技能（1 專屬 basic 取代繼承的射擊 + 2 進階），走 J1-G 的「進階職專屬基本技能」模式。玩法：陷阱、翻滾機動、多重射強化。
+- **疾羽射**（專屬 basic，取代射擊）：低 MP、短冷卻的快箭，命中給移速加成；分支 疾風（移速更久）／連射（追加第二箭）。
+- **絆索陷阱**：在腳下佈設持續傷害地帶；分支 毒索（傷害更高）／束縛（改為定身）。
+- **迅步**：向後翻滾 + 短暫無敵，落地後下一箭傷害加成。
+- 新機制：`skillAreaDamage` 的 `slow`/`root` 選項、`playZoneAnim` 的 `snare` 種類、`moveSpd()` 的 `swiftT` 加成。
 
-### J2-E　進階職 2：神射手（marksman）——蓄力爆發／穿透
+### J2-E　進階職 2：神射手（marksman）——蓄力爆發／穿透 — ✅ 已完成（v0.29.49）
 - `CLASSES.marksman`（base:archer, advanced）。
-- 3 技能。玩法：蓄力狙擊、穿透、暴擊爆發。
+- **狙擊**（專屬 basic，取代射擊）：慢而重的大箭，附帶額外暴擊率；分支 致命（暴擊率更高）／穩固（傷害更高）。
+- **蓄力狙擊**：高倍率穿透巨箭，穿透不衰減。
+- **鷹眼**：專注狀態，期間傷害／暴擊提升、冷卻縮短；分支 凝神（技能免 MP）／速射（冷卻更短）。
+- 新機制：投射物的 `critBoost`/`pierceMax`/`noDecay`，`skillMpCost` 與冷卻計算的 `deadeyeT` 掛勾。
+
+> 三個弓系基本技（射擊／疾羽射／狙擊）**共用 `arrow` 投射物但各自染色**（箭矢改走 `SKILL_VFX_DEFS`，
+> `tint` 由技能指定）——同系該長得像箭，但要分得出是誰射的。`tests/skill-fx-smoke.js` 會檢查
+> 「同 kind 必須有不同 tint」。
 
 ### J2-F　平衡與回歸
 - 基準檔加 archer + ranger + marksman（`DUNGEON_BENCHMARK_PROFILES`，弓的固定裝備）。

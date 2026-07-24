@@ -36,7 +36,9 @@ const DUNGEON_BENCHMARK_PROFILES = [
   { id:'berserker-chapter2', classId:'berserker', tier:'chapter2', label:'狂戰士 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'paladin-chapter2', classId:'paladin', tier:'chapter2', label:'聖騎士 · 第二章', gearLabel:'稀有全套', seed:72007 },
   { id:'elementalist-chapter2', classId:'elementalist', tier:'chapter2', label:'元素師 · 第二章', gearLabel:'稀有全套', seed:72007 },
-  { id:'warlock-chapter2', classId:'warlock', tier:'chapter2', label:'咒術師 · 第二章', gearLabel:'稀有全套', seed:72007 }
+  { id:'warlock-chapter2', classId:'warlock', tier:'chapter2', label:'咒術師 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'ranger-chapter2', classId:'ranger', tier:'chapter2', label:'遊俠 · 第二章', gearLabel:'稀有全套', seed:72007 },
+  { id:'marksman-chapter2', classId:'marksman', tier:'chapter2', label:'神射手 · 第二章', gearLabel:'稀有全套', seed:72007 }
 // 裝備改用惰性 getter：本檔比 systems.js 早載入，建表當下還沒有 baseClassOf，
 // 但 profile.gear 對所有呼叫端維持原本的用法。
 ].map(profile => Object.defineProperty(profile, 'gear', {

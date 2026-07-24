@@ -26,6 +26,9 @@ function update() {
     p.shieldT--;
     if (p.shieldT === 0) { p.shieldHp = 0; p.shieldReflect = 0; p.shieldBreakMp = 0; p.shieldBurst = false; }
   }
+  if (p.swiftT > 0) p.swiftT--;           // 遊俠疾羽射：短暫移速
+  if (p.evadeBoostT > 0) p.evadeBoostT--; // 遊俠迅步：下一箭強化
+  if (p.deadeyeT > 0) { p.deadeyeT--; if (p.deadeyeT === 0) { p.deadeyeDmg = 1; p.deadeyeCrit = 0; p.deadeyeCdMul = 1; p.deadeyeFreeMp = false; } } // 神射手專注
   if (p.holyGuardT > 0) p.holyGuardT--;   // 聖騎士減傷
   if (p.ccImmuneT > 0) { p.ccImmuneT--; p.chillT = 0; p.hazardSlowT = 0; } // 庇護：免疫緩速與凍結
   if (perkV('aegis') > 0) { // 守護結界:每12秒補護盾
@@ -142,17 +145,25 @@ function update() {
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
         hitMon(m, r.d, r.crit);
-        if (pr.kind === 'arrow') {                     // 弓箭手：直傷；可穿透/擊退/緩速
+        if (pr.kind === 'arrow') {                     // 弓箭手系：直傷 + 穿透/擊退/緩速/專注加成
           const tt2 = pr.talent || {};
           const vuln = tt2.mechanic && tt2.branch === 0 && tt2.id === 'shoot' ? 1.15 : 1; // 射擊·精準：受傷+15%
-          const r = skillDmg((pr.mult || 1) * vuln);
-          hitMon(m, r.d, r.crit || (tt2.ultimate && tt2.branch === 0));
+          let mul = (pr.mult || 1) * vuln;
+          if (player.evadeBoostT > 0) { mul *= player.evadeBoost || 1.4; player.evadeBoostT = 0; } // 迅步：只吃一箭
+          if (player.deadeyeT > 0) mul *= player.deadeyeDmg || 1;                                  // 鷹眼專注
+          const pierced = pr.hits ? pr.hits.length : 0;
+          if (pierced && !pr.noDecay) mul *= Math.pow(0.85, pierced);                              // 穿透遞減（貫日不衰減）
+          const r = skillDmg(mul);
+          const bonusCrit = (pr.critBoost || 0) + (player.deadeyeT > 0 ? (player.deadeyeCrit || 0) : 0);
+          const crit = r.crit || (tt2.ultimate && tt2.branch === 0 && tt2.id === 'shoot') || (bonusCrit > 0 && Math.random() < bonusCrit);
+          hitMon(m, crit && !r.crit ? Math.round(r.d * 1.6) : r.d, crit);
           burst(pr.x, pr.y, '#cfe0a0', pr.big ? 10 : 6);
+          if (pr.swift) player.swiftT = Math.max(player.swiftT || 0, pr.swift);                    // 疾羽射：移速
           if (mons.includes(m)) {
             if (pr.knock && m.type !== 'boss') { m.x = Math.max(18, Math.min(worldW - 18, m.x + (pr.vx > 0 ? 1 : -1) * pr.knock)); if (!(m.ccT > 0)) { m.freezeT = Math.max(m.freezeT || 0, 24); m.ccT = 90; } }
             if (pr.slowHit && !(m.ccT > 0)) m.slowT = Math.max(m.slowT || 0, 150);
           }
-          if (pr.pierce) { pr.hits.push(m); continue; } // 穿透：不消失，繼續飛
+          if (pr.pierce && pierced + 1 < (pr.pierceMax || 99)) { pr.hits.push(m); continue; }      // 穿透上限內繼續飛
           gone = true; break;
         } else if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果
           const doFire = pr.elemAll || pr.elem === 'fire';

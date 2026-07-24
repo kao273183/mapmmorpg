@@ -309,14 +309,10 @@ function render() {
   // projectiles
   const ELEM_PROJ_COL = { fire:['#ff7a36', '#ffd9a0'], ice:['#4ad0c8', '#d8fffb'], bolt:['#e9d45a', '#fff6c0'] };
   for (const pr of projs) {
-    if (pr.kind === 'arrow') {                 // 弓箭手箭矢：DCSS 箭圖，依飛行方向旋轉
+    if (pr.kind === 'arrow') {                 // 弓箭手系箭矢：依飛行方向旋轉，tint 區分技能／職業
       const ang = Math.atan2(pr.vy || 0, pr.vx) + Math.PI / 4; // 箭圖本身指右上(NE)
-      if (arrowImg && arrowImg.complete && arrowImg.naturalWidth) {
-        const asz = pr.big ? 20 : 14;
-        ctx.save(); ctx.translate(Math.round(pr.x), Math.round(pr.y)); ctx.rotate(ang);
-        ctx.drawImage(arrowImg, -asz, -asz, asz * 2, asz * 2); ctx.restore();
-      } else { // 後備：程式畫一根箭
-        ctx.strokeStyle = '#c8ccd0'; ctx.lineWidth = 2; ctx.beginPath();
+      if (!drawSkillVfxFrame('arrow', pr.x, pr.y, 0, pr.big ? 0.56 : 0.4, false, ang, 1, pr.tint)) {
+        ctx.strokeStyle = pr.tint || '#c8ccd0'; ctx.lineWidth = 2; ctx.beginPath(); // 後備
         ctx.moveTo(pr.x - pr.vx * 1.6, pr.y - (pr.vy || 0) * 1.6); ctx.lineTo(pr.x, pr.y); ctx.stroke();
       }
     } else if (pr.kind === 'ice') {

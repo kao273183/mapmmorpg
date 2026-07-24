@@ -128,9 +128,9 @@ const SKILL_ICON_FILES = {
   bloodrend:33, warcry:45,
   bulwark:5, smite:9, elemburst:27, chainstorm:14, plague:38, soulleech:66,
   rend:17, holystrike:23, elembolt:49, shadowbolt:55,
-  shoot:30, multishot:24, pierce:40, arrowrain:47, powershot:29
+  shoot:30, multishot:24, pierce:40, arrowrain:47, powershot:29,
+  swiftshot:19, snaretrap:8, evade:53, snipe:16, chargeshot:64, deadeye:6
 };
-const arrowImg = new Image(); arrowImg.src = 'assets/runtime/skills/vfx/arrow.png'; // 弓箭手投射物（DCSS, CC0）
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
   const normal = new Image(), gray = new Image();
@@ -157,6 +157,7 @@ const SKILL_VFX_DEFS = {
   darkBolt:{ src:'assets/runtime/skills/vfx/darkBolt.png', frames:6, frame:16 },
   wardShield:{ src:'assets/runtime/skills/vfx/wardShield.png', frames:6, frame:48 },
   splash:{ src:'assets/runtime/skills/vfx/splash.png', frames:6, frame:32 },
+  arrow:{ src:'assets/runtime/skills/vfx/arrow.png', frames:1, frame:32 }, // 弓箭手箭矢（DCSS, CC0）；靠 tint 區分職業
   // Weapon Slash - Effect (Cethiel, CC0)：5 種斬擊，每格 150px（原 126×150 補成正方形）
   crescentBold:{ src:'assets/runtime/skills/vfx/crescentBold.png', frames:6, frame:150 },
   crescentRing:{ src:'assets/runtime/skills/vfx/crescentRing.png', frames:6, frame:150 },

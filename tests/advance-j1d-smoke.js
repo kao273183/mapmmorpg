@@ -159,7 +159,7 @@ assert.strictEqual(api.loadouts.paladin[0], null, '聖騎士不該留著法師�
 // 7. 新增 6 個技能後，既有存檔區塊仍是 46
 assert.strictEqual(api.skillsToNums().length, 46, '技能存檔區塊必須維持 46');
 assert.strictEqual(api.LEGACY_SKILL_IDS.length, 10, '存檔區塊只含 10 個基礎職技能');
-assert.strictEqual(api.SKILL_IDS.length, 27, '總技能數：劍士5+法師5+進階12+弓箭手5(J2-B)');
+assert.strictEqual(api.SKILL_IDS.length, 33, '總技能數：基礎職15(劍士5+法師5+弓箭手5) + 進階職18(6職×3)');
 
 // 8. 每個技能都要有圖示與配色，否則介面會畫成空白
 const bootSrc = fs.readFileSync(path.join(root, 'src', 'game', 'bootstrap.js'), 'utf8');

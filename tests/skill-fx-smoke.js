@@ -87,7 +87,7 @@ const progressionSrc = read('src', 'game', 'progression.js');
 const defsBlock = progressionSrc.match(/const SKILL_DEFS = \{[\s\S]*?\n\};/)[0];
 const basics = [];
 for (const m of defsBlock.matchAll(/^\s*(\w+):\s*\{ cls:'(\w+)'[^}]*basic:true/gm)) basics.push({ id: m[1], cls: m[2] });
-assert.strictEqual(basics.length, 7, '七個職業各要有一個基本技能，實際 ' + basics.map(b => b.id).join('/'));
+assert.strictEqual(basics.length, 9, '九個職業各要有一個基本技能，實際 ' + basics.map(b => b.id).join('/'));
 
 const meleeBasics = basics.filter(b => arcs[b.id]);
 const rangedBasics = basics.filter(b => !arcs[b.id]);
@@ -102,14 +102,21 @@ const arcShapes = meleeBasics.map(b => arcs[b.id].r + '/' + arcs[b.id].spread);
 assert.strictEqual(new Set(arcShapes).size, arcShapes.length,
   '近戰基本技能的刀光形狀也應不同（只有顏色不同在快節奏中不夠明顯）');
 
-// 遠程基本技能各自要有 kind，且不能共用
-const rangedKinds = rangedBasics.map(b => {
-  const m = bodies[b.id] && bodies[b.id].match(/kind:'([a-z]+)'/);
+// 遠程基本技能各自要有投射物，且外觀必須可辨識：
+// 同一個 kind 是允許的（弓箭手系本來就都射箭），但這時必須靠 tint 區分開來。
+const rangedLooks = rangedBasics.map(b => {
+  const body = bodies[b.id] || '';
+  const m = body.match(/kind:'([a-z]+)'/);
   assert.ok(m, b.id + ' 是遠程基本技能，應建立投射物');
-  return m[1];
+  const tint = (body.match(/tint:'(#[0-9a-fA-F]{6})'/) || [])[1] || '';
+  return { id: b.id, kind: m[1], tint, look: m[1] + '|' + tint };
 });
-assert.strictEqual(new Set(rangedKinds).size, rangedKinds.length,
-  '遠程基本技能不可共用同一種投射物外觀：' + rangedBasics.map((b, i) => b.id + '=' + rangedKinds[i]).join(', '));
+for (const r of rangedLooks) {
+  const sameKind = rangedLooks.filter(o => o.kind === r.kind);
+  if (sameKind.length > 1) assert.ok(r.tint, r.id + ' 與其他基本技共用 ' + r.kind + ' 投射物，必須指定 tint 才分得出來');
+}
+assert.strictEqual(new Set(rangedLooks.map(r => r.look)).size, rangedLooks.length,
+  '遠程基本技能的投射物外觀不可完全相同：' + rangedLooks.map(r => r.id + '=' + r.look).join(', '));
 
 // ── 4. VFX 圖集：宣告的尺寸必須對得上實際檔案，且要有授權登記 ──────────────
 const bootSrc = read('src', 'game', 'bootstrap.js');

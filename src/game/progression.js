@@ -266,6 +266,14 @@ const SKILL_DEFS = {
   pierce:    { cls:'archer', name:'貫穿射', mp:14, cd:180, desc:'射出強力一箭,貫穿直線上所有敵人' },
   arrowrain: { cls:'archer', name:'箭雨',   mp:22, cd:320, desc:'呼喚箭雨落在指定範圍,持續覆蓋' },
   powershot: { cls:'archer', name:'勁弩射', mp:16, cd:200, desc:'蓄力一箭,高傷並擊退命中的敵人' },
+  // 進階職：遊俠（弓箭手系，陷阱與機動）
+  swiftshot: { cls:'ranger', name:'疾羽射', mp:3, cd:32, minCd:14, basic:true, desc:'輕快的一箭,射速快;命中後短暫提升移速' },
+  snaretrap: { cls:'ranger', name:'絆索陷阱', mp:12, cd:240, desc:'在前方佈下陷阱,持續傷害並纏住踏入的敵人' },
+  evade:     { cls:'ranger', name:'迅步', mp:10, cd:300, desc:'瞬間翻滾拉開距離,期間無敵並強化下一箭' },
+  // 進階職：神射手（弓箭手系，蓄力與穿透）
+  snipe:     { cls:'marksman', name:'狙擊', mp:6, cd:58, minCd:24, basic:true, desc:'較慢但精準的一箭,爆擊率提升' },
+  chargeshot:{ cls:'marksman', name:'蓄力狙擊', mp:18, cd:300, desc:'凝聚全力的一箭,貫穿並造成巨額傷害' },
+  deadeye:   { cls:'marksman', name:'鷹眼', mp:14, cd:420, desc:'進入專注狀態,一段時間內箭矢傷害與爆擊大幅提升' },
   plague:    { cls:'warlock', name:'疫咒', mp:14, cd:180, desc:'散布疫病使範圍敵人持續受傷並陷入虛弱' },
   soulleech: { cls:'warlock', name:'汲魂', mp:16, cd:240, desc:'抽取前方直線敵人的生命,回復自身HP與MP' }
 };
@@ -283,7 +291,9 @@ const BRANCH_NAMES = {
   elemburst:['三重','熾炎'], chainstorm:['連鎖','聚能'],
   plague:['蔓延','衰敗'], soulleech:['吸血','奪魂'],
   shoot:['精準','速射'],
-  multishot:['散射','集火'], pierce:['洞穿','裂空'], arrowrain:['廣域','密集'], powershot:['擊退','穿甲']
+  multishot:['散射','集火'], pierce:['洞穿','裂空'], arrowrain:['廣域','密集'], powershot:['擊退','穿甲'],
+  swiftshot:['疾風','連珠'], snaretrap:['束縛','毒牙'], evade:['疾影','反擊'],
+  snipe:['弱點','穿刺'], chargeshot:['貫日','裂魂'], deadeye:['專注','迅捷']
 };
 const TALENT_EFFECTS = {
   slash:[{ lv3:'擊退目標', lv5:'必定爆擊' }, { lv3:'目標上限+2', lv5:'第3擊強化且免費' }],
@@ -312,11 +322,17 @@ const TALENT_EFFECTS = {
   multishot:[{ lv3:'箭數+2、扇形更廣', lv5:'命中疊加易傷' }, { lv3:'集中三箭、傷害+25%', lv5:'全數命中追加一發' }],
   pierce:[{ lv3:'每穿透一體傷害提升', lv5:'穿透不再衰減' }, { lv3:'對低血目標加傷', lv5:'貫穿末端爆裂' }],
   arrowrain:[{ lv3:'範圍擴大', lv5:'落點留下減速箭陣' }, { lv3:'箭數增加', lv5:'密集覆蓋、命中緩速' }],
-  powershot:[{ lv3:'擊退更遠並短暫暈眩', lv5:'撞牆追加傷害' }, { lv3:'改為貫穿全直線', lv5:'穿甲、無視部分防禦' }]
+  powershot:[{ lv3:'擊退更遠並短暫暈眩', lv5:'撞牆追加傷害' }, { lv3:'改為貫穿全直線', lv5:'穿甲、無視部分防禦' }],
+  swiftshot:[{ lv3:'命中提升移速更久', lv5:'移動中射擊不減速' }, { lv3:'冷卻再縮短', lv5:'每三箭追加一發' }],
+  snaretrap:[{ lv3:'踏入者被定身', lv5:'定身時受傷提升' }, { lv3:'持續傷害提高', lv5:'陷阱範圍擴大並延長' }],
+  evade:[{ lv3:'距離與無敵時間提升', lv5:'留下迷惑殘影' }, { lv3:'閃避後下一箭傷害翻倍', lv5:'閃避立即重置射擊冷卻' }],
+  snipe:[{ lv3:'爆擊傷害提升', lv5:'對滿血目標必定爆擊' }, { lv3:'貫穿一名敵人', lv5:'貫穿全直線' }],
+  chargeshot:[{ lv3:'貫穿更多敵人', lv5:'貫穿不衰減' }, { lv3:'爆擊率大幅提升', lv5:'爆擊時追加爆裂' }],
+  deadeye:[{ lv3:'專注期間爆擊率再提升', lv5:'專注期間必定爆擊' }, { lv3:'專注期間冷卻縮短', lv5:'專注期間射擊不消耗MP' }]
 };
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };
-const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], archer: ['shoot', null, null], berserker: ['rend', null, null], paladin: ['holystrike', null, null], elementalist: ['elembolt', null, null], warlock: ['shadowbolt', null, null] };
+const loadouts = { warrior: ['slash', null, null], mage: ['fire', null, null], archer: ['shoot', null, null], ranger: ['swiftshot', null, null], marksman: ['snipe', null, null], berserker: ['rend', null, null], paladin: ['holystrike', null, null], elementalist: ['elembolt', null, null], warlock: ['shadowbolt', null, null] };
 let menuTab = 'base', selSkill = null, pendingReset = null, selStash = null, pendingStashDel = null;
 function classSkills(cls) { // 進階職＝基礎職技能 + 自身專屬技能；若自己有基本技能，就取代繼承來的那個
   const base = baseOf(cls);
@@ -702,6 +718,26 @@ const MASTERY_COSMETIC_TABLE = {
     titles: [
       { lv:15, id:'ele_four',   name:'四象行者', col:'#5fe0d4' },
       { lv:20, id:'ele_storm',  name:'風暴之主', col:'#9ceaff' }
+    ]
+  },
+  ranger: {
+    colors: [
+      { lv:5,  id:'rng_moss',   name:'苔綠',   col:'#6fbf6a', trim:'#d0f0c0' },
+      { lv:10, id:'rng_dusk',   name:'暮林',   col:'#3f7a52', trim:'#a8d8b0' }
+    ],
+    titles: [
+      { lv:15, id:'rng_track',  name:'循跡者',   col:'#8fd88a' },
+      { lv:20, id:'rng_wild',   name:'荒野之主', col:'#b0f0a0' }
+    ]
+  },
+  marksman: {
+    colors: [
+      { lv:5,  id:'mks_brass',  name:'黃銅',   col:'#c8a04a', trim:'#f0dca0' },
+      { lv:10, id:'mks_sun',    name:'烈陽金', col:'#ffd24a', trim:'#fff4c0' }
+    ],
+    titles: [
+      { lv:15, id:'mks_eye',    name:'鷹瞳',     col:'#e8c860' },
+      { lv:20, id:'mks_onehit', name:'一箭穿心', col:'#ffe888' }
     ]
   },
   warlock: {

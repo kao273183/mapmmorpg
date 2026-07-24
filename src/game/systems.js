@@ -10,7 +10,9 @@ const CLASSES = {
   berserker:    { name: '狂戰士', col: '#ff6b3d', base: 'warrior', advanced: true, tag: '近戰  •  高風險爆發', sub: '以血換傷，越危險越強' },
   paladin:      { name: '聖騎士', col: '#ffd76a', base: 'warrior', advanced: true, tag: '近戰  •  防禦持續', sub: '護盾與治療，站得比誰都久' },
   elementalist: { name: '元素師', col: '#4ad0c8', base: 'mage',    advanced: true, tag: '遠程  •  多元素範圍', sub: '火冰雷齊發，成群清場' },
-  warlock:      { name: '咒術師', col: '#a35ad0', base: 'mage',    advanced: true, tag: '遠程  •  詛咒消耗', sub: '疫病與虛弱，讓敵人自己倒下' }
+  warlock:      { name: '咒術師', col: '#a35ad0', base: 'mage',    advanced: true, tag: '遠程  •  詛咒消耗', sub: '疫病與虛弱，讓敵人自己倒下' },
+  ranger:       { name: '遊俠',   col: '#6fbf6a', base: 'archer',  advanced: true, tag: '遠程  •  陷阱機動', sub: '設陷牽制，靈巧走位' },
+  marksman:     { name: '神射手', col: '#e0c060', base: 'archer',  advanced: true, tag: '遠程  •  蓄力穿透', sub: '一箭定生死，穿透一切' }
 };
 function baseClassOf(cls) { const c = CLASSES[cls]; return (c && c.base) || cls; } // 進階職對應回基礎職（裝備/屬性/外觀共用）
 function isAdvancedClass(cls) { return !!(CLASSES[cls] && CLASSES[cls].advanced); }
@@ -84,7 +86,7 @@ const player = {
   x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
   onGround: false, dropT: 0, inv: 0, cast: 0, slotCd: [0, 0, 0], walk: 0,
   dashT: 0, dashCd: 0, dashDir: 1,
-  slashT: 0, spinT: 0, potCd: 0, rageT: 0, rageAtk: 0, rageSpd: 0, rageLifesteal: 0, rageExtend: 0, rageBlood: false, rageUltimate: false,
+  slashT: 0, spinT: 0, potCd: 0, swiftT: 0, evadeBoostT: 0, evadeBoost: 1, deadeyeT: 0, deadeyeDmg: 1, deadeyeCrit: 0, deadeyeCdMul: 1, deadeyeFreeMp: false, rageT: 0, rageAtk: 0, rageSpd: 0, rageLifesteal: 0, rageExtend: 0, rageBlood: false, rageUltimate: false,
   shieldHp: 0, shieldT: 0, shieldReflect: 0, shieldBreakMp: 0, shieldBurst: false, chillT: 0, hazardSlowT:0, cls: 'warrior', skillCasts: {},
   perk: {}, revives: 0, affixDeathUsed: false, uniqueReviveUsed: false, eventAtk: 0, eventRerolls:0, aegisCd: 0, airJumped: false,
   lv: 1, hp: 100, mhp: 100, mp: 30, mmp: 30, xp: 0,
@@ -141,7 +143,10 @@ function blessingHeal(amount) {
   const blessed = typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(amount) : amount;
   return typeof dungeonCurseHealingAmount === 'function' ? dungeonCurseHealingAmount(blessed) : blessed;
 }
-function skillMpCost(definition) { return Math.ceil((definition && definition.mp || 0) * (1 + curseRiskV('mana_leak'))); }
+function skillMpCost(definition) {
+  if (player.deadeyeT > 0 && player.deadeyeFreeMp) return 0; // 鷹眼·迅捷終極：專注期間免 MP
+  return Math.ceil((definition && definition.mp || 0) * (1 + curseRiskV('mana_leak')));
+}
 function cardLv(c) { return c.stat ? player.cd[c.id] : perkV(c.id); }
 const CARD_MAXLV = 5;
 function rollPick() {
@@ -211,7 +216,7 @@ function critRate() { return Math.min(1, 0.08 + 0.06 * player.cd.crit + 0.005 * 
 function armorDef() {
   return Math.round(eqStat('armor', 'def') + eqStat('helmet', 'def') + affixV('def') + player.cd.def + curseRewardV('leaden_steps'));
 }
-function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + uniquePassiveV('moveBonus') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0)) * (1 - curseRiskV('leaden_steps')) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
+function moveSpd() { return (2.0 + 0.4 * player.cd.spd + eqStat('boots', 'spd') + affixV('move') + blessingV('wind_stride') + uniquePassiveV('moveBonus') + (player.rageT > 0 ? player.rageSpd || 0.8 : 0) + (player.swiftT > 0 ? 0.7 : 0)) * (1 - curseRiskV('leaden_steps')) * (player.chillT > 0 ? 0.55 : 1) * (player.hazardSlowT > 0 ? 0.72 : 1); }
 function jumpV() { return 11.5 + (player.eq.boots && player.eq.boots.jmp ? player.eq.boots.jmp : 0); }
 function skillDamageMul() { return (1 + 0.15 * player.cd.xdmg) * (1 + affixV('skillDmg')) * (1 + curseRewardV('mana_leak')) * (player.mp >= player.mmp * 0.7 ? 1 + 0.1 * perkV('overcharge') : 1); }
 function cooldownMul() { return Math.pow(0.9, player.cd.aspd) * (1 + 0.18 * perkV('brute')) * Math.max(0.35, 1 - affixV('cooldown')) * (1 - 0.015 * meta.up.haste) * (1 + curseRiskV('broken_hourglass')); }
@@ -351,6 +356,8 @@ function skillAreaDamage(x, y, rx, ry, mult, color, opts) {
     hit++;
     if (before > 0 && m.hp <= 0) killed++;
     if (opts.knock && mons.includes(m) && m.type !== 'boss') m.x = Math.max(18, Math.min(worldW - 18, m.x + Math.sign(m.x - x || player.face) * opts.knock));
+    if (opts.slow && mons.includes(m) && !(m.ccT > 0)) m.slowT = Math.max(m.slowT || 0, opts.slow);
+    if (opts.root && mons.includes(m) && !(m.ccT > 0)) { m.freezeT = Math.max(m.freezeT || 0, opts.root); m.ccT = 112; }
     burst(m.x, m.y - m.h / 2, color || '#ffd23e', opts.particles || 6);
   }
   return { hit, killed };
@@ -432,6 +439,7 @@ function playZoneAnim(z) {
   else if (z.kind === 'aftershock' || z.kind === 'rupture') playSkillAnim('roots', z.x, z.y - 30, { scale:Math.max(1, z.rx / 64), layer:'back' });
   else if (z.kind === 'impact') playSkillAnim('groundImpact', z.x, z.y - 30, { scale:Math.max(1, z.rx / 64), layer:'back' });
   else if (z.kind === 'thunder') playSkillAnim('impact', z.x, z.y, { scale:1.05 });
+  else if (z.kind === 'snare') playSkillAnim('roots', z.x, z.y - 26, { scale:Math.max(1, z.rx / 60), layer:'back', alpha:0.9 });
   else if (z.kind === 'wind' || z.kind === 'whirlwind') playSkillAnim('smoke', z.x, z.y, { scale:Math.max(1.1, z.rx / 74), layer:'back', alpha:0.75 });
 }
 function fireballAim(playerRef, originX, originY) {
@@ -855,7 +863,7 @@ const SKILL_FX = {
       const spread = twin ? (i === 0 ? -0.08 : 0.08) : 0;
       const ang = aim.angle + spread;
       projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
-        t:aim.target ? 100 : 80, mult:t.dmg, kind:'arrow', talent:t, pierce,
+        t:aim.target ? 100 : 80, mult:t.dmg, kind:'arrow', talent:t, pierce, tint:'#cfe0a0',
         hits:pierce ? [] : null, aimTarget:aim.target, aimT:aim.target ? 20 : 0 });
     }
     playSfx('swordSwing', 0.5, 1.3); beep(520, 0.05, 'square', 0.03);
@@ -870,7 +878,7 @@ const SKILL_FX = {
       const spread = (i - (n - 1) / 2) * (wide ? 0.22 : focus ? 0.1 : 0.16);
       const ang = base + spread;
       projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
-        t:70, mult:0.7 * t.dmg * dmgMul, kind:'arrow', talent:t, aimT:0 });
+        t:70, mult:0.7 * t.dmg * dmgMul, kind:'arrow', talent:t, tint:'#b8d878', aimT:0 });
     }
     playSfx('swordSwing', 0.5, 1.2); beep(480, 0.06, 'square', 0.04);
   },
@@ -879,7 +887,7 @@ const SKILL_FX = {
     p.cast = 12;
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 13;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:75, mult:1.6 * t.dmg, kind:'arrow', talent:t, pierce:true, hits:[], big:true,
+      t:75, mult:1.6 * t.dmg, kind:'arrow', talent:t, pierce:true, hits:[], big:true, tint:'#e8e0a0',
       aimTarget:aim.target, aimT:aim.target ? 14 : 0 });
     playSfx('swordSwing', 0.6, 0.85); beep(300, 0.1, 'sawtooth', 0.045);
   },
@@ -891,7 +899,7 @@ const SKILL_FX = {
     for (let i = 0; i < n; i++) {
       const ax = cx + (Math.random() - 0.5) * span * 2;
       projs.push({ x:ax, y:-20 - Math.random() * 40, vx:(Math.random() - 0.5) * 1.5, vy:8 + Math.random() * 2,
-        t:110, mult:0.6 * t.dmg, kind:'arrow', talent:t, slowHit:dense && t.ultimate, aimT:0 });
+        t:110, mult:0.6 * t.dmg, kind:'arrow', talent:t, tint:'#9ac0e0', slowHit:dense && t.ultimate, aimT:0 });
     }
     playSfx('meteor', 0.65);
   },
@@ -901,9 +909,89 @@ const SKILL_FX = {
     const armor = t.mechanic && t.branch === 1; // 穿甲：貫穿+高傷
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 15;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:60, mult:(armor ? 3.4 : 2.6) * t.dmg, kind:'arrow', talent:t, pierce:armor, hits:armor ? [] : null,
+      t:60, mult:(armor ? 3.4 : 2.6) * t.dmg, kind:'arrow', talent:t, tint:'#e0a860', pierce:armor, hits:armor ? [] : null,
       knock:t.mechanic && t.branch === 0 ? 60 : 0, big:true, aimTarget:aim.target, aimT:aim.target ? 12 : 0 });
     playSfx('swordSwing', 0.7, 0.8); beep(170, 0.15, 'sawtooth', 0.05);
+  },
+  swiftshot(t) { // 遊俠基本技：輕快連射，命中提升移速
+    const p = player;
+    p.cast = 8;
+    const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 11;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:75, mult:0.85 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', swift:t.mechanic && t.branch === 0 ? 150 : 80,
+      aimTarget:aim.target, aimT:aim.target ? 18 : 0 });
+    if (t.ultimate && t.branch === 1) { // 連珠：每三箭追加一發
+      p.skillCasts.swiftshot = (p.skillCasts.swiftshot || 0) + 1;
+      if (p.skillCasts.swiftshot % 3 === 0) projs.push({ x, y:y - 6, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed - 0.6,
+        t:75, mult:0.85 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', aimT:0 });
+    }
+    playSfx('swordSwing', 0.45, 1.45); beep(600, 0.04, 'square', 0.028);
+  },
+  snaretrap(t) { // 遊俠：前方佈下陷阱區域
+    const p = player;
+    p.cast = 12;
+    const big = t.mechanic && t.branch === 1 && t.ultimate;
+    const tx = p.x + p.face * 70 * t.area, ty = p.y - 16;
+    const rx = (big ? 84 : 62) * t.area, dur = big ? 420 : 300;
+    const root = t.mechanic && t.branch === 0 ? (t.ultimate ? 70 : 45) : 0;
+    const dot = t.mechanic && t.branch === 1 ? 0.55 : 0.35;
+    addSkillZone('snare', tx, ty, rx, 46, 0, dur, 30, dot * t.dmg, '#7aa860',
+      root ? { root, slow:120 } : { slow:180 });
+    playSkillAnim('roots', tx, ty - 20, { scale:Math.max(1, rx / 58), layer:'back' });
+    playSfx('uiConfirm', 0.4, 0.8); beep(220, 0.12, 'triangle', 0.04);
+    num(tx, ty - 40, '陷阱', '#9ac878', { size:11 });
+  },
+  evade(t) { // 遊俠：翻滾拉開距離、無敵、強化下一箭
+    const p = player;
+    const far = t.mechanic && t.branch === 0;
+    const dist = (far ? 150 : 110) * t.area;
+    p.x = Math.max(14, Math.min(worldW - 14, p.x - p.face * dist)); // 往後翻滾
+    p.inv = Math.max(p.inv, far ? (t.ultimate ? 60 : 45) : 32);
+    p.cast = 10;
+    p.evadeBoostT = 180; // 下一箭強化（update 讀取）
+    p.evadeBoost = t.mechanic && t.branch === 1 ? (t.ultimate ? 2.4 : 2.0) : 1.4;
+    if (t.ultimate && t.branch === 1) p.slotCd = p.slotCd.map(() => 0); // 反擊終極：重置冷卻
+    playSkillAnim('smoke', p.x + p.face * 40, p.y - 28, { scale:1.2, flip:p.face < 0, layer:'back', alpha:0.7 });
+    playSkillAnim('teleport', p.x, p.y - 30, { scale:1.0, alpha:0.8 });
+    playSfx('dash', 0.6); beep(520, 0.07, 'sine', 0.035);
+  },
+  snipe(t) { // 神射手基本技：慢但精準、爆擊率高
+    const p = player;
+    p.cast = 12;
+    const pierceAll = t.ultimate && t.branch === 1;
+    const pierceOne = t.mechanic && t.branch === 1;
+    const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 14;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:85, mult:1.45 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#f0d878',
+      pierce:pierceAll || pierceOne, hits:(pierceAll || pierceOne) ? [] : null, pierceMax:pierceAll ? 99 : 1,
+      critBoost:t.mechanic && t.branch === 0 ? (t.ultimate ? 1 : 0.35) : 0.15,
+      aimTarget:aim.target, aimT:aim.target ? 16 : 0 });
+    playSfx('swordSwing', 0.6, 0.75); beep(260, 0.1, 'sawtooth', 0.04);
+  },
+  chargeshot(t) { // 神射手：蓄力巨箭，貫穿
+    const p = player;
+    p.cast = 16;
+    const solar = t.mechanic && t.branch === 0;
+    projs.push({ x:p.x + p.face * 22, y:p.y - 30, vx:p.face * 17, vy:0,
+      t:70, mult:3.8 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#ffd24a', pierce:true, hits:[],
+      pierceMax:solar ? 99 : 3, noDecay:t.ultimate && t.branch === 0,
+      critBoost:t.mechanic && t.branch === 1 ? (t.ultimate ? 0.9 : 0.5) : 0.2 });
+    playSkillAnim('beam', p.x + p.face * 60, p.y - 30, { scale:1.2, flip:p.face < 0, layer:'back', alpha:0.7 });
+    playSfx('swordSwing', 0.8, 0.6); beep(140, 0.2, 'sawtooth', 0.055);
+    burst(p.x + p.face * 30, p.y - 30, '#ffd24a', 14);
+  },
+  deadeye(t) { // 神射手：專注狀態，箭矢傷害與爆擊提升
+    const p = player;
+    p.cast = 10;
+    p.deadeyeT = Math.round((t.mechanic && t.branch === 1 ? 480 : 360) * t.area);
+    p.deadeyeDmg = t.mechanic && t.branch === 0 ? 1.35 : 1.2;
+    p.deadeyeCrit = t.mechanic && t.branch === 0 ? (t.ultimate ? 1 : 0.5) : 0.25;
+    p.deadeyeCdMul = t.mechanic && t.branch === 1 ? 0.6 : 1;
+    p.deadeyeFreeMp = t.ultimate && t.branch === 1;
+    playSkillAnim('rune', p.x, p.y - p.h / 2, { scale:1.25, layer:'back', alpha:0.85, tint:'#ffd24a' });
+    burst(p.x, p.y - p.h / 2, '#fff0b0', 18);
+    playSfx('uiConfirm', 0.6, 1.2); beep(760, 0.16, 'sine', 0.04);
+    num(p.x, p.y - p.h - 26, '專注', '#ffd24a');
   },
   fire(t) {
     const p = player;
@@ -987,7 +1075,7 @@ function trySkill(i) {
   }
   activityProgress('skills', 1);
   if (!result || !result.free) p.mp -= mpCost;
-  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(def.minCd || 6, Math.round(def.cd * t.cd * cooldownMul()));
+  p.slotCd[i] = result && result.resetCd ? 0 : Math.max(def.minCd || 6, Math.round(def.cd * t.cd * cooldownMul() * (p.deadeyeT > 0 ? (p.deadeyeCdMul || 1) : 1)));
   if (p.slotCd[i] > 0 && perkV('echo') > 0 && Math.random() < 0.04 * perkV('echo')) {
     p.slotCd[i] = 0;
     num(p.x, p.y - p.h - 24, '技能迴響!', '#ffd23e');
