@@ -1,0 +1,70 @@
+# PLAN — 弓箭手基礎職（J2）
+
+第三個基礎職，接在劍士／法師之後（見 [PLAN-class-system.md](PLAN-class-system.md)）。這是整個職業系統**最大的一塊** —— 前面 J1-C~G 都是在既有兩職的基礎設施上加東西，弓箭手是**從零長一個新基礎職**：新精靈圖、新武器類型、新攻擊型態（遠程箭矢）、新裝備線，還要把選角頁從「固定兩張基礎職大卡」擴成三張。
+
+> 開發位置：`feature/class-system` 分支，做完一段再合回 main（[[class-system-branch]]）。版本號往 0.29.47+ 走。
+
+## 好消息：存檔相容不用重做
+
+J1-C 當初把序列化區塊凍結在 `LEGACY_SKILL_IDS`（劍士＋法師的 10 技能＝46 格），其餘技能走 `ax` 欄位。**弓箭手的技能不在 LEGACY 裡，會自動落進 `ax`**——所以不必動 46 格舊區塊、不必改存檔碼。`advancedSkillState()`/`applyAdvancedSkillState()` 已經處理「非 legacy 職業」的技能與出戰欄。J2-A 要驗證這條對「基礎職」也成立（目前只有進階職走過這條路）。
+
+## 接入點盤點（現況）
+
+| 項目 | 現況 | 弓箭手要做的 |
+|---|---|---|
+| 職業表 | `CLASSES`（systems.js:6），`baseClassIds()` 自動認基礎職 | 加 `archer` |
+| 精靈圖 | 只有 `WAR`／`MAGE`（bootstrap.js:287/292），手刻像素字串 | 手畫 `ARC`（持弓） |
+| 武器種類 | 二元 `baseClassOf(cls)==='mage' ? 'stave' : 'sword'`（systems.js:980） | 改三向，加 `'bow'` |
+| 裝備美術索引 | `it.wpn === 'stave' ? 1 : 0`（bootstrap.js:94） | 加弓的索引 |
+| 裝備名稱 | `GEAR_BASE.weapon.{warrior,mage}`（systems.js:940） | 加 `archer` 一組弓名 |
+| 裝備可用判定 | `gearUsableByClass` 經 `baseClassOf` | 已自動支援，免動 |
+| 選角頁 | **固定兩張基礎職大卡**（191px，town.js） | 改成能容納三張基礎職 |
+| 精通 | `ensureMasteryState` 自動補、精通分頁已自適應欄數 | 免動 |
+| 精通外觀 | `MASTERY_COSMETIC_TABLE`（progression.js） | 加 archer 的 2 配色 + 2 稱號 |
+| 攻擊型態 | 近戰扇形 / 遠程投射物 | 遠程箭矢（新投射物 kind） |
+
+## 分段
+
+### J2-A　基礎職框架（選得到、進得去、能普攻）
+- `CLASSES.archer`（base，`tag`/`sub` 文案）。
+- **精靈圖 `ARC`**：手刻持弓像素圖（參考 WAR/MAGE 的字元調色盤；配色系統要能重上色，所以甲冑用可辨識的字元）。
+- **武器類型 `'bow'`**：`it.wpn` 指派改三向（systems.js:980）；裝備美術索引加弓（bootstrap.js:94）；`GEAR_BASE.weapon.archer` 一組弓名（短弓／獵弓／複合弓／強弓／長弓）。
+- **一個基礎射擊技能**（basic），先讓弓箭手能選、能進地城、能射箭。箭矢用新的投射物 kind `'arrow'`：render.js 投射物迴圈加繪製分支、update.js 加命中處理（**避免掉進火球分支**——J1-G 踩過這坑）。
+- **選角頁容納第三張基礎職大卡**：目前 `jobPickList().bases` 固定畫兩張 191px 卡，要改成依基礎職數自適應（三張約 125px，或改直式）。`baseClassIds()` 已自動把 archer 算進去。
+- 驗證：全新存檔選弓箭手 → 進地城 → 射箭 → 精通入帳；存檔往返（archer 技能/出戰欄落在 `ax`）。附 smoke。
+
+### J2-B　五個基礎技能 + 箭矢特效
+- 5 技能（1 basic + 4）。提案：**射擊**（basic，追蹤較弱的直射）／**多重箭**（扇形三箭）／**貫穿射**（穿透直線）／**箭雨**（指定範圍落箭，類隕石）／**佈設陷阱**或**蓄力射**（二選一，看想強調機動還是爆發）。各含兩條天賦分支 + Lv3/Lv5。
+- 箭矢與範圍特效：找 CC0 箭矢素材（見下）或程式繪製；沿用 J1 的 `tintedSkillVfx` 染色與 `SKILL_VFX_DEFS`。
+- 技能圖示從既有 70 個挑號；配色進 `SKILL_COLORS`。
+- 平衡：持續輸出對齊劍士/法師基準（弓箭手定位＝遠程持續 + 範圍，單發不該贏近戰爆發）。
+
+### J2-C　精通外觀獎勵
+- `MASTERY_COSMETIC_TABLE.archer`：Lv5/10 配色、Lv15/20 稱號（例：翠羽綠／獵人褐；神射手、百步穿楊）。配色的重上色對照表要蓋到 ARC 精靈圖用到的字元（`tests/cosmetics-j1e-smoke.js` 會檢查）。
+
+### J2-D　進階職 1：遊俠（ranger）——陷阱／機動／多重射
+- `CLASSES.ranger`（base:archer, advanced），archer 精通 Lv10 解鎖。
+- 3 技能（1 專屬 basic 取代繼承的射擊 + 2 進階），走 J1-G 的「進階職專屬基本技能」模式。玩法：陷阱、翻滾機動、多重射強化。
+
+### J2-E　進階職 2：神射手（marksman）——蓄力爆發／穿透
+- `CLASSES.marksman`（base:archer, advanced）。
+- 3 技能。玩法：蓄力狙擊、穿透、暴擊爆發。
+
+### J2-F　平衡與回歸
+- 基準檔加 archer + ranger + marksman（`DUNGEON_BENCHMARK_PROFILES`，弓的固定裝備）。
+- 選角頁在「3 基礎職 × 各 2 進階職＝最多 9 職業」下的版面（晶片列已依系分組，主要壓力在三張基礎大卡 + 精通分頁欄數，兩者都已部分自適應，需複驗）。
+- 回歸：零局內戰力、舊存檔相容、箭矢投射物在低特效下的表現、手機版面。仿 `tests/class-j1f-regression.js`。
+
+## 需要的新素材
+
+- **弓箭手精靈圖**：可自己刻（像 WAR/MAGE）。
+- **弓的裝備美術**：`GEAR_ART` 目前只有 warrior/mage 兩套；弓可先沿用或找 CC0 弓圖。缺圖時 `gearArtPath` 有 fallback，不會崩。
+- **箭矢與弓特效**：找 CC0 箭矢 sprite（OpenGameArt 有數個 CC0 arrow/bow 特效），或用既有 `streak`/程式線條先頂著。染色系統已就緒。
+- 一律走 `assets/source/<pack>/` + `assets/runtime/skills/vfx/`，登記 `LICENSE.md`（[[github-dual-account-push]] 之外的既有規則）。
+
+## 主要風險 / 待決
+
+1. **選角頁三張基礎職大卡的版面**——目前是為兩張寫死的，這是 J2-A 最花工的 UI 改動。
+2. **基礎職走 `ax` 欄位**是否完全 OK——理論上成立（archer 非 legacy），J2-A 要用存檔往返實測確認，這是唯一的存檔風險點。
+3. **弓箭手的定位平衡**——遠程 + 範圍容易過強（法師已是遠程），要在 J2-B/F 用實測數據壓住，別讓弓箭手變成「更好的法師」。
+4. 箭矢投射物要記得在 render **和** update **兩邊**都加分支（J1-G 的無聲失效坑）。
