@@ -128,7 +128,7 @@ const SKILL_ICON_FILES = {
   bloodrend:33, warcry:45,
   bulwark:5, smite:9, elemburst:27, chainstorm:14, plague:38, soulleech:66,
   rend:17, holystrike:23, elembolt:49, shadowbolt:55,
-  shoot:30
+  shoot:30, multishot:24, pierce:40, arrowrain:47, powershot:29
 };
 const arrowImg = new Image(); arrowImg.src = 'assets/runtime/skills/vfx/arrow.png'; // 弓箭手投射物（DCSS, CC0）
 const skillIcons = {}, skillIconsGray = {};

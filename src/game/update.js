@@ -142,12 +142,16 @@ function update() {
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
         hitMon(m, r.d, r.crit);
-        if (pr.kind === 'arrow') {                     // 弓箭手：直傷；精準終極可穿透
+        if (pr.kind === 'arrow') {                     // 弓箭手：直傷；可穿透/擊退/緩速
           const tt2 = pr.talent || {};
-          const vuln = tt2.mechanic && tt2.branch === 0 ? 1.15 : 1; // 精準：受傷+15%
+          const vuln = tt2.mechanic && tt2.branch === 0 && tt2.id === 'shoot' ? 1.15 : 1; // 射擊·精準：受傷+15%
           const r = skillDmg((pr.mult || 1) * vuln);
           hitMon(m, r.d, r.crit || (tt2.ultimate && tt2.branch === 0));
-          burst(pr.x, pr.y, '#cfe0a0', 6);
+          burst(pr.x, pr.y, '#cfe0a0', pr.big ? 10 : 6);
+          if (mons.includes(m)) {
+            if (pr.knock && m.type !== 'boss') { m.x = Math.max(18, Math.min(worldW - 18, m.x + (pr.vx > 0 ? 1 : -1) * pr.knock)); if (!(m.ccT > 0)) { m.freezeT = Math.max(m.freezeT || 0, 24); m.ccT = 90; } }
+            if (pr.slowHit && !(m.ccT > 0)) m.slowT = Math.max(m.slowT || 0, 150);
+          }
           if (pr.pierce) { pr.hits.push(m); continue; } // 穿透：不消失，繼續飛
           gone = true; break;
         } else if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果

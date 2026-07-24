@@ -312,8 +312,9 @@ function render() {
     if (pr.kind === 'arrow') {                 // 弓箭手箭矢：DCSS 箭圖，依飛行方向旋轉
       const ang = Math.atan2(pr.vy || 0, pr.vx) + Math.PI / 4; // 箭圖本身指右上(NE)
       if (arrowImg && arrowImg.complete && arrowImg.naturalWidth) {
+        const asz = pr.big ? 20 : 14;
         ctx.save(); ctx.translate(Math.round(pr.x), Math.round(pr.y)); ctx.rotate(ang);
-        ctx.drawImage(arrowImg, -14, -14, 28, 28); ctx.restore();
+        ctx.drawImage(arrowImg, -asz, -asz, asz * 2, asz * 2); ctx.restore();
       } else { // 後備：程式畫一根箭
         ctx.strokeStyle = '#c8ccd0'; ctx.lineWidth = 2; ctx.beginPath();
         ctx.moveTo(pr.x - pr.vx * 1.6, pr.y - (pr.vy || 0) * 1.6); ctx.lineTo(pr.x, pr.y); ctx.stroke();

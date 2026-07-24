@@ -262,6 +262,10 @@ const SKILL_DEFS = {
   shadowbolt:{ cls:'warlock', name:'暗影箭', mp:7, cd:48, minCd:20, basic:true, desc:'直傷較低,但會疊加腐蝕的持續傷害' },
   // 弓箭手（基礎職）
   shoot:     { cls:'archer', name:'射擊', mp:4, cd:40, minCd:16, basic:true, desc:'射出一箭,對命中的第一個敵人造成傷害' },
+  multishot: { cls:'archer', name:'多重箭', mp:12, cd:150, desc:'扇形射出三箭,覆蓋前方一片' },
+  pierce:    { cls:'archer', name:'貫穿射', mp:14, cd:180, desc:'射出強力一箭,貫穿直線上所有敵人' },
+  arrowrain: { cls:'archer', name:'箭雨',   mp:22, cd:320, desc:'呼喚箭雨落在指定範圍,持續覆蓋' },
+  powershot: { cls:'archer', name:'勁弩射', mp:16, cd:200, desc:'蓄力一箭,高傷並擊退命中的敵人' },
   plague:    { cls:'warlock', name:'疫咒', mp:14, cd:180, desc:'散布疫病使範圍敵人持續受傷並陷入虛弱' },
   soulleech: { cls:'warlock', name:'汲魂', mp:16, cd:240, desc:'抽取前方直線敵人的生命,回復自身HP與MP' }
 };
@@ -278,7 +282,8 @@ const BRANCH_NAMES = {
   bulwark:['庇護','反擊'], smite:['審判','聖療'],
   elemburst:['三重','熾炎'], chainstorm:['連鎖','聚能'],
   plague:['蔓延','衰敗'], soulleech:['吸血','奪魂'],
-  shoot:['精準','速射']
+  shoot:['精準','速射'],
+  multishot:['散射','集火'], pierce:['洞穿','裂空'], arrowrain:['廣域','密集'], powershot:['擊退','穿甲']
 };
 const TALENT_EFFECTS = {
   slash:[{ lv3:'擊退目標', lv5:'必定爆擊' }, { lv3:'目標上限+2', lv5:'第3擊強化且免費' }],
@@ -303,7 +308,11 @@ const TALENT_EFFECTS = {
   chainstorm:[{ lv3:'連鎖次數+2', lv5:'連鎖不再衰減' }, { lv3:'改為集中單體高傷', lv5:'命中麻痺目標' }],
   plague:[{ lv3:'疫病範圍擴大', lv5:'目標死亡時傳染鄰近敵人' }, { lv3:'虛弱效果加重', lv5:'虛弱目標受到的持續傷害翻倍' }],
   soulleech:[{ lv3:'吸取的HP提升', lv5:'低血時吸取量再翻倍' }, { lv3:'額外回復MP', lv5:'擊殺立即重置冷卻' }],
-  shoot:[{ lv3:'命中使目標受傷+15%', lv5:'必定爆擊並穿透一名敵人' }, { lv3:'冷卻縮短、箭速加快', lv5:'一次射出兩箭' }]
+  shoot:[{ lv3:'命中使目標受傷+15%', lv5:'必定爆擊並穿透一名敵人' }, { lv3:'冷卻縮短、箭速加快', lv5:'一次射出兩箭' }],
+  multishot:[{ lv3:'箭數+2、扇形更廣', lv5:'命中疊加易傷' }, { lv3:'集中三箭、傷害+25%', lv5:'全數命中追加一發' }],
+  pierce:[{ lv3:'每穿透一體傷害提升', lv5:'穿透不再衰減' }, { lv3:'對低血目標加傷', lv5:'貫穿末端爆裂' }],
+  arrowrain:[{ lv3:'範圍擴大', lv5:'落點留下減速箭陣' }, { lv3:'箭數增加', lv5:'密集覆蓋、命中緩速' }],
+  powershot:[{ lv3:'擊退更遠並短暫暈眩', lv5:'撞牆追加傷害' }, { lv3:'改為貫穿全直線', lv5:'穿甲、無視部分防禦' }]
 };
 const skillState = {}; // id -> {unl, pts, spent, branch(-1未選/0=A/1=B)}
 for (const id of SKILL_IDS) skillState[id] = { unl: SKILL_DEFS[id].basic ? 1 : 0, pts: 0, spent: 0, branch: -1 };

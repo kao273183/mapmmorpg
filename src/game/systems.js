@@ -860,6 +860,51 @@ const SKILL_FX = {
     }
     playSfx('swordSwing', 0.5, 1.3); beep(520, 0.05, 'square', 0.03);
   },
+  multishot(t) { // 弓箭手：扇形三箭
+    const p = player;
+    p.cast = 12;
+    const wide = t.mechanic && t.branch === 0, focus = t.mechanic && t.branch === 1;
+    const n = wide ? 5 : 3, dmgMul = focus ? 1.25 : 1;
+    const x = p.x + p.face * 20, y = p.y - 30, base = fireballAim(p, x, y).angle, speed = 9;
+    for (let i = 0; i < n; i++) {
+      const spread = (i - (n - 1) / 2) * (wide ? 0.22 : focus ? 0.1 : 0.16);
+      const ang = base + spread;
+      projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
+        t:70, mult:0.7 * t.dmg * dmgMul, kind:'arrow', talent:t, aimT:0 });
+    }
+    playSfx('swordSwing', 0.5, 1.2); beep(480, 0.06, 'square', 0.04);
+  },
+  pierce(t) { // 弓箭手：貫穿直線
+    const p = player;
+    p.cast = 12;
+    const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 13;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:75, mult:1.6 * t.dmg, kind:'arrow', talent:t, pierce:true, hits:[], big:true,
+      aimTarget:aim.target, aimT:aim.target ? 14 : 0 });
+    playSfx('swordSwing', 0.6, 0.85); beep(300, 0.1, 'sawtooth', 0.045);
+  },
+  arrowrain(t) { // 弓箭手：範圍落箭（複用箭矢，從天而降）
+    const p = player;
+    p.cast = 14;
+    const wide = t.mechanic && t.branch === 0, dense = t.mechanic && t.branch === 1;
+    const cx = p.x + p.face * 140 * t.area, span = (wide ? 160 : 110) * t.area, n = dense ? 10 : 6;
+    for (let i = 0; i < n; i++) {
+      const ax = cx + (Math.random() - 0.5) * span * 2;
+      projs.push({ x:ax, y:-20 - Math.random() * 40, vx:(Math.random() - 0.5) * 1.5, vy:8 + Math.random() * 2,
+        t:110, mult:0.6 * t.dmg, kind:'arrow', talent:t, slowHit:dense && t.ultimate, aimT:0 });
+    }
+    playSfx('meteor', 0.65);
+  },
+  powershot(t) { // 弓箭手：蓄力強箭 + 擊退
+    const p = player;
+    p.cast = 14;
+    const armor = t.mechanic && t.branch === 1; // 穿甲：貫穿+高傷
+    const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 15;
+    projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
+      t:60, mult:(armor ? 3.4 : 2.6) * t.dmg, kind:'arrow', talent:t, pierce:armor, hits:armor ? [] : null,
+      knock:t.mechanic && t.branch === 0 ? 60 : 0, big:true, aimTarget:aim.target, aimT:aim.target ? 12 : 0 });
+    playSfx('swordSwing', 0.7, 0.8); beep(170, 0.15, 'sawtooth', 0.05);
+  },
   fire(t) {
     const p = player;
     p.cast = 12;

@@ -440,7 +440,7 @@ const SKILL_COLORS = {
   elemburst:'#4ad0c8', chainstorm:'#7ee0ff',
   plague:'#a35ad0', soulleech:'#c99ae8',
   rend:'#e0555e', holystrike:'#ffeec0', elembolt:'#8fe0d8', shadowbolt:'#8f5ac0',
-  shoot:'#cfe0a0'
+  shoot:'#cfe0a0', multishot:'#b8d878', pierce:'#e8e0a0', arrowrain:'#9ac0e0', powershot:'#e0a860'
 };
 function drawSkillSigil(id, x, y, r, active, locked) {
   const col = SKILL_COLORS[id] || '#d8b365';
