@@ -71,9 +71,19 @@ J1-C 當初把序列化區塊凍結在 `LEGACY_SKILL_IDS`（劍士＋法師的 1
 - [Rotating Arrow Projectile](https://opengameart.org/content/rotating-arrow-projectile)（Randalinski, CC0, 64×64）——完整箭矢含羽尾，但是**直向旋轉**的，橫向射擊要自己轉，不如程式畫。
 - [CC0 Arrows](https://opengameart.org/content/cc0-arrows)（knekko, CC0）——**大多是 UI 方向箭頭**（游標指標），真正的弓箭沒幾個，不合用。
 
-**結論**：真正要下載的其實只有**弓的裝備圖示**（CC0 Ranged Icons）；箭矢建議程式畫（可染色、可轉向，跟斬擊 palette 同一套邏輯）；角色精靈圖自刻。放箭動畫是加分項。這樣新素材負擔很小。
+### ✅ 已備妥：DCSS 遠程武器包（CC0，2026-07-24）
 
-- 素材一律走 `assets/source/<pack>/` + `assets/runtime/`，登記 `LICENSE.md`。push 用 [[github-dual-account-push]]。
+`assets/source/ranged-dcss/`（[node/12210](https://opengameart.org/node/12210)，**CC0**，與專案現用的 sword-dcss/stave-dcss 同源）一次補齊兩個缺口：
+
+- **弓 → 裝備 5 稀有度**：短弓（普通）→ 弓（精良）→ 長弓（稀有）→ 華麗長弓（史詩）→ **urand 傳奇弓**（傳說）。全 32×32。
+- **箭 → 投射物**：一般箭＝基礎射擊；`boltfire`/`boltice`/`arrow02poison` 等元素變體對得上元素技能。32×32 靜態 sprite，飛行時依方向轉向即可（不必程式畫箭）。
+- 弩/投石/吹箭用不到，保留在 source。
+
+**所以角色精靈圖是唯一還要自製的**（自刻，像 WAR/MAGE）。技能圖示用現有 70 個裡的 #24/#30/#52。**幾乎不必再下載任何東西。**
+
+接入 runtime 由 J2-A 進行：弓的 gear art 掛點（`GEAR_ART` 加 archer 一套、`GEAR_BASE.weapon.archer`）、箭矢投射物 kind（render+update 兩邊都要加，別掉進火球分支）。
+
+- 素材走 `assets/source/<pack>/` + `assets/runtime/`，登記 `LICENSE.md`。push 用 [[github-dual-account-push]]。
 
 ## 主要風險 / 待決
 

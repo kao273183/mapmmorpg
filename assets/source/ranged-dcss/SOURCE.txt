@@ -1,0 +1,21 @@
+Ranged weapons — Dungeon Crawl Stone Soup 32x32 tiles
+=====================================================
+
+Source: https://opengameart.org/node/12210
+Author: Chris Hamons (maintainer) / DCSS project（Submitted by MedicineStorm）
+License: CC0 1.0 Universal (public domain dedication)
+          http://creativecommons.org/publicdomain/zero/1.0/
+Retrieved: 2026-07-24
+
+與專案既有的 item-library/weapon/sword-dcss、stave-dcss 同源同授權（同一個
+node/12210 的 DCSS tiles）。這包是該庫的「遠程武器」部分（原庫未收進 item-library）。
+
+內容（32×32）：
+- bow/：短弓/弓/長弓/傳奇弓(urand_krishna/piercer/storm)
+- ammo/：一般箭、火焰弩箭、冰箭、綠毒箭、弩矢、投石彈等（含 shadow 版）
+- crossbow/、sling/、blowgun/：弩、投石索、吹箭（弓箭手用不到，保留）
+
+弓箭手（J2）規劃採用：
+- 弓 → 裝備 5 稀有度（短弓→弓→長弓→華麗長弓→urand 傳奇弓）
+- 箭 → 投射物（一般箭＝基礎射擊；boltfire/boltice/arrow02poison ＝元素技能）
+接入 runtime 由 J2-A 進行（gear art 掛點 + 箭矢投射物 kind）。
