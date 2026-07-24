@@ -7,9 +7,16 @@ Sources:
 Author: Cethiel (https://opengameart.org/users/cethiel)
 License: CC0 1.0 Universal (public domain dedication)
           http://creativecommons.org/publicdomain/zero/1.0/
-Retrieved: （待填，下載後補上日期）
+Retrieved: 2026-07-24
 
-內容：5 種不同的揮擊／斬擊動畫，另附 4 種顏色變體。
+內容：5 種斬擊動畫 × 4 種顏色變體（Classic / Alternative 1–3），
+      每個動畫 6 格逐格 PNG，每格 126×150，透明去背。
 
-用途：解決揮砍／裂顱斬／血怒斬／聖印斬四個技能共用同一張 slashBeam 的問題，
-      一種斬擊分配給一個技能。顏色變體非必要 —— tintedSkillVfx() 已可染色。
+採用：只取 Classic（金）變體，5 個動畫各自把 6 格補成 150×150 正方後
+      橫向合成為 strip，放到 assets/runtime/skills/vfx/：
+        1 → crescentBold.png（粗月牙）
+        2 → crescentRing.png（環形斬）
+        3 → crescentThin.png（細月牙）
+        4 → thrust.png（斜刺）
+        5 → streak.png（斜掃線）
+      其餘 3 種顏色變體未採用（改用引擎內 tintedSkillVfx 染色）。

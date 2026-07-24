@@ -148,7 +148,13 @@ const SKILL_VFX_DEFS = {
   arcaneBolt:{ src:'assets/runtime/skills/vfx/arcaneBolt.png', frames:6, frame:16 },
   darkBolt:{ src:'assets/runtime/skills/vfx/darkBolt.png', frames:6, frame:16 },
   wardShield:{ src:'assets/runtime/skills/vfx/wardShield.png', frames:6, frame:48 },
-  splash:{ src:'assets/runtime/skills/vfx/splash.png', frames:6, frame:32 }
+  splash:{ src:'assets/runtime/skills/vfx/splash.png', frames:6, frame:32 },
+  // Weapon Slash - Effect (Cethiel, CC0)：5 種斬擊，每格 150px（原 126×150 補成正方形）
+  crescentBold:{ src:'assets/runtime/skills/vfx/crescentBold.png', frames:6, frame:150 },
+  crescentRing:{ src:'assets/runtime/skills/vfx/crescentRing.png', frames:6, frame:150 },
+  crescentThin:{ src:'assets/runtime/skills/vfx/crescentThin.png', frames:6, frame:150 },
+  thrust:{ src:'assets/runtime/skills/vfx/thrust.png', frames:6, frame:150 },
+  streak:{ src:'assets/runtime/skills/vfx/streak.png', frames:6, frame:150 }
 };
 const skillVfxImages = {};
 for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {

@@ -136,7 +136,11 @@ curl -L -o "assets/source/sword-slash-tbbk/pixel_art_sword_slash_sprites.png" \
   - 新增 `tintedSkillVfx(key, col)`：離屏畫布 + `color` 混合模式染色（保留明暗），結果依 `key|color` 快取。
     `playSkillAnim` 支援 `tint` 選項。元素飛彈的火／冰／雷是同一組圖染三色。
   - 接上：元素飛彈（arcaneBolt，三色）、暗影箭（darkBolt）、聖盾壁壘（wardShield，金）、疫咒（splash，紫）。
-- ⬜ 尚未接的技能：血怒斬、戰吼、制裁光錘、汲魂、元素爆發、連鎖風暴仍用既有通用圖集。
+- ✅ **劍士系斬擊改版** — v0.29.45。Weapon Slash - Effect（Cethiel, CC0）合成 5 條 strip，
+  接到揮砍／裂顱斬／旋風斬／聖印斬／血怒斬／制裁光錘／突進斬，各自染不同色。
+  只用 Classic 變體；drawSkillVfxFrame 加了二維網格（cols）與非 72px（frame）支援。
+- ⬜ 尚未接的技能：戰吼、汲魂、元素爆發、連鎖風暴、狂暴仍用既有通用圖集。
+  狂暴曾試接一張「往上竄的能量光環」(Aura38.png)，但那張非本包、來源未定，已收回待授權。
   原始包裡還有 19 組沒用到（Magic Ray 可做汲魂的光束、Splash 染金可做制裁光錘、Firebomb 可做元素爆發）。
 - ⬜ 既有 13 組 VFX 與 70 個技能圖示的來源仍待補（見 [`assets/runtime/skills/LICENSE.md`](../assets/runtime/skills/LICENSE.md)）。
 

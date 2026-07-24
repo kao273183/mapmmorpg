@@ -85,8 +85,9 @@ assert.strictEqual(new Set(rangedKinds).size, rangedKinds.length,
 const bootSrc = read('src', 'game', 'bootstrap.js');
 const vfxBlock = bootSrc.match(/const SKILL_VFX_DEFS = \{[\s\S]*?\n\};/)[0];
 const vfxDefs = [];
-for (const m of vfxBlock.matchAll(/(\w+):\{ src:'([^']+)', frames:(\d+)(?:, frame:(\d+))?/g)) {
-  vfxDefs.push({ key: m[1], src: m[2], frames: +m[3], frame: m[4] ? +m[4] : 72 });
+for (const m of vfxBlock.matchAll(/(\w+):\{ src:'([^']+)', frames:(\d+)(?:, frame:(\d+))?(?:, cols:(\d+))?/g)) {
+  const frames = +m[3];
+  vfxDefs.push({ key: m[1], src: m[2], frames, frame: m[4] ? +m[4] : 72, cols: m[5] ? +m[5] : frames });
 }
 assert.ok(vfxDefs.length >= 13, 'SKILL_VFX_DEFS 應解析得到全部圖集，實際 ' + vfxDefs.length);
 const pngSize = file => { // 從 PNG IHDR 直接讀寬高，不需要外部套件
@@ -98,9 +99,11 @@ for (const d of vfxDefs) {
   const file = path.join(root, d.src);
   assert.ok(fs.existsSync(file), d.key + ' 的圖集檔不存在：' + d.src);
   const { w, h } = pngSize(file);
-  assert.strictEqual(h, d.frame, d.key + ' 宣告每格 ' + d.frame + 'px，實際圖高 ' + h + 'px');
-  assert.strictEqual(w, d.frame * d.frames,
-    d.key + ' 宣告 ' + d.frames + ' 格 × ' + d.frame + 'px，實際圖寬 ' + w + 'px（會切到錯的格）');
+  const rows = Math.ceil(d.frames / d.cols); // 網格：cols 標明每列格數（橫條時 cols＝frames，rows＝1）
+  assert.strictEqual(w, d.frame * d.cols,
+    d.key + ' 宣告每列 ' + d.cols + ' 格 × ' + d.frame + 'px，實際圖寬 ' + w + 'px（會切到錯的格）');
+  assert.strictEqual(h, d.frame * rows,
+    d.key + ' 宣告 ' + rows + ' 列 × ' + d.frame + 'px，實際圖高 ' + h + 'px');
 }
 // 非 72px 的來源一定要宣告 frame，否則會被當成 72 切爛
 for (const d of vfxDefs) {
