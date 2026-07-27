@@ -144,7 +144,9 @@ function update() {
         const tt = pr.talent || { mechanic:false, ultimate:false, branch:-1 };
         const pierceBonus = pr.kind === 'ice' && tt.mechanic && tt.branch === 1 ? 1 + (pr.pierceN || 0) * 0.2 : 1;
         const r = skillDmg((pr.mult || 1) * pierceBonus);
-        hitMon(m, r.d, r.crit);
+        // 箭矢改在下方的弓箭手分支自行結算（要吃穿透遞減／專注／迅步／額外爆擊），這裡不能再打一次，
+        // 否則同一支箭會結算兩次傷害、傳奇弓的觸發也會判定兩次。r 仍要算：elem/shadow 的 DoT 依它縮放。
+        if (pr.kind !== 'arrow') hitMon(m, r.d, r.crit);
         if (pr.kind === 'arrow') {                     // 弓箭手系：直傷 + 穿透/擊退/緩速/專注加成
           const tt2 = pr.talent || {};
           const vuln = tt2.mechanic && tt2.branch === 0 && tt2.id === 'shoot' ? 1.15 : 1; // 射擊·精準：受傷+15%

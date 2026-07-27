@@ -863,7 +863,7 @@ const SKILL_FX = {
       const spread = twin ? (i === 0 ? -0.08 : 0.08) : 0;
       const ang = aim.angle + spread;
       projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
-        t:aim.target ? 100 : 80, mult:t.dmg, kind:'arrow', talent:t, pierce, tint:'#cfe0a0',
+        t:aim.target ? 100 : 80, mult:2 * t.dmg, kind:'arrow', talent:t, pierce, tint:'#cfe0a0',
         hits:pierce ? [] : null, aimTarget:aim.target, aimT:aim.target ? 20 : 0 });
     }
     playSfx('swordSwing', 0.5, 1.3); beep(520, 0.05, 'square', 0.03);
@@ -878,7 +878,7 @@ const SKILL_FX = {
       const spread = (i - (n - 1) / 2) * (wide ? 0.22 : focus ? 0.1 : 0.16);
       const ang = base + spread;
       projs.push({ x, y, vx:p.face * Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
-        t:70, mult:0.7 * t.dmg * dmgMul, kind:'arrow', talent:t, tint:'#b8d878', aimT:0 });
+        t:70, mult:1.4 * t.dmg * dmgMul, kind:'arrow', talent:t, tint:'#b8d878', aimT:0 });
     }
     playSfx('swordSwing', 0.5, 1.2); beep(480, 0.06, 'square', 0.04);
   },
@@ -887,7 +887,7 @@ const SKILL_FX = {
     p.cast = 12;
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 13;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:75, mult:1.6 * t.dmg, kind:'arrow', talent:t, pierce:true, hits:[], big:true, tint:'#e8e0a0',
+      t:75, mult:3.2 * t.dmg, kind:'arrow', talent:t, pierce:true, hits:[], big:true, tint:'#e8e0a0',
       aimTarget:aim.target, aimT:aim.target ? 14 : 0 });
     playSfx('swordSwing', 0.6, 0.85); beep(300, 0.1, 'sawtooth', 0.045);
   },
@@ -899,7 +899,7 @@ const SKILL_FX = {
     for (let i = 0; i < n; i++) {
       const ax = cx + (Math.random() - 0.5) * span * 2;
       projs.push({ x:ax, y:-20 - Math.random() * 40, vx:(Math.random() - 0.5) * 1.5, vy:8 + Math.random() * 2,
-        t:110, mult:0.6 * t.dmg, kind:'arrow', talent:t, tint:'#9ac0e0', slowHit:dense && t.ultimate, aimT:0 });
+        t:110, mult:1.2 * t.dmg, kind:'arrow', talent:t, tint:'#9ac0e0', slowHit:dense && t.ultimate, aimT:0 });
     }
     playSfx('meteor', 0.65);
   },
@@ -909,7 +909,7 @@ const SKILL_FX = {
     const armor = t.mechanic && t.branch === 1; // 穿甲：貫穿+高傷
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 15;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:60, mult:(armor ? 3.4 : 2.6) * t.dmg, kind:'arrow', talent:t, tint:'#e0a860', pierce:armor, hits:armor ? [] : null,
+      t:60, mult:(armor ? 6.8 : 5.2) * t.dmg, kind:'arrow', talent:t, tint:'#e0a860', pierce:armor, hits:armor ? [] : null,
       knock:t.mechanic && t.branch === 0 ? 60 : 0, big:true, aimTarget:aim.target, aimT:aim.target ? 12 : 0 });
     playSfx('swordSwing', 0.7, 0.8); beep(170, 0.15, 'sawtooth', 0.05);
   },
@@ -918,12 +918,12 @@ const SKILL_FX = {
     p.cast = 8;
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 11;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:75, mult:0.85 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', swift:t.mechanic && t.branch === 0 ? 150 : 80,
+      t:75, mult:1.7 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', swift:t.mechanic && t.branch === 0 ? 150 : 80,
       aimTarget:aim.target, aimT:aim.target ? 18 : 0 });
     if (t.ultimate && t.branch === 1) { // 連珠：每三箭追加一發
       p.skillCasts.swiftshot = (p.skillCasts.swiftshot || 0) + 1;
       if (p.skillCasts.swiftshot % 3 === 0) projs.push({ x, y:y - 6, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed - 0.6,
-        t:75, mult:0.85 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', aimT:0 });
+        t:75, mult:1.7 * t.dmg, kind:'arrow', talent:t, tint:'#8fe08a', aimT:0 });
     }
     playSfx('swordSwing', 0.45, 1.45); beep(600, 0.04, 'square', 0.028);
   },
@@ -962,7 +962,7 @@ const SKILL_FX = {
     const pierceOne = t.mechanic && t.branch === 1;
     const x = p.x + p.face * 20, y = p.y - 30, aim = fireballAim(p, x, y), speed = 14;
     projs.push({ x, y, vx:p.face * Math.cos(aim.angle) * speed, vy:Math.sin(aim.angle) * speed,
-      t:85, mult:1.45 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#f0d878',
+      t:85, mult:2.9 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#f0d878',
       pierce:pierceAll || pierceOne, hits:(pierceAll || pierceOne) ? [] : null, pierceMax:pierceAll ? 99 : 1,
       critBoost:t.mechanic && t.branch === 0 ? (t.ultimate ? 1 : 0.35) : 0.15,
       aimTarget:aim.target, aimT:aim.target ? 16 : 0 });
@@ -973,7 +973,7 @@ const SKILL_FX = {
     p.cast = 16;
     const solar = t.mechanic && t.branch === 0;
     projs.push({ x:p.x + p.face * 22, y:p.y - 30, vx:p.face * 17, vy:0,
-      t:70, mult:3.8 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#ffd24a', pierce:true, hits:[],
+      t:70, mult:7.6 * t.dmg, kind:'arrow', talent:t, big:true, tint:'#ffd24a', pierce:true, hits:[],
       pierceMax:solar ? 99 : 3, noDecay:t.ultimate && t.branch === 0,
       critBoost:t.mechanic && t.branch === 1 ? (t.ultimate ? 0.9 : 0.5) : 0.2 });
     playSkillAnim('beam', p.x + p.face * 60, p.y - 30, { scale:1.2, flip:p.face < 0, layer:'back', alpha:0.7 });

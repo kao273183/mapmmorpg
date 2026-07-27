@@ -169,6 +169,44 @@ for (const [id, body] of Object.entries(bodies)) {
   assert.ok(/playSfx\(|beep\(/.test(body), '技能「' + id + '」沒有任何音效');
 }
 
+// ── N. 投射物命中只能結算一次傷害 ────────────────────────────────────────
+// 實際踩過的坑：J2-A 為箭矢加了專屬命中分支（要吃穿透遞減／專注／迅步），
+// 但迴圈上方的通用 hitMon 對所有 kind 都會先打一次 —— 箭矢因此每次命中結算兩次傷害，
+// 整個弓箭手系從上線起就是設計值的兩倍，而且不會報錯（傳奇武器的觸發也判定兩次）。
+// 規則：任何自己呼叫 hitMon 的 kind 分支，都必須被通用那次的守衛排除掉。
+// 用大括號配對精確界定「投射物命中處理」區塊——用正則抓會吃過頭，把後面隕石的
+// hitMon 算進最後一個 kind 分支，誤判成 ice 也重複結算。
+const hitStart = updateSrc.indexOf('const pierceBonus =');
+assert.ok(hitStart > 0, 'update.js 應有投射物命中處理區塊');
+const braceBlock = (src, from) => {          // 從 from 之後第一個 { 起，回傳配對到的整段
+  const open = src.indexOf('{', from);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1);
+  }
+  return '';
+};
+// 命中處理是 for (const m of mons) 裡的 if (碰撞) { ... }，往回找那個 if
+const ifStart = updateSrc.lastIndexOf('if (Math.abs(pr.x - m.x)', hitStart);
+const block = braceBlock(updateSrc, ifStart);
+assert.ok(block.includes("pr.kind === 'arrow'"), '命中區塊應涵蓋箭矢分支');
+const generic = block.match(/^\s*(?:if \(([^)]*)\) )?hitMon\(m, r\.d, r\.crit\);/m);
+assert.ok(generic, '找不到通用的 hitMon 呼叫');
+const guard = generic[1] || '';
+// 逐一取出各 kind 分支的本體（同樣用大括號配對），看誰自己呼叫了 hitMon
+const selfHit = [];
+for (const mk of block.matchAll(/pr\.kind === '([a-z]+)'\) \{/g)) {
+  const body = braceBlock(block, mk.index + mk[0].length - 1);
+  if (/hitMon\(/.test(body)) selfHit.push(mk[1]);
+}
+for (const kind of selfHit) {
+  assert.ok(new RegExp("pr\\.kind !== '" + kind + "'").test(guard),
+    "投射物 kind「" + kind + "」的分支自己呼叫了 hitMon，通用那次必須把它排除（否則同一次命中結算兩次傷害）");
+}
+assert.ok(selfHit.length > 0, '應抓得到自行結算傷害的 kind（目前是箭矢）');
+assert.strictEqual(selfHit.join(','), 'arrow', '目前只有箭矢自行結算，實際 ' + selfHit.join(','));
+
 console.log('✓ 技能特效 smoke 測試通過（' + kinds.size + ' 種投射物外觀・' +
   Object.keys(arcs).length + ' 種刀光・' + basics.length + ' 個基本技能各自可辨識・' +
   vfxDefs.length + ' 組圖集尺寸與授權已核對）');
