@@ -365,7 +365,18 @@ const WARDER = [
   "...ee...", "..ebbe..", ".ebb22be", "ebb2222b",
   ".ebb22be", "..ebbe..", "...ee...", "..e..e.."
 ];
-const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW, shooter: SHOOTER, totem: TOTEM, warder: WARDER };
+// D4-C 穿地獸：潛地時只露出土丘（低矮），冒出後是帶爪的獸首。
+const BURROW_MOUND = [ "..........", "..mmmmmm..", ".mmaaaamm.", "mmaaaaaamm" ];
+const BURROWER = [
+  "..aa..aa..", ".maaaaaam.", "maa7aa7aam", "maaaaaaaam",
+  ".maaaaaam.", "..m2mm2m..", "..mmmmmm..", ".mm....mm." ];
+// D4-C 鏡影：紫黑核心 + 稜角外框，瞬移感。
+const PHASER = [
+  "...ff...", "..feef..", ".fe22ef.", "fe2ff2ef",
+  ".fe22ef.", "..feef..", "...ff...", "..f..f.." ];
+// D4-C 蜂群單位：很小，一次生一群。
+const SWARM = [ ".kk.", "kppk", "kppk", ".kk." ];
+const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW, shooter: SHOOTER, totem: TOTEM, warder: WARDER, burrower: BURROWER, phaser: PHASER, swarm: SWARM };
 function drawSprite(rows, x, y, s, flip, flash, recolor) {
   const w = rows[0].length;
   for (let r = 0; r < rows.length; r++) {

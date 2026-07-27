@@ -1,4 +1,4 @@
-// D4-A/B smoke 測試：射手（敵方遠程管線）、支援型怪（治療圖騰／護符怪）與起始群系多樣化。
+// D4-A/B/C smoke 測試：射手（敵方遠程管線）、支援型怪、機動型怪與起始群系多樣化。
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +17,7 @@ const dataSrc = read('src', 'dungeon', 'data.js');
 
 // ── 1. 新怪必須四件套齊全：生成／AI／繪製／怪池 ──────────────────────────
 // 少任何一項都不會報錯，只會變成「生不出來」「不會動」「畫成史萊姆」或「永遠不出現」。
-const NEW_TYPES = ['shooter', 'totem', 'warder'];
+const NEW_TYPES = ['shooter', 'totem', 'warder', 'burrower', 'phaser', 'swarm'];
 for (const type of NEW_TYPES) {
   assert.ok(new RegExp("type === '" + type + "'").test(runSrc), type + ' 缺少 spawnMon 生成分支');
   assert.ok(new RegExp("m\\.type === '" + type + "'").test(updateSrc), type + ' 缺少 update AI 分支');
@@ -90,6 +90,51 @@ for (const kind of ['totem', 'warder']) {
   assert.ok(/m\.\w+Cd = \d+/.test(ai[0]), kind + ' 動作後必須重設冷卻');
 }
 
+// ── 2.7 機動型怪 ─────────────────────────────────────────────────────────
+// 三隻的共同要求：出手前要有預警、預警不得依賴低特效開關、動作後要重設冷卻。
+for (const kind of ['burrower', 'phaser']) {
+  const ai = live(updateSrc).match(new RegExp("\\} else if \\(m\\.type === '" + kind + "'\\) \\{[\\s\\S]*?\\n    \\} else if"));
+  assert.ok(ai, kind + ' 缺少 AI');
+  assert.ok(/!\(m\.freezeT > 0\)/.test(ai[0]), kind + ' 應以 !(x > 0) 判定凍結');
+}
+// 穿地獸：冒出點必須鎖在玩家位置，否則裂痕出現在旁邊、站著不動也打不到
+const burrowAi = live(updateSrc).match(/\} else if \(m\.type === 'burrower'\) \{[\s\S]*?\n    \} else if/)[0];
+// 兩個進入預警的路徑（首次冒出與連續冒出）都必須鎖定玩家位置——
+// 只檢查「有出現過鎖定」會被另一條路徑矇混過去。
+const emergeTriggers = burrowAi.match(/m\.emergeT = \d+/g) || [];
+assert.ok(emergeTriggers.length >= 2, '穿地獸應有首次冒出與連續冒出兩條路徑');
+const locks = burrowAi.match(/m\.x = Math\.max\(m\.minx, Math\.min\(m\.maxx, p\.x\)\)/g) || [];
+assert.strictEqual(locks.length, emergeTriggers.length,
+  '每個進入預警的路徑都要把冒出點鎖到玩家腳下（' + emergeTriggers.length + ' 條路徑但只有 ' + locks.length + ' 處鎖定）');
+assert.ok(/m\.repeats = tier >= \d+ \? \d+ : 0/.test(burrowAi), '穿地獸應有秘境高層的連續冒出變體');
+// 潛地中不得造成接觸傷害；dmg:0 的支援怪也不得因 Math.max(1,...) 刮傷玩家
+const contact = live(updateSrc).match(/if \(p\.inv === 0 &&[\s\S]*?dmgPlayer\(\{ amount:d, sourceName:monsterLabel/);
+assert.ok(contact, '找不到接觸傷害判定');
+assert.ok(/m\.dmg > 0/.test(contact[0]), '接觸傷害要排除 dmg:0 的怪，否則 Math.max(1,...) 會讓零傷害的支援怪仍刮 1 點');
+assert.ok(/m\.type === 'burrower' && m\.burrow/.test(contact[0]), '潛地中的穿地獸不該有接觸傷害');
+// 鏡影：落點要在玩家「旁邊」而不是身上
+const phaserAi = live(updateSrc).match(/\} else if \(m\.type === 'phaser'\) \{[\s\S]*?\n    \} else if/)[0];
+const blinkOffset = phaserAi.match(/p\.x \+ side \* (\d+)/);
+assert.ok(blinkOffset, '鏡影的瞬移落點應相對玩家偏移');
+assert.ok(parseInt(blinkOffset[1], 10) >= 30,
+  '鏡影落點偏移只有 ' + blinkOffset[1] + '，會直接疊在玩家身上（等於無法反應的貼臉攻擊）');
+assert.ok(/m\.blinkT = \d+/.test(phaserAi) && /m\.blinkCd = /.test(phaserAi), '鏡影要有預告時間與冷卻');
+// 蜂群：一次生一群，且單體要比同層一般怪脆很多（靠 AoE 清）
+const swarmSpawn = live(runSrc).match(/if \(type === 'swarm'\) \{[\s\S]*?\n  \}/)[0];
+assert.ok(/for \(let i = 0; i < count; i\+\+\)/.test(swarmSpawn), '蜂群應一次生成一群');
+const swarmHp = parseInt(swarmSpawn.match(/monsterHp\((\d+),/)[1], 10);
+const slimeHp = parseInt(live(runSrc).match(/let hp = monsterHp\((\d+), sc, n, elite/)[1], 10);
+assert.ok(swarmHp < slimeHp / 2, '蜂群單體 HP(' + swarmHp + ') 應遠低於一般怪(' + slimeHp + ')，否則不成立「靠 AoE 清」');
+// 預警繪製：破土與瞬移都要有，且不吃低特效
+for (const [kind, cond] of [['burrower', "m\\.emergeT > 0"], ['phaser', "m\\.blinkT > 0"]]) {
+  const block = renderSrc.match(new RegExp("if \\(m\\.type === '" + kind + "' && " + cond + "\\) \\{[\\s\\S]*?\\n    \\}"));
+  assert.ok(block, kind + ' 缺少預警繪製');
+  assert.ok(!/combatSettings/.test(block[0]), kind + ' 的預警不得依賴 combatSettings');
+}
+// 每隻新怪都要有名稱，否則傷害來源會顯示成「怪物」
+const labels = live(runSrc).match(/const MONSTER_LABEL = \{[^}]*\}/)[0];
+for (const t of NEW_TYPES) assert.ok(new RegExp(t + ':').test(labels), t + ' 沒有 MONSTER_LABEL，傷害來源會顯示成「怪物」');
+
 // ── 3. 起始群系多樣化 ────────────────────────────────────────────────────
 assert.ok(/const DUNGEON_START_BIOME_IDS = \[/.test(coreSrc), '應有可起始的群系清單');
 const startIds = coreSrc.match(/const DUNGEON_START_BIOME_IDS = \[([^\]]*)\]/)[1]
@@ -114,5 +159,5 @@ const pickFn = coreSrc.match(/function dungeonPickStartBiome\(seed\) \{[\s\S]*?\
 assert.ok(pickFn, '缺少 dungeonPickStartBiome');
 assert.ok(!/Math\.random/.test(pickFn[0]), '起始群系必須由 run seed 推導，不能用 Math.random（否則同種子無法重現）');
 
-console.log('✓ D4-A/B smoke 測試通過（' + NEW_TYPES.length + ' 種新怪四件套・遠程管線與預警・護盾與治療・高層變體・' +
+console.log('✓ D4-A/B/C smoke 測試通過（' + NEW_TYPES.length + ' 種新怪四件套・遠程管線與預警・護盾與治療・高層變體・' +
   startIds.length + ' 種起始群系與章節互換）');

@@ -212,6 +212,8 @@ function render() {
       ctx.fillStyle = '#f5ede0';
       for (let tx = -20; tx <= 16; tx += 9) { ctx.fillRect(mx + tx, my - 29 - bite, 5, 6); ctx.fillRect(mx + tx + 4, my - 34, 5, 6); }
       ctx.fillStyle = '#ff5a5a'; ctx.fillRect(mx - 16, my - 38 - bite, 5, 5); ctx.fillRect(mx + 11, my - 38 - bite, 5, 5);
+    } else if (m.type === 'burrower' && m.burrow) {   // 潛地中：只露出土丘
+      drawSprite(BURROW_MOUND, m.x - BURROW_MOUND[0].length * m.s / 2, m.ground - BURROW_MOUND.length * m.s, m.s, m.vx < 0, m.hitT > 0);
     } else if (m.type === 'boss' && drawDungeonBossSprite(m)) {
       drawDungeonBossSpecialTelegraph(m);
     } else {
@@ -219,6 +221,25 @@ function render() {
       const bossStyle = m.type === 'boss' ? dungeonBossDef(m.bossId) : null;
       const rc = bossStyle ? { e:bossStyle.color, f:bossStyle.accent } : null;
       drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
+    }
+    if (m.type === 'burrower' && m.emergeT > 0) {   // 破土預警：地面裂痕由虛轉實
+      const urgent = m.emergeT <= 12;
+      ctx.save(); ctx.globalAlpha = urgent ? 0.95 : 0.45 + Math.sin(frame * 0.4) * 0.12;
+      ctx.strokeStyle = urgent ? '#ffb45e' : '#c89a5a'; ctx.lineWidth = urgent ? 4 : 3;
+      ctx.setLineDash(urgent ? [] : [7, 6]);
+      ctx.beginPath(); ctx.ellipse(m.x, m.ground - 4, 44, 12, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+      ctx.fillStyle = urgent ? '#ffd08a' : '#c89a5a'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+      ctx.fillText('破土', m.x, m.ground - 24); ctx.textAlign = 'left';
+    }
+    if (m.type === 'phaser' && m.blinkT > 0) {     // 瞬移預告：落點殘影 + 連線
+      ctx.save(); ctx.globalAlpha = 0.32 + Math.sin(frame * 0.35) * 0.1;
+      ctx.strokeStyle = '#b05ae0'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.moveTo(m.x, m.y - m.h / 2); ctx.lineTo(m.ghostX, m.ghostY - m.h / 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.45;
+      drawSprite(PHASER, m.ghostX - PHASER[0].length * m.s / 2, m.ghostY - PHASER.length * m.s, m.s, false, false);
+      ctx.restore();
     }
     if (m.shield > 0) {                       // 護盾環：一眼看出「這隻現在打不動」
       ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(frame * 0.18) * 0.15;

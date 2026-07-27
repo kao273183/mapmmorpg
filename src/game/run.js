@@ -78,6 +78,30 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
       minx, maxx, hp, mhp: hp, xpv: Math.round(20 * xpSc), dmg: Math.round(5 * dsc), wardCd: 40, w: 26, h: 26, hitT: 0, elite: false, s: 3 });
     return;
   }
+  if (type === 'burrower') { // D4-C 穿地獸：潛地追人 → 預警 → 腳下冒出
+    const hp = monsterHp(30, sc, n);
+    mons.push({ type:'burrower', x: sx, y: pl.y, ground: pl.y, vx: 0,
+      minx: 20, maxx: worldW - 20, hp, mhp: hp, xpv: Math.round(20 * xpSc), dmg: Math.round(11 * dsc),
+      burrow: 1, digT: 60 + Math.floor(rng() * 60), emergeT: 0, aboveT: 0, w: 34, h: 26, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'phaser') { // D4-C 鏡影：短距瞬移貼近，落地即攻擊
+    const hp = monsterHp(24, sc, n);
+    mons.push({ type:'phaser', x: sx, y: pl.y - 20, baseY: pl.y - 20, t: rng() * 200, vx: 0,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(21 * xpSc), dmg: Math.round(10 * dsc),
+      blinkCd: 60 + Math.floor(rng() * 60), blinkT: 0, ghostX: sx, ghostY: pl.y - 20, w: 26, h: 26, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'swarm') { // D4-C 蜂群：一次生一小群，單體極脆 → 靠 AoE 清
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      const hp = monsterHp(6, sc, n);
+      mons.push({ type:'swarm', x: sx + (i - 1.5) * 18, y: pl.y - 60 + (i % 2) * 16, t: rng() * 200 + i * 40,
+        ax: sx, ay: pl.y - 60, minx, maxx, hp, mhp: hp, xpv: Math.round(6 * xpSc), dmg: Math.round(4 * dsc),
+        diveCd: 90 + Math.floor(rng() * 80), diveT: 0, w: 16, h: 16, hitT: 0, elite: false, s: 3 });
+    }
+    return;
+  }
   const elite = rng() < eliteCh;
   let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
   let damage = 8 * dsc * (elite ? 1.6 : 1);
@@ -515,7 +539,7 @@ function burst(x, y, color, n) {
 }
 
 // ---------- combat ----------
-const MONSTER_LABEL = { slime:'史萊姆', bat:'蝙蝠', mush:'跳菇', spore:'孢子怪', bomber:'爆裂怪', charger:'衝鋒獸', icer:'冰霜怪', splitter:'分裂怪', boss:'Boss' };
+const MONSTER_LABEL = { slime:'史萊姆', bat:'蝙蝠', mush:'跳菇', spore:'孢子怪', bomber:'爆裂怪', charger:'衝鋒獸', icer:'冰霜怪', splitter:'分裂怪', boss:'Boss', shooter:'射手', totem:'治療圖騰', warder:'護符怪', burrower:'穿地獸', phaser:'鏡影', swarm:'蜂群' };
 function monsterLabel(m) { return m && m.type === 'boss' ? (m.name || dungeonBossDef(m.bossId).name) : (MONSTER_LABEL[m && m.type] || '怪物'); }
 function removeMon(m) {
   const i = mons.indexOf(m);

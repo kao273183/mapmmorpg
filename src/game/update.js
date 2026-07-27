@@ -320,6 +320,67 @@ function update() {
       } else if (Math.abs(m.x - p.x) < 48 && Math.abs(m.y - p.y) < 60) {
         m.fuse = 30;
       }
+    } else if (m.type === 'burrower') { // D4-C：潛地追人 → 定點預警 → 冒出範圍傷害 → 短暫暴露
+      if (m.burrow) {                       // 潛地中：移動快、不造成接觸傷害（由 dmg 判定排除）
+        m.x += Math.sign(p.x - m.x || 1) * 1.9 * moveF;
+        m.x = Math.max(m.minx, Math.min(m.maxx, m.x));
+        m.y = m.ground;
+        if (m.digT > 0) m.digT--;
+        else if (Math.abs(p.x - m.x) < 90 && !(m.freezeT > 0)) {
+          // 冒出點鎖在「當下的玩家腳下」——預警期間不再移動，所以要在這裡就定位，
+          // 否則裂痕出現在旁邊、站著不動反而打不到，預警就失去意義。
+          m.x = Math.max(m.minx, Math.min(m.maxx, p.x));
+          m.emergeT = 40; m.burrow = 0; m.aboveT = 0;
+        }
+      } else if (m.emergeT > 0) {           // 預警：地面裂痕，玩家有時間走開
+        m.emergeT--;
+        if (m.emergeT === 0) {
+          const tier = (typeof currentRiftScale === 'function') ? currentRiftScale().tier : 1;
+          m.aboveT = 100; m.erupt = 12;
+          burst(m.x, m.ground - 16, '#c89a5a', 16);   // 破土粒子；傷害在下方自行判定，不能借用 skillAreaDamage(那是打怪的)
+          if (Math.abs(p.x - m.x) < 46 && p.inv === 0) {
+            const d = Math.max(1, m.dmg - armorDef());
+            if (dmgPlayer({ amount:d, sourceName:'穿地獸的突襲', sourceX:m.x, heavy:true })) return;
+          }
+          m.repeats = tier >= 5 ? 2 : 0;    // 高層變體：連續多次冒出
+          beep(150, 0.18, 'sawtooth', 0.05);
+        }
+      } else {                               // 暴露期：可被打，之後再潛回去
+        if (m.erupt > 0) m.erupt--;
+        if (m.aboveT > 0) m.aboveT--;
+        else if (m.repeats > 0) { m.repeats--; m.x = Math.max(m.minx, Math.min(m.maxx, p.x)); m.emergeT = 32; } // 連續冒出要重新鎖定
+        else { m.burrow = 1; m.digT = 90 + Math.random() * 60; }
+      }
+    } else if (m.type === 'phaser') { // D4-C：短距瞬移貼近玩家，落點有殘影預告
+      m.t++;
+      m.y = m.baseY + Math.sin(m.t * 0.06) * 8;
+      if (m.blinkT > 0) {
+        m.blinkT--;
+        if (m.blinkT === 0) {                // 瞬移到殘影標好的位置
+          m.x = m.ghostX; m.baseY = m.ghostY; m.y = m.ghostY;
+          burst(m.x, m.y - m.h / 2, '#b05ae0', 10); beep(700, 0.08, 'sine', 0.035);
+        }
+      } else if (m.blinkCd > 0) { m.blinkCd--; }
+      else if (!(m.freezeT > 0)) {
+        const side = p.x < m.x ? -1 : 1;
+        m.ghostX = Math.max(m.minx, Math.min(m.maxx, p.x + side * 44)); // 落在玩家旁邊而不是身上
+        m.ghostY = p.y - 20;
+        m.blinkT = 28;                       // 預告時間，讓玩家能反手
+        m.blinkCd = 130 + Math.floor(Math.random() * 70);
+      }
+    } else if (m.type === 'swarm') { // D4-C：平時繞著錨點聚散，週期性整群撲擊
+      m.t++;
+      if (m.diveT > 0) {
+        m.diveT--;
+        m.x += Math.sign(p.x - m.x || 1) * 2.6 * moveF;
+        m.y += Math.sign((p.y - p.h / 2) - m.y || 1) * 2.0 * moveF;
+        if (m.diveT === 0) { m.diveCd = 120 + Math.random() * 60; m.ax = m.x; m.ay = Math.max(300, m.y - 40); }
+      } else if (m.diveCd > 0) {
+        m.diveCd--;
+        m.ax += Math.sign(p.x - m.ax || 1) * 0.35 * moveF;               // 錨點緩慢跟著玩家漂
+        m.x += ((m.ax + Math.cos(m.t * 0.07) * 26) - m.x) * 0.06 * moveF; // 聚散
+        m.y += ((m.ay + Math.sin(m.t * 0.09) * 20) - m.y) * 0.06 * moveF;
+      } else if (!(m.freezeT > 0)) { m.diveT = 46; }
     } else if (m.type === 'totem') { // D4-B：不動，週期性回復周圍敵人（含自己以外的目標）
       m.healBeams = null;
       if (m.healCd > 0) m.healCd--;
@@ -481,7 +542,9 @@ function update() {
       }
       if (m.y > 448) m.y = 448;
     }
-    if (p.inv === 0 &&
+    // dmg:0 的怪（治療圖騰）與潛地中的穿地獸不造成接觸傷害——
+    // 否則 Math.max(1, ...) 會讓「零傷害」的支援怪還是刮玩家 1 點。
+    if (p.inv === 0 && m.dmg > 0 && !(m.type === 'burrower' && m.burrow) &&
         Math.abs(m.x - p.x) < (m.w + p.w) / 2 - 4 &&
         Math.abs((m.y - m.h / 2) - (p.y - p.h / 2)) < (m.h + p.h) / 2 - 6) {
       const d = Math.max(1, Math.round(m.dmg * (0.9 + Math.random() * 0.2)) - armorDef());
