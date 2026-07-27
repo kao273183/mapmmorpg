@@ -37,6 +37,9 @@ const context = vm.createContext({
 });
 
 vm.runInContext(source, context, { filename:'game.js' });
+// 套裝加成走 affixV(stat) 這條管線；stat 沒有任何消費端＝加成是死的（穿了等於沒穿）。
+// 用原始碼判定而非硬寫清單，日後新增 stat 也自動涵蓋。
+context.affixConsumed = stat => new RegExp("affixV\\('" + stat + "'\\)").test(source);
 vm.runInContext(`
   globalThis.dungeonRun = { modifierState:{
     activeBlessings:['sunsteel_edge','executioner','hunter_mark','oak_heart','guardian_shell','renewal_well','wind_stride','swift_dash','aerial_grace','soul_bloom','treasure_eye','fate_thread'],
@@ -68,7 +71,22 @@ vm.runInContext(`
   acceptDungeonModifierOffer(sealedState, 'sealed_fate');
   if (sealedState.rerollsRemaining !== 0 || player.eventRerolls !== 2) throw new Error('sealed fate did not exchange modifier rerolls for card rerolls');
 
-  if (GEAR_SETS.length !== 4) throw new Error('expected four launch sets');
+  // 每個基礎職固定兩組套裝（進階職沿用其基礎職的）。用推導的方式寫，加職業時不會再壞。
+  for (const base of baseClassIds()) {
+    const owned = GEAR_SETS.filter(s => s.cls === base);
+    if (owned.length !== 2) throw new Error(base + ' 應有 2 組套裝，實際 ' + owned.length);
+  }
+  if (GEAR_SETS.length !== baseClassIds().length * 2) throw new Error('套裝只該定義在基礎職上，實際 ' + GEAR_SETS.length + ' 組');
+  for (const s of GEAR_SETS) {
+    if (isAdvancedClass(s.cls)) throw new Error(s.id + ' 定義在進階職 ' + s.cls + ' 上，掉落與鍛造都會找不到');
+    if (SET_PARTS.some(part => !s.pieces[part])) throw new Error(s.id + ' 缺少部位名稱');
+    if (s.bonuses.length !== 2 || s.bonuses[0].pieces !== 2 || s.bonuses[1].pieces !== 4) throw new Error(s.id + ' 應為 2 件／4 件兩段加成');
+    for (const b of s.bonuses) { // 加成必須真的有人消費，否則穿了等於沒穿
+      if (!affixConsumed(b.stat)) throw new Error(s.id + ' 的 ' + b.stat + ' 沒有任何消費端');
+    }
+  }
+  if (new Set(GEAR_SETS.map(s => s.color)).size !== GEAR_SETS.length) throw new Error('套裝顏色不可重複');
+  if (new Set(GEAR_SETS.flatMap(s => SET_PARTS.map(p => s.pieces[p]))).size !== GEAR_SETS.length * SET_PARTS.length) throw new Error('套裝部位名稱不可重複');
   if (meta.mats.set !== 0) throw new Error('old saves should migrate with zero set cores');
   const originalRandom = Math.random; Math.random = () => 0; player.cls = 'warrior';
   if (genGear(4, 2, 'boss').setId) throw new Error('sets should not drop before floor five');
@@ -117,12 +135,9 @@ vm.runInContext(`
         throw new Error(job + ' 掉到自己穿不上的套裝 ' + id);
     }
   }
-  // 目前沒有套裝的職業＝弓箭手系（J2 只做了職業本身，套裝與傳奇弓還沒設計，見 doc/PLAN-archer.md）。
-  // 釘住這份名單有兩個作用：別的職業掉了套裝會被抓到（bug ① 的回歸），
-  // 而補上弓箭手套裝之後這裡會提醒把名單一併清掉，不會留下過期的容許值。
+  // 每個職業都要有套裝可拿——沒有的話該職的套裝核心會一直累積卻無處可花。
   const noSets = Object.keys(CLASSES).filter(job => setIdsForClass(job).length === 0).join(',');
-  if (noSets !== 'archer,ranger,marksman')
-    throw new Error('沒有套裝的職業應只有弓箭手系（待補內容），實際為 [' + noSets + ']');
+  if (noSets) throw new Error('這些職業拿不到任何套裝：[' + noSets + ']');
 `, context);
 
 assert.equal(storage.has('pixelrogue_save'), true, 'forge should persist the updated stash');

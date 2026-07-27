@@ -37,6 +37,18 @@ const GEAR_SETS = [
     id:'voidweave', cls:'mage', name:'虛空織法', color:'#c58aff',
     pieces:{ weapon:'虛空咒杖', armor:'虛空法袍', helmet:'虛空兜帽', boots:'虛空步履' },
     bonuses:[{ pieces:2, stat:'crit', value:0.06, text:'爆擊率 +6%' }, { pieces:4, stat:'mpKill', value:5, text:'擊殺回復 MP +5' }]
+  },
+  // 弓箭手系兩組，分別對上兩個進階職的玩法：疾風＝遊俠的機動放風箏，鷹眼＝神射手的暴擊爆發。
+  // 沿用既有 stat（都走 affixV），不必接新的加成管線；critDmg 經 playerDmg 也會吃到技能傷害。
+  {
+    id:'gale_hunt', cls:'archer', name:'疾風遊獵', color:'#79c96f',
+    pieces:{ weapon:'疾風獵弓', armor:'疾風皮甲', helmet:'疾風羽冠', boots:'疾風獵靴' },
+    bonuses:[{ pieces:2, stat:'move', value:0.5, text:'移動速度 +0.5' }, { pieces:4, stat:'atkPct', value:0.15, text:'攻擊 +15%' }]
+  },
+  {
+    id:'hawkeye', cls:'archer', name:'鷹眼獵手', color:'#d8a83e',
+    pieces:{ weapon:'鷹眼長弓', armor:'鷹眼護胸', helmet:'鷹眼目罩', boots:'鷹眼踏靴' },
+    bonuses:[{ pieces:2, stat:'crit', value:0.06, text:'爆擊率 +6%' }, { pieces:4, stat:'critDmg', value:0.40, text:'爆擊傷害 +40%' }]
   }
 ];
 const GEAR_SET_BY_ID = Object.fromEntries(GEAR_SETS.map(s => [s.id, s]));
