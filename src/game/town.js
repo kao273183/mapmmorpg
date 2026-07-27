@@ -957,6 +957,12 @@ function renderMenu() {
   const terrainNormal = (typeof terrainMode === 'undefined' ? 'normal' : terrainMode) !== 'complex';
   ctx.textAlign = 'left'; ctx.fillStyle = '#aeb4d0'; ctx.font = 'bold 11px ' + STAT_FONT;
   ctx.fillText('本次難度', left.x + 18, left.y + 262);
+  // 解鎖提示放在標題列右側：難度鈕那一列已被 −／＋ 佔滿，貼在鈕下緣會疊上去。
+  if ((typeof terrainMode !== 'undefined' && terrainMode === 'complex') && riftTier >= ((typeof riftTierUnlocked === 'function') ? riftTierUnlocked() : 1)) {
+    ctx.textAlign = 'right'; ctx.fillStyle = '#6a7090'; ctx.font = '9px ' + STAT_FONT;
+    ctx.fillText(riftTier >= RIFT_MAX_TIER ? '已達最高層 T' + RIFT_MAX_TIER : '擊敗本層 Boss 解鎖 T' + (riftTier + 1), left.x + left.w - 18, left.y + 262);
+    ctx.textAlign = 'left';
+  }
   const dbW = 188, dbH = 26, db1 = left.x + 18, db2 = left.x + 18 + dbW + 12, dby = left.y + 270;
   diffBtns.length = 0;
   const diffBtn = (x, mode, label, on) => {
@@ -991,11 +997,6 @@ function renderMenu() {
     ctx.fillStyle = '#7dd8a8';
     const reward = '掉落 ×' + sc.drop.toFixed(2) + ' 傳奇 ×' + sc.unique.toFixed(2) + ' 靈魂 ×' + sc.soul.toFixed(2) + ' 精通 ×' + sc.mastery.toFixed(2);
     ctx.fillText(reward, left.x + 176, left.y + 308);
-    if (riftTier >= maxT) {
-      ctx.textAlign = 'right'; ctx.fillStyle = '#6a7090';
-      ctx.fillText(maxT >= RIFT_MAX_TIER ? '已達最高層' : '擊敗本層 Boss 解鎖 T' + (riftTier + 1), left.x + left.w - 18, left.y + 296);
-      ctx.textAlign = 'left';
-    }
   }
   ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 316, left.w - 36, 1);
   const bw2 = left.w - 36, bh2 = 48;
