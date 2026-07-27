@@ -320,6 +320,44 @@ function update() {
       } else if (Math.abs(m.x - p.x) < 48 && Math.abs(m.y - p.y) < 60) {
         m.fuse = 30;
       }
+    } else if (m.type === 'totem') { // D4-B：不動，週期性回復周圍敵人（含自己以外的目標）
+      m.healBeams = null;
+      if (m.healCd > 0) m.healCd--;
+      else if (!(m.freezeT > 0)) {
+        const tier = (typeof currentRiftScale === 'function') ? currentRiftScale().tier : 1;
+        const radius = 210, pct = 0.05, shieldOn = tier >= 5;   // 高層變體：回血之外再給護盾
+        const beams = [];
+        for (const o of mons) {
+          if (o === m || o.hp <= 0 || o.type === 'boss') continue;
+          if (Math.hypot(o.x - m.x, (o.y - o.h / 2) - (m.y - m.h / 2)) > radius) continue;
+          const before = o.hp;
+          o.hp = Math.min(o.mhp, o.hp + Math.max(1, Math.round(o.mhp * pct)));
+          if (shieldOn) o.shield = Math.max(o.shield || 0, Math.round(o.mhp * 0.12));
+          if (o.hp > before || shieldOn) beams.push(o);
+        }
+        if (beams.length) { m.healBeams = beams; playSfx('uiSelect', 0.28, 1.6); }
+        m.healCd = 110;
+      }
+      m.healFx = m.healBeams ? 26 : Math.max(0, (m.healFx || 0) - 1);
+    } else if (m.type === 'warder') { // D4-B：懸浮巡邏，週期性給周圍敵人護盾；本體死了護盾立刻消失
+      m.t++;
+      m.x += m.vx * moveF;
+      if (m.x < m.minx) { m.x = m.minx; m.vx = Math.abs(m.vx); }
+      if (m.x > m.maxx) { m.x = m.maxx; m.vx = -Math.abs(m.vx); }
+      m.y = m.baseY + Math.sin(m.t * 0.05) * 12;
+      m.wardBeams = null;
+      if (m.wardCd > 0) m.wardCd--;
+      else if (!(m.freezeT > 0)) {
+        const amt = o => Math.max(2, Math.round(o.mhp * 0.18));
+        const beams = [];
+        for (const o of mons) {
+          if (o === m || o.hp <= 0 || o.type === 'boss') continue;
+          if (Math.hypot(o.x - m.x, (o.y - o.h / 2) - (m.y - m.h / 2)) > 190) continue;
+          o.shield = Math.max(o.shield || 0, amt(o)); o.wardedBy = m; beams.push(o);
+        }
+        if (beams.length) { m.wardBeams = beams; playSfx('uiSelect', 0.3, 0.8); }
+        m.wardCd = 150;
+      }
     } else if (m.type === 'shooter') { // D4-A：站定射擊，會與玩家保持距離；發射前有可見預警
       const dx = p.x - m.x, adx = Math.abs(dx), inLane = Math.abs((p.y - p.h / 2) - (m.y - m.h / 2)) < 60;
       if (m.tel > 0) {                       // 預警中：站住不動，讓玩家有時間走位

@@ -355,7 +355,17 @@ const SHOOTER = [
   "...kkkk...", "..kcccck..", "..kciick..", "..kcccck..",
   "...kkkk...", "....ee....", "...eeee...", "..ee..ee.."
 ];
-const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW, shooter: SHOOTER };
+// D4-B 治療圖騰：不動的柱狀物，頂端一顆綠核（外觀刻意「像個裝置」而不是生物）。
+const TOTEM = [
+  "..3333..", ".339933.", ".392293.", ".339933.",
+  "..3333..", "...mm...", "...mm...", "..mmmm.."
+];
+// D4-B 護符怪：懸浮菱形 + 外圈，護盾感；本體很脆。
+const WARDER = [
+  "...ee...", "..ebbe..", ".ebb22be", "ebb2222b",
+  ".ebb22be", "..ebbe..", "...ee...", "..e..e.."
+];
+const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW, shooter: SHOOTER, totem: TOTEM, warder: WARDER };
 function drawSprite(rows, x, y, s, flip, flash, recolor) {
   const w = rows[0].length;
   for (let r = 0; r < rows.length; r++) {

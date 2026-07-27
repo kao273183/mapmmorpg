@@ -220,6 +220,21 @@ function render() {
       const rc = bossStyle ? { e:bossStyle.color, f:bossStyle.accent } : null;
       drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
     }
+    if (m.shield > 0) {                       // 護盾環：一眼看出「這隻現在打不動」
+      ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(frame * 0.18) * 0.15;
+      ctx.strokeStyle = '#8fd4ff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(m.x, m.y - m.h / 2, m.w / 2 + 8, m.h / 2 + 8, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    const beams = m.healBeams || m.wardBeams;
+    if (beams && beams.length) {              // 支援光束：讓玩家看出「是誰在補」
+      const heal = !!m.healBeams;
+      ctx.save(); ctx.globalAlpha = 0.7; ctx.strokeStyle = heal ? '#7dd8a8' : '#8fd4ff'; ctx.lineWidth = 2;
+      for (const o of beams) { ctx.beginPath(); ctx.moveTo(m.x, m.y - m.h / 2); ctx.lineTo(o.x, o.y - o.h / 2); ctx.stroke(); }
+      ctx.restore();
+      ctx.fillStyle = heal ? '#7dd8a8' : '#8fd4ff'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+      ctx.fillText(heal ? '治療中' : '護盾', m.x, m.y - m.h - 16); ctx.textAlign = 'left';
+    }
     if (m.type === 'shooter' && m.tel > 0) { // 發射預警：瞄準線由虛轉實，最後 10 幀轉紅
       const ax = m.aimX != null ? m.aimX : player.x, ay = m.aimY != null ? m.aimY : player.y - player.h / 2;
       const urgent = m.tel <= 10;

@@ -1,10 +1,12 @@
-// D4-A smoke 測試：射手（敵方遠程管線）與起始群系多樣化。
+// D4-A/B smoke 測試：射手（敵方遠程管線）、支援型怪（治療圖騰／護符怪）與起始群系多樣化。
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = (...p) => fs.readFileSync(path.join(root, ...p), 'utf8');
+// 檢查「這段程式碼有在跑」時要先去掉註解——否則把該行註解掉，字串比對仍然會通過。
+const live = src => src.replace(/(^|[^:'"])\/\/.*$/gm, '$1');
 const runSrc = read('src', 'game', 'run.js');
 const updateSrc = read('src', 'game', 'update.js');
 const renderSrc = read('src', 'game', 'render.js');
@@ -15,7 +17,7 @@ const dataSrc = read('src', 'dungeon', 'data.js');
 
 // ── 1. 新怪必須四件套齊全：生成／AI／繪製／怪池 ──────────────────────────
 // 少任何一項都不會報錯，只會變成「生不出來」「不會動」「畫成史萊姆」或「永遠不出現」。
-const NEW_TYPES = ['shooter'];
+const NEW_TYPES = ['shooter', 'totem', 'warder'];
 for (const type of NEW_TYPES) {
   assert.ok(new RegExp("type === '" + type + "'").test(runSrc), type + ' 缺少 spawnMon 生成分支');
   assert.ok(new RegExp("m\\.type === '" + type + "'").test(updateSrc), type + ' 缺少 update AI 分支');
@@ -25,7 +27,10 @@ for (const type of NEW_TYPES) {
 // 怪池裡出現的每個 type 都必須有生成分支（反向檢查：打錯字會靜默消失）
 const pools = [...systemsSrc.matchAll(/pool:\[([^\]]*)\]/g)].flatMap(m =>
   m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean));
-const spawnable = new Set(['slime', 'bat', 'mush', 'spore', 'bomber', 'charger', 'icer', 'splitter'].concat(NEW_TYPES));
+// 可生成的 type 由 spawnMon 的原始碼推導（硬寫清單每加一隻怪就得改一次）
+const spawnBody = runSrc.slice(runSrc.indexOf('function spawnMon'), runSrc.indexOf('function currentFloorEventDef'));
+const spawnable = new Set([...spawnBody.matchAll(/type === '(\w+)'/g)].map(m => m[1])
+  .concat([...spawnBody.matchAll(/mons\.push\(\{ ?type:'(\w+)'/g)].map(m => m[1])));
 for (const t of new Set(pools)) {
   assert.ok(spawnable.has(t), '怪池裡的 ' + t + ' 沒有對應的生成分支（打錯字會靜默不生成）');
 }
@@ -56,6 +61,35 @@ assert.ok(!/m\.freezeT <= 0/.test(aiBlock[0]),
 assert.ok(/currentRiftScale\(\)\.tier/.test(systemsSrc), '射手應依秘境層級切換強化變體');
 assert.ok(/tier >= \d+ \? 3 : 1/.test(systemsSrc), '高層應改為散射三連');
 
+// ── 2.5 支援型怪：護盾與治療 ─────────────────────────────────────────────
+// 護盾必須接在傷害唯一入口 hitMon，否則某些傷害來源會直接穿透護盾。
+const hitBody = runSrc.match(/function hitMon\(m, d, crit, noChain\) \{[\s\S]*?\n\}/)[0];
+assert.ok(/m\.shield > 0/.test(hitBody), '護盾必須在 hitMon 內結算，否則會有傷害來源穿透護盾');
+assert.ok(/m\.shield -= absorbed; d -= absorbed;/.test(hitBody),
+  '護盾應吸收後把剩餘傷害往下傳，否則剛好破盾的那一擊會整發浪費或整發穿透');
+assert.ok(hitBody.indexOf('m.shield') < hitBody.indexOf('m.hp -= d'), '護盾要在扣血之前結算');
+// 護符怪死亡要清掉它掛的護盾，這是「先解場」的回饋
+const deathBlock = live(runSrc).match(/if \(m\.type === 'warder'\) \{[\s\S]*?\n    \}/);
+assert.ok(deathBlock, '護符怪死亡時應清除它掛出的護盾');
+assert.ok(/o\.wardedBy = null;/.test(deathBlock[0]), '應一併清掉 wardedBy，避免留著已死怪物的參照');
+// 治療圖騰不該有接觸傷害（它的威脅是「清不完」而不是「打得痛」）
+const totemSpawn = runSrc.match(/if \(type === 'totem'\) \{[\s\S]*?\n  \}/)[0];
+assert.ok(/dmg: 0/.test(totemSpawn), '治療圖騰不該有接觸傷害');
+// 支援行為要有可見來源提示，且低特效下不能消失
+const beamBlock = renderSrc.match(/const beams = m\.healBeams \|\| m\.wardBeams;[\s\S]*?\n    \}/);
+assert.ok(beamBlock, '缺少支援光束的繪製');
+assert.ok(/moveTo\(m\.x/.test(beamBlock[0]) && /lineTo\(o\.x/.test(beamBlock[0]), '支援光束應連到受益的目標');
+assert.ok(!/combatSettings/.test(beamBlock[0]), '支援光束不得依賴 combatSettings');
+assert.ok(/m\.shield > 0\) \{[\s\S]{0,300}ellipse/.test(renderSrc), '有護盾的怪應畫出護盾環');
+// 支援型怪的行為要略過 Boss，否則會變成幫 Boss 補血/加盾
+for (const kind of ['totem', 'warder']) {
+  const ai = updateSrc.match(new RegExp("\\} else if \\(m\\.type === '" + kind + "'\\) \\{[\\s\\S]*?\\n    \\} else if"));
+  assert.ok(ai, kind + ' 缺少 AI');
+  assert.ok(/o\.type === 'boss'/.test(ai[0]), kind + ' 應排除 Boss，否則會幫 Boss 補血或加盾');
+  assert.ok(/!\(m\.freezeT > 0\)/.test(ai[0]), kind + ' 應以 !(x > 0) 判定凍結（undefined <= 0 為 false）');
+  assert.ok(/m\.\w+Cd = \d+/.test(ai[0]), kind + ' 動作後必須重設冷卻');
+}
+
 // ── 3. 起始群系多樣化 ────────────────────────────────────────────────────
 assert.ok(/const DUNGEON_START_BIOME_IDS = \[/.test(coreSrc), '應有可起始的群系清單');
 const startIds = coreSrc.match(/const DUNGEON_START_BIOME_IDS = \[([^\]]*)\]/)[1]
@@ -80,5 +114,5 @@ const pickFn = coreSrc.match(/function dungeonPickStartBiome\(seed\) \{[\s\S]*?\
 assert.ok(pickFn, '缺少 dungeonPickStartBiome');
 assert.ok(!/Math\.random/.test(pickFn[0]), '起始群系必須由 run seed 推導，不能用 Math.random（否則同種子無法重現）');
 
-console.log('✓ D4-A smoke 測試通過（射手四件套與遠程管線・預警可讀性・高層變體・' +
+console.log('✓ D4-A/B smoke 測試通過（' + NEW_TYPES.length + ' 種新怪四件套・遠程管線與預警・護盾與治療・高層變體・' +
   startIds.length + ' 種起始群系與章節互換）');

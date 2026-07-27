@@ -66,6 +66,18 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
       shotCd: 40 + Math.floor(rng() * 60), tel: 0, w: 30, h: 26, hitT: 0, elite: false, s: 3 });
     return;
   }
+  if (type === 'totem') { // D4-B 治療圖騰：不動、無接觸傷害，持續回復周圍敵人 → 必須優先擊殺
+    const hp = monsterHp(34, sc, n);
+    mons.push({ type:'totem', x: sx, y: pl.y, vx: 0, minx: sx, maxx: sx,
+      hp, mhp: hp, xpv: Math.round(22 * xpSc), dmg: 0, healCd: 60, w: 26, h: 26, hitT: 0, elite: false, s: 3 });
+    return;
+  }
+  if (type === 'warder') { // D4-B 護符怪：給周圍敵人護盾，自身很脆 → 先解場再打本體
+    const hp = monsterHp(16, sc, n);
+    mons.push({ type:'warder', x: sx, y: pl.y - 40, baseY: pl.y - 40, vx: (0.35 + rng() * 0.25) * (rng() < 0.5 ? -1 : 1), t: rng() * 200,
+      minx, maxx, hp, mhp: hp, xpv: Math.round(20 * xpSc), dmg: Math.round(5 * dsc), wardCd: 40, w: 26, h: 26, hitT: 0, elite: false, s: 3 });
+    return;
+  }
   const elite = rng() < eliteCh;
   let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
   let damage = 8 * dsc * (elite ? 1.6 : 1);
@@ -552,6 +564,12 @@ function hitMon(m, d, crit, noChain) {
   if (typeof dungeonCurseOutgoingDamage === 'function') d = Math.max(1, Math.round(dungeonCurseOutgoingDamage(d)));
   if (m.hp < m.mhp * 0.25 && perkV('execute') > 0) d = Math.max(1, Math.round(d * (1 + 0.1 * perkV('execute'))));
   if (m.vulnT > 0) d = Math.max(1, Math.round(d * (m.vulnMul || 1.2)));
+  if (m.shield > 0) {                       // D4-B 護符怪給的護盾：先吃傷害，破了才扣血
+    const absorbed = Math.min(m.shield, d);
+    m.shield -= absorbed; d -= absorbed;
+    if (m.shield <= 0) { m.shield = 0; burst(m.x, m.y - m.h / 2, '#8fd4ff', 6); }
+    if (d <= 0) { m.hitT = 8; num(m.x, m.y - m.h - 8, String(absorbed), '#8fd4ff', { kind:'tick', size:11 }); return; }
+  }
   m.hp -= d; m.hitT = 8;
   const lifesteal = 0.06 * perkV('vamp') + affixV('lifesteal') + (player.rageT > 0 ? player.rageLifesteal || 0 : 0);
   if (lifesteal > 0) player.hp = Math.min(player.mhp, player.hp + blessingHeal(d * lifesteal)); // 吸血鬼/吸血詞綴
@@ -567,6 +585,15 @@ function hitMon(m, d, crit, noChain) {
   if (crit) combatVibrate(10);
   playSfx(crit ? 'critical' : 'hit');
   if (m.hp <= 0) {
+    if (m.type === 'warder') { // 護符怪一死，它掛的護盾立刻蒸發——這是「先打護符怪」的回饋
+      let cleared = 0;
+      for (const o of mons) {
+        if (o.wardedBy !== m) continue;
+        o.wardedBy = null;                    // 一律清掉，避免留著已死怪物的參照
+        if (o.shield > 0) { o.shield = 0; cleared++; burst(o.x, o.y - o.h / 2, '#8fd4ff', 6); }
+      }
+      if (cleared) num(m.x, m.y - m.h - 26, '護盾消散 ×' + cleared, '#8fd4ff');
+    }
     triggerCombatFeel(m.type === 'boss' ? 'boss' : 'kill', m);
     kills++;
     activityProgress('kills', 1);
