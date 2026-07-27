@@ -59,14 +59,52 @@ function terrainHazardIsMovementType(hazardId) {
 // 一般模式降低險境房出現機率。
 function dungeonHazardChanceMul() { return terrainModeConfig().hazardChanceMul; }
 // 一般模式降低 Boss 生命與傷害（傷害降更多，減少被秒的挫折）。
-function dungeonBossHpMul() { const m = terrainModeConfig().bossHpMul; return Number.isFinite(m) ? m : 1; }
-function dungeonBossDmgMul() { const m = terrainModeConfig().bossDmgMul; return Number.isFinite(m) ? m : 1; }
+function dungeonBossHpMul() { const m = terrainModeConfig().bossHpMul; return (Number.isFinite(m) ? m : 1) * currentRiftScale().bossHp; }
+function dungeonBossDmgMul() { const m = terrainModeConfig().bossDmgMul; return (Number.isFinite(m) ? m : 1) * currentRiftScale().bossDmg; }
 // 一般模式降低裝備與藥水掉落機率（簡單模式的報酬取捨）。
-function dungeonDropMul() { const m = terrainModeConfig().dropMul; return Number.isFinite(m) ? m : 1; }
+function dungeonDropMul() { const m = terrainModeConfig().dropMul; return (Number.isFinite(m) ? m : 1) * currentRiftScale().drop; }
 // 掉落稀有度上限（一般模式頂多藍裝 rarity 1）。
 function dungeonMaxRarity() { const m = terrainModeConfig().maxRarity; return Number.isFinite(m) ? m : 4; }
 // 一般模式升等較快（經驗值加成）。
 function dungeonXpMul() { const m = terrainModeConfig().xpMul; return Number.isFinite(m) ? m : 1; }
+
+// ---------- R1 秘境分層難度 ----------
+// 「困難」不再是單一檔位，而是秘境 T1..T10：T1 完全等同改版前的困難（不動既有體驗，
+// 舊存檔一律視為 T1），往上每層在既有 per-floor 縮放之上再套一組全域倍率。
+// 傷害漲得比血量慢，避免高層變成「一下被秒」而不是「打得更久」。
+const RIFT_MAX_TIER = 10;
+const RIFT_STEP = { monHp:0.35, monDmg:0.22, bossHp:0.35, bossDmg:0.22, drop:0.15, unique:0.10, soul:0.20, mastery:0.25 };
+function riftClampTier(tier) {
+  const t = Math.round(Number(tier));
+  return Number.isFinite(t) ? Math.max(1, Math.min(RIFT_MAX_TIER, t)) : 1;
+}
+function riftScale(tier) {
+  const t = riftClampTier(tier), n = t - 1, out = { tier:t };
+  for (const k of Object.keys(RIFT_STEP)) out[k] = 1 + RIFT_STEP[k] * n;
+  return out;
+}
+let riftTier = 1;                       // 本局選擇的層級；只在困難模式有意義
+const RIFT_TIER_KEY = 'pixelrogue_rift_tier';
+try {
+  const saved = localStorage.getItem(RIFT_TIER_KEY);
+  if (saved != null) riftTier = riftClampTier(saved);
+} catch (e) {}
+function setRiftTier(tier) {
+  // 不得超過已解鎖層。riftTierUnlocked 在 progression.js（較晚載入），所以用 typeof 守衛；
+  // 開檔時的還原走 revalidateRiftTier()（main.js 於全部載入後呼叫），否則舊的 localStorage 值能繞過解鎖。
+  const max = (typeof riftTierUnlocked === 'function') ? riftTierUnlocked() : RIFT_MAX_TIER;
+  riftTier = Math.min(riftClampTier(tier), max);
+  try { localStorage.setItem(RIFT_TIER_KEY, String(riftTier)); } catch (e) {}
+  return riftTier;
+}
+function revalidateRiftTier() { return setRiftTier(riftTier); } // 存檔載入後把選層夾回已解鎖範圍
+// 一般模式不吃層級加成（維持入門定位），等同 T1。
+function currentRiftScale() { return riftScale(terrainMode === 'complex' ? riftTier : 1); }
+function dungeonMonHpMul() { return currentRiftScale().monHp; }
+function dungeonMonDmgMul() { return currentRiftScale().monDmg; }
+function dungeonSoulMul() { return currentRiftScale().soul; }
+function dungeonMasteryXpMul() { return currentRiftScale().mastery; }
+function dungeonUniqueRateMul() { return currentRiftScale().unique; }
 
 const DUNGEON_BIOME_DEFS = [
   { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },

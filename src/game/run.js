@@ -2,18 +2,21 @@
 // ---------- floor generation ----------
 function monsterHp(base, sc, n, extraMul = 1) {
   const endurance = 1.5 + Math.min(0.75, 0.025 * (n - 1));
-  const hp = base * sc * endurance * extraMul;
+  const tier = (typeof dungeonMonHpMul === 'function') ? dungeonMonHpMul() : 1; // R1 秘境層級
+  const hp = base * sc * endurance * extraMul * tier;
   return Math.round(typeof dungeonCurseBaseEnemyHp === 'function' ? dungeonCurseBaseEnemyHp(hp) : hp);
 }
 function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
   rng = rng || Math.random;
+  // 傷害的秘境層級縮放走 dsc，血量在 monsterHp 內另外套——兩者遞增速度不同（傷害漲得慢）。
+  const dsc = sc * ((typeof dungeonMonDmgMul === 'function') ? dungeonMonDmgMul() : 1);
   if (type === 'bat') {
     const bx = 350 + rng() * (worldW - 550);
     const by = 170 + rng() * 140;
     const hp = monsterHp(20, sc, n);
     mons.push({ type:'bat', x: bx, y: by, ax: bx, ay: by, t: rng() * 200,
       hp, mhp: hp, xpv: Math.round(16 * xpSc),
-      dmg: Math.round(10 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+      dmg: Math.round(10 * dsc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   const wide = plats.filter(q => !q.ground && q.w > 120);
@@ -23,42 +26,42 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
   if (type === 'mush') {
     const hp = monsterHp(30, sc, n);
     mons.push({ type:'mush', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + rng() * 0.3) * (rng() < 0.5 ? -1 : 1), vy: 0, onG: true, jt: 30 + rng() * 60,
-      minx, maxx, hp, mhp: hp, xpv: Math.round(14 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(14 * xpSc), dmg: Math.round(9 * dsc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'spore') {
     const hp = monsterHp(22, sc, n);
     mons.push({ type:'spore', x: sx, y: pl.y, vx: (0.3 + rng() * 0.25) * (rng() < 0.5 ? -1 : 1), st: 60 + rng() * 60,
-      minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * sc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(9 * dsc), w: 34, h: 24, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'bomber') {
     const hp = monsterHp(24, sc, n);
     mons.push({ type:'bomber', x: sx, y: pl.y, baseY: pl.y, vx: 0, fuse: null, boom: false,
-      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(7 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(7 * dsc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'charger') {
     const hp = monsterHp(34, sc, n);
     mons.push({ type:'charger', x: sx, y: pl.y, vx: (0.4 + rng() * 0.3) * (rng() < 0.5 ? -1 : 1), chg: 0, tel: 0, dir: 1,
-      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(9 * sc), w: 36, h: 20, hitT: 0, elite: false, s: 3 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(16 * xpSc), dmg: Math.round(9 * dsc), w: 36, h: 20, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'icer') {
     const hp = monsterHp(28, sc, n);
     mons.push({ type:'icer', x: sx, y: pl.y, vx: (0.5 + rng() * 0.4) * (rng() < 0.5 ? -1 : 1),
-      minx, maxx, hp, mhp: hp, xpv: Math.round(13 * xpSc), dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(13 * xpSc), dmg: Math.round(8 * dsc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
     return;
   }
   if (type === 'splitter') {
     const hp = monsterHp(30, sc, n);
     mons.push({ type:'splitter', x: sx, y: pl.y, baseY: pl.y, vx: (0.4 + rng() * 0.35) * (rng() < 0.5 ? -1 : 1), gen: 0,
-      minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * sc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
+      minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * dsc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
     return;
   }
   const elite = rng() < eliteCh;
   let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
-  let damage = 8 * sc * (elite ? 1.6 : 1);
+  let damage = 8 * dsc * (elite ? 1.6 : 1);
   if (elite && typeof dungeonCurseEliteStat === 'function') {
     hp = Math.round(dungeonCurseEliteStat(hp));
     damage = dungeonCurseEliteStat(damage);
@@ -97,7 +100,7 @@ function spawnEventMimic() {
   const hp = monsterHp(52, sc, floor, 2.1);
   const x = floorEvent.x;
   mons.push({ type:'slime', mimic:true, x, y:468, vx:0.85, minx:Math.max(20, x - 210), maxx:Math.min(worldW - 20, x + 210),
-    hp, mhp:hp, xpv:Math.round(30 * (1 + 0.15 * (floor - 1))), dmg:Math.round(12 * sc), w:52, h:34,
+    hp, mhp:hp, xpv:Math.round(30 * (1 + 0.15 * (floor - 1))), dmg:Math.round(12 * sc * dungeonMonDmgMul()), w:52, h:34,
     hitT:0, elite:true, eventMon:true, s:4 });
   portal = null;
   burst(x, floorEvent.y - 30, '#ff8a6a', 28);
@@ -329,7 +332,7 @@ function spawnBossAdds(count) { // Boss 進階段召喚蝙蝠援軍(較弱,增�
   for (let i = 0; i < count; i++) {
     const bx = 220 + Math.random() * (worldW - 440), by = 150 + Math.random() * 120;
     const hp = monsterHp(22, sc, floor);
-    mons.push({ type: 'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 100, hp: hp, mhp: hp, xpv: 10, dmg: Math.round(8 * sc), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
+    mons.push({ type: 'bat', x: bx, y: by, ax: bx, ay: by, t: Math.random() * 100, hp: hp, mhp: hp, xpv: 10, dmg: Math.round(8 * sc * dungeonMonDmgMul()), w: 34, h: 22, hitT: 0, elite: false, s: 3 });
   }
   num(player.x, player.y - player.h - 30, '召喚援軍!', '#ff5a5a');
   beep(180, 0.2, 'sawtooth', 0.05);
@@ -405,7 +408,7 @@ function updateFleeChannel() {
 }
 function endRun(result) {
   const benchmarkRun = !!activeDungeonBenchmarkId;
-  const gained = Math.round(soulsRun * soulGainMul());
+  const gained = Math.round(soulsRun * soulGainMul() * ((typeof dungeonSoulMul === 'function') ? dungeonSoulMul() : 1)); // R1 秘境層級
   if (!benchmarkRun) meta.souls += gained;
   let stashed = 0;
   if (!benchmarkRun) for (const it of player.items) if (stashGear(it)) stashed++; // 背包裝備存入倉庫
@@ -602,6 +605,11 @@ function hitMon(m, d, crit, noChain) {
     if (m.type === 'boss') {
       if (typeof recordDungeonBossEnd === 'function') recordDungeonBossEnd('kill', null);
       if (m.bossId && runBossIds.indexOf(m.bossId) < 0) runBossIds.push(m.bossId); // 精通首殺加成用
+      // R1 秘境：在困難模式清掉 Boss 就解鎖下一層（基準局不計，避免測試污染進度）
+      if (!activeDungeonBenchmarkId && terrainMode === 'complex' && typeof unlockNextRiftTier === 'function' && unlockNextRiftTier(riftTier)) {
+        num(m.x, m.y - m.h - 40, '秘境 T' + meta.riftTier + ' 已解鎖!', '#c58aff');
+        playSfx('uiConfirm', 0.8, 1.15);
+      }
       // 保底傳說裝 + 追加一件隨機裝
       gearDrops.push({ x: m.x - 26, y: m.y - m.h, vy: -4, vx: -1.2, it: genGear(floor, floor >= 20 ? 4 : 3, 'boss'), t: 1500, ground: 468 }); // 保底史詩,深層傳說
       gearDrops.push({ x: m.x + 26, y: m.y - m.h, vy: -4, vx: 1.2, it: genGear(floor, 2, 'boss'), t: 1500, ground: 468 });

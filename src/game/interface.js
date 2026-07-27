@@ -60,10 +60,10 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.54';
+const GAME_VERSION = '0.29.55';
 const GAME_UPDATE_NOTES = [
   {
-    version:'0.29.54', date:'2026-07-24', title:'弓箭手技能補完（J2-B）',
+    version:'0.29.55', date:'2026-07-24', title:'弓箭手技能補完（J2-B）',
     items:['弓箭手補齊四個技能：多重箭（扇形三箭）、貫穿射（穿透整條直線）、箭雨（範圍落箭覆蓋）、勁弩射（蓄力強箭並擊退）。','每個技能都有兩條天賦分支——例如多重箭散射／集火、勁弩射擊退／穿甲。技能樹補滿五個節點。','箭矢投射物新增穿透、擊退、緩速與大箭表現；全部沿用弓箭手的箭圖。']
   },
   {
@@ -788,6 +788,8 @@ function handleTap(mx, my) {
     for (const b of diffBtns) if (inside(b)) {
       if (b.act === 'terrainNormal') setTerrainMode('normal');
       else if (b.act === 'terrainComplex') setTerrainMode('complex');
+      else if (b.act === 'riftDown') setRiftTier(riftTier - 1);          // 秘境層級 −
+      else if (b.act === 'riftUp') setRiftTier(Math.min(riftTier + 1, riftTierUnlocked())); // ＋ 不得超過已解鎖
       playSfx('uiSelect'); return;
     }
     for (const b of metaBtns) if (inside(b)) {

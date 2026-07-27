@@ -11,7 +11,9 @@ const meta = {
     equipped: { title: null, color: null, aura: 'none', skin: null }
   },
   // 職業精通（J1）：每個職業（含未來進階職）獨立累積，零局內戰力
-  mastery: {}
+  mastery: {},
+  // 秘境（R1）：已解鎖的最高層。舊存檔沒有這個欄位＝T1（＝改版前的困難）
+  riftTier: 1
 };
 const GEAR_PARTS = ['weapon', 'armor', 'helmet', 'boots', 'acc'];
 const SET_PARTS = ['weapon', 'armor', 'helmet', 'boots'];
@@ -549,7 +551,7 @@ function saveMeta() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       s: meta.souls, u: UP_IDS.map(id => meta.up[id]), b: bestFloor, k: skillsToNums(),
       st: meta.stash, mt: meta.mats, lo: meta.loadout, sq: meta.stashSeq, pn: meta.playerName,
-      cs: meta.cosmetics, ms: meta.mastery, ax: advancedSkillState()
+      cs: meta.cosmetics, ms: meta.mastery, ax: advancedSkillState(), rt: meta.riftTier
     }));
   } catch (e) {}
 }
@@ -571,6 +573,8 @@ function loadMeta() {
     // 職業精通（結構清理交給 ensureMasteryState，舊存檔缺欄位＝從 0 開始）
     if (d && d.ms && typeof d.ms === 'object') meta.mastery = d.ms;
     if (d && d.ax) applyAdvancedSkillState(d.ax); // 進階職技能狀態
+    // 秘境已解鎖層級（R1）：舊存檔沒有 rt＝T1；上限用 riftClampTier（data.js 先載入）
+    meta.riftTier = (d && d.rt != null && typeof riftClampTier === 'function') ? riftClampTier(d.rt) : 1;
   } catch (e) {}
 }
 function saveChk(a) { let s = 7; for (const v of a) s = (s * 31 + v) % 99991; return s; }
@@ -855,6 +859,17 @@ function addMasteryXp(job, amount) { // 回傳本次升了幾級
   saveMeta();
   return masteryLevel(e.xp) - before;
 }
+// R1 秘境：在第 T 層擊敗 Boss → 解鎖 T+1（無倒扣、無時限）。回傳是否真的解鎖了新層。
+function unlockNextRiftTier(clearedTier) {
+  if (typeof riftClampTier !== 'function') return false;
+  const t = riftClampTier(clearedTier);
+  const next = riftClampTier(t + 1);
+  if (next <= (meta.riftTier || 1)) return false;
+  meta.riftTier = next;
+  saveMeta();
+  return true;
+}
+function riftTierUnlocked() { return (typeof riftClampTier === 'function') ? riftClampTier(meta.riftTier || 1) : 1; }
 function calcMasteryGain(job, opts) { // 樓層/擊殺/撤退 + 首次 Boss 加成 + 重複刷衰減
   const o = opts || {}, e = ensureMasteryState(job);
   const fl = Math.max(0, o.floor | 0), kl = Math.max(0, o.kills | 0);

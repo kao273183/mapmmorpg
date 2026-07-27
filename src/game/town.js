@@ -965,9 +965,38 @@ function renderMenu() {
     ctx.textAlign = 'center'; ctx.fillStyle = on ? '#f0dcfa' : '#858ba8'; ctx.font = 'bold 12px ' + STAT_FONT; ctx.fillText(label, x + dbW / 2, dby + 17);
   };
   diffBtn(db1, 'terrainNormal', '一般（推薦）', terrainNormal);
-  diffBtn(db2, 'terrainComplex', '困難', !terrainNormal);
-  ctx.textAlign = 'left'; ctx.fillStyle = '#ffb45e'; ctx.font = '9px ' + STAT_FONT;
-  ctx.fillText(terrainNormal ? '一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少' : '困難：可掉傳說與套裝、掉落較高、Boss 全強度、險境較多', left.x + 18, left.y + 308);
+  const maxT = (typeof riftTierUnlocked === 'function') ? riftTierUnlocked() : 1;
+  // 秘境層級選擇器直接嵌進秘境鈕的兩端，不另外佔一列——下方緊接分隔線與「進入地城」，沒有多餘高度。
+  // −／＋ 必須先 push，點擊處理是「第一個命中就 return」，晚 push 會被底下的模式鈕吃掉。
+  const stepW = 30;   // 觸控目標；點歪了會落在秘境鈕上（已選中，無副作用）
+  if (!terrainNormal) {
+    const stepBtn = (x, act, label, enabled) => {
+      if (enabled) diffBtns.push({ x, y: dby + 1, w: stepW, h: dbH - 2, act });
+      fillRoundRect(x, dby + 1, stepW, dbH - 2, 4, enabled ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.015)', enabled ? '#8a4fb0' : '#33364a', 1);
+      ctx.textAlign = 'center'; ctx.fillStyle = enabled ? '#e0bff5' : '#4a4d64'; ctx.font = 'bold 13px ' + STAT_FONT;
+      ctx.fillText(label, x + stepW / 2, dby + 17);
+    };
+    stepBtn(db2 + 3, 'riftDown', '−', riftTier > 1);
+    stepBtn(db2 + dbW - stepW - 3, 'riftUp', '＋', riftTier < maxT);
+  }
+  diffBtn(db2, 'terrainComplex', terrainNormal ? '秘境' : '秘境 T' + riftTier + '  / T' + maxT, !terrainNormal);
+  ctx.textAlign = 'left'; ctx.font = '9px ' + STAT_FONT;
+  if (terrainNormal) {
+    ctx.fillStyle = '#ffb45e';
+    ctx.fillText('一般：升等較快、最高藍裝、掉落偏低、Boss 較弱、陷阱少', left.x + 18, left.y + 308);
+  } else {
+    const sc = riftScale(riftTier);
+    ctx.fillStyle = '#c98a8a';
+    ctx.fillText('怪物 HP ×' + sc.monHp.toFixed(2) + ' 傷害 ×' + sc.monDmg.toFixed(2), left.x + 18, left.y + 308);
+    ctx.fillStyle = '#7dd8a8';
+    const reward = '掉落 ×' + sc.drop.toFixed(2) + ' 傳奇 ×' + sc.unique.toFixed(2) + ' 靈魂 ×' + sc.soul.toFixed(2) + ' 精通 ×' + sc.mastery.toFixed(2);
+    ctx.fillText(reward, left.x + 176, left.y + 308);
+    if (riftTier >= maxT) {
+      ctx.textAlign = 'right'; ctx.fillStyle = '#6a7090';
+      ctx.fillText(maxT >= RIFT_MAX_TIER ? '已達最高層' : '擊敗本層 Boss 解鎖 T' + (riftTier + 1), left.x + left.w - 18, left.y + 296);
+      ctx.textAlign = 'left';
+    }
+  }
   ctx.fillStyle = '#343850'; ctx.fillRect(left.x + 18, left.y + 316, left.w - 36, 1);
   const bw2 = left.w - 36, bh2 = 48;
   startBtn = { x: left.x + 18, y: left.y + 324, w: bw2, h: bh2 };

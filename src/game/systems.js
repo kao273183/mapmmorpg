@@ -1169,7 +1169,8 @@ function genGear(n, forceR, source) {
   let uniqueId = null;
   if (baseR >= 3 && typeof uniqueIdsFor === 'function') {
     const cands = uniqueIdsFor(slot, player.cls, baseR);
-    if (cands.length && Math.random() < UNIQUE_DROP_RATE) uniqueId = pick(cands);
+    const uRate = UNIQUE_DROP_RATE * ((typeof dungeonUniqueRateMul === 'function') ? dungeonUniqueRateMul() : 1); // R1 秘境層級
+    if (cands.length && Math.random() < uRate) uniqueId = pick(cands);
   }
   // 套裝為史詩以上；上限低於 3 的模式（一般）不掉套裝；已是 Unique 則不再滾套裝。
   const rate = (!uniqueId && cap >= 3 && n >= 5 && SET_PARTS.includes(slot)) ? (SET_DROP_RATE[source || 'normal'] || SET_DROP_RATE.normal) : 0;
