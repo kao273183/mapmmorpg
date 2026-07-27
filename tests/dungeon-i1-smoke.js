@@ -49,6 +49,25 @@ assert(warH.length > 0 && warH.length === mageH.length, '頭盔應為通用（�
 assert.strictEqual(api.uniqueIdsFor('weapon', 'warrior', 2).length, 0, 'r=2 不應有 unique 候選');
 assert(api.uniqueIdsFor('weapon', 'warrior', 3).length > 0, 'r=3 應有 unique 候選');
 
+// 4b. 每個基礎職都要有自己的傳奇武器，且武器種類要對得上該職的武器欄。
+// 弓箭手上線後有一段時間 10 把武器類 unique 全是劍或杖，弓系的武器欄不可能是傳奇——
+// 這種缺口不會報錯，只會讓一整個職業系少一條收藏線，用推導式擋住。
+const WPN_OF_BASE = { warrior:'sword', mage:'stave', archer:'bow' };
+for (const base of Object.keys(WPN_OF_BASE)) {
+  const ws = api.uniqueIdsFor('weapon', base, 4);
+  assert(ws.length > 0, base + ' 沒有任何傳奇武器，該職的武器欄永遠不可能是傳奇');
+  for (const id of ws) {
+    const u = api.UNIQUE_DEFS[id];
+    assert.strictEqual(u.wpn, WPN_OF_BASE[base], id + ' 的 wpn 應為 ' + WPN_OF_BASE[base] + '，實際 ' + u.wpn);
+  }
+}
+// 武器類 unique 一律要標 wpn，否則會生成沒有武器種類的裝備（美術與圖示查表會落空）
+for (const id of ids) {
+  const u = api.UNIQUE_DEFS[id];
+  if (u.kind === 'weapon') assert(u.wpn, id + ' 是武器類 unique，必須指定 wpn');
+  else assert(!u.wpn, id + ' 不是武器，不該有 wpn');
+}
+
 // 5. gearColor：unique 回傳專屬金橙色；一般裝回傳稀有度色
 assert.strictEqual(api.gearColor({ unique: 'frost_blade', r: 4 }), api.UNIQUE_COLOR, 'unique 應回傳專屬色');
 assert.strictEqual(api.gearColor({ r: 1 }), '#6f9dff', '藍裝應回傳精良色');

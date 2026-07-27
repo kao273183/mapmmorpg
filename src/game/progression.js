@@ -72,7 +72,12 @@ const UNIQUE_DEFS = {
   venom_fang:    { id:'venom_fang',    name:'劇毒之牙', kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'幽暗洞窟', powers:[{ type:'burn', chance:0.32, dur:180, dmgMul:0.28 }], powerText:'命中 32% 劇毒（持續傷害）' },
   rift_blade:    { id:'rift_blade',    name:'裂空劍',   kind:'weapon', wpn:'sword', cls:'warrior', minR:3, biome:'虛空深淵', powers:[{ type:'chain', chance:0.32, mul:0.5 }],      powerText:'命中 32% 連鎖閃電' },
   soulreaper:    { id:'soulreaper',    name:'奪魂杖',   kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'幽暗洞窟', powers:[{ type:'lifesteal', amount:0.10 }],          powerText:'法擊吸血 10%' },
-  pyro_stave:    { id:'pyro_stave',    name:'炎爆法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' }
+  pyro_stave:    { id:'pyro_stave',    name:'炎爆法杖', kind:'weapon', wpn:'stave', cls:'mage',    minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' },
+  // — J2-H：弓箭手系傳奇弓 —
+  // 觸發機率對齊法杖（實測命中頻率 弓 1.6 次/秒、法杖 1.7、劍 4.0——弓不像直覺以為的那樣打得比較快）。
+  frost_bow:     { id:'frost_bow',     name:'霜羽弓',   kind:'weapon', wpn:'bow',   cls:'archer',  minR:3, biome:'冰霜凍原', powers:[{ type:'freeze', chance:0.22, dur:48 }],      powerText:'命中 22% 凍結敵人' },
+  ember_bow:     { id:'ember_bow',     name:'炎羽弓',   kind:'weapon', wpn:'bow',   cls:'archer',  minR:3, biome:'熾熱熔岩', powers:[{ type:'burn', chance:0.32, dur:150, dmgMul:0.35 }], powerText:'命中 32% 點燃（持續燃燒）' },
+  starpiercer:   { id:'starpiercer',   name:'貫星弓',   kind:'weapon', wpn:'bow',   cls:'archer',  minR:3, biome:'虛空深淵', powers:[{ type:'pierceShot', count:1 }],              powerText:'所有箭矢額外貫穿 1 名敵人' }
 };
 const UNIQUE_LIST = Object.values(UNIQUE_DEFS);
 function uniqueDef(id) { return id ? UNIQUE_DEFS[id] : null; }

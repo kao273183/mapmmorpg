@@ -138,7 +138,7 @@ function update() {
     pr.x += pr.vx; pr.y += pr.vy || 0; pr.t--;
     let gone = pr.t <= 0;
     for (const m of mons) {
-      if (pr.pierce && pr.hits.indexOf(m) >= 0) continue;
+      if (pr.hits && pr.hits.indexOf(m) >= 0) continue; // 以 hits 判定：傳奇弓會讓非穿透箭也帶 hits
       const fireVsBat = pr.kind === 'fire' && m.type === 'bat';
       if (Math.abs(pr.x - m.x) < m.w / 2 + (fireVsBat ? 12 : 8) && Math.abs(pr.y - (m.y - m.h / 2)) < m.h / 2 + (fireVsBat ? 18 : 10)) {
         const tt = pr.talent || { mechanic:false, ultimate:false, branch:-1 };
@@ -163,7 +163,11 @@ function update() {
             if (pr.knock && m.type !== 'boss') { m.x = Math.max(18, Math.min(worldW - 18, m.x + (pr.vx > 0 ? 1 : -1) * pr.knock)); if (!(m.ccT > 0)) { m.freezeT = Math.max(m.freezeT || 0, 24); m.ccT = 90; } }
             if (pr.slowHit && !(m.ccT > 0)) m.slowT = Math.max(m.slowT || 0, 150);
           }
-          if (pr.pierce && pierced + 1 < (pr.pierceMax || 99)) { pr.hits.push(m); continue; }      // 穿透上限內繼續飛
+          // 穿透上限內繼續飛。貫星弓（pierceShot）讓所有箭矢額外貫穿 N 名，與技能自帶的穿透相加。
+          const bowPierce = (typeof equippedUniquePower === 'function') ? equippedUniquePower('pierceShot') : null;
+          const extra = bowPierce ? (bowPierce.count || 1) : 0;
+          const maxHits = (pr.pierce ? (pr.pierceMax || 99) : 1) + extra;
+          if (pierced + 1 < maxHits) { (pr.hits || (pr.hits = [])).push(m); continue; }
           gone = true; break;
         } else if (pr.kind === 'elem') {                      // 元素師基本技：依當前元素附加效果
           const doFire = pr.elemAll || pr.elem === 'fire';
