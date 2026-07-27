@@ -54,7 +54,7 @@ function terrainHazardMaxPerRoom(def) {
 }
 // 判斷某地形是否屬於「移動改變型」（一般模式下會被中和）。
 function terrainHazardIsMovementType(hazardId) {
-  return hazardId === 'ice_floor' || hazardId === 'void_platforms';
+  return hazardId === 'ice_floor' || hazardId === 'void_platforms' || hazardId === 'wind_zone';
 }
 // 一般模式降低險境房出現機率。
 function dungeonHazardChanceMul() { return terrainModeConfig().hazardChanceMul; }
@@ -106,12 +106,14 @@ function dungeonSoulMul() { return currentRiftScale().soul; }
 function dungeonMasteryXpMul() { return currentRiftScale().mastery; }
 function dungeonUniqueRateMul() { return currentRiftScale().unique; }
 
+// hazardIds：該群系可能出現的險境，每個房間依房間種子挑一種（D4-D 之前每個群系只有一種）。
+// hazardId 保留為預設值，供還沒改走清單的呼叫端與舊行為對照。
 const DUNGEON_BIOME_DEFS = [
-  { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },
-  { id:'cavern', name:'幽暗洞窟', hazardId:'falling_rocks', enemyTag:'蝙蝠、孢子怪', bossName:'洞窟領主' },
-  { id:'volcano', name:'熾熱熔岩', hazardId:'lava_vents', enemyTag:'爆裂怪、衝鋒獸', bossName:'熔岩魔王' },
-  { id:'tundra', name:'冰霜凍原', hazardId:'ice_floor', enemyTag:'冰霜怪、分裂怪', bossName:'冰霜領主' },
-  { id:'void', name:'虛空深淵', hazardId:'void_platforms', enemyTag:'深淵混合怪群', bossName:'深淵魔王' }
+  { id:'meadow', name:'翠綠草原', hazardId:'thorn_roots', hazardIds:['thorn_roots', 'poison_gas'], enemyTag:'史萊姆、蝙蝠', bossName:'草原領主' },
+  { id:'cavern', name:'幽暗洞窟', hazardId:'falling_rocks', hazardIds:['falling_rocks', 'poison_gas'], enemyTag:'蝙蝠、孢子怪', bossName:'洞窟領主' },
+  { id:'volcano', name:'熾熱熔岩', hazardId:'lava_vents', hazardIds:['lava_vents', 'geyser'], enemyTag:'爆裂怪、衝鋒獸', bossName:'熔岩魔王' },
+  { id:'tundra', name:'冰霜凍原', hazardId:'ice_floor', hazardIds:['ice_floor', 'wind_zone'], enemyTag:'冰霜怪、分裂怪', bossName:'冰霜領主' },
+  { id:'void', name:'虛空深淵', hazardId:'void_platforms', hazardIds:['void_platforms', 'wind_zone'], enemyTag:'深淵混合怪群', bossName:'深淵魔王' }
 ];
 
 const DUNGEON_HAZARD_DEFS = {
@@ -139,6 +141,27 @@ const DUNGEON_HAZARD_DEFS = {
     id:'void_platforms', biomeId:'void', name:'虛空平台', previewTag:'虛空平台', implemented:true,
     tutorial:'平台閃爍兩次後會消失；地面永遠保留穩定路線。', warningFrames:60, activeFrames:90, cooldownFrames:120,
     maxPerRoom:2, rewards:['靈魂加成', '強化石']
+  },
+  // — D4-D 新地形 —
+  // 毒氣：站著就掉血（每 tick 少量），逼玩家不能在原地纏鬥；活躍期長、傷害低，與落石那種
+  // 「單次重擊」形成對比。
+  poison_gas: {
+    id:'poison_gas', biomeId:'cavern', name:'毒氣區', previewTag:'毒氣區', implemented:true,
+    tutorial:'綠霧範圍內會持續掉血，別在裡面停留或纏鬥。', warningFrames:40, activeFrames:150, cooldownFrames:140,
+    maxPerRoom:3, damagePct:0.022, minDamage:3, tickFrames:26, rewards:['靈魂加成', '強化石']
+  },
+  // 間歇泉：垂直噴發，命中把玩家高高彈起兼傷害——不是「站著挨打」而是「被打斷節奏」。
+  geyser: {
+    id:'geyser', biomeId:'volcano', name:'間歇泉', previewTag:'間歇泉', implemented:true,
+    tutorial:'地面冒出蒸氣時會垂直噴發，會把人彈起，先離開再通過。', warningFrames:50, activeFrames:36, cooldownFrames:120,
+    maxPerRoom:3, damagePct:0.05, minDamage:6, launch:-13, rewards:['靈魂加成', '強化石']
+  },
+  // 強風帶：週期性把玩家往一側推，影響跳躍與走位。屬於「改變移動規則」型，
+  // 一般模式會被中和（與冰面／虛空平台同一條規則）。
+  wind_zone: {
+    id:'wind_zone', biomeId:'tundra', name:'強風帶', previewTag:'強風帶', implemented:true,
+    tutorial:'風向箭頭亮起時會被往一側推，逆風要多留起跳距離。', warningFrames:55, activeFrames:110, cooldownFrames:130,
+    maxPerRoom:2, push:0.34, rewards:['靈魂加成', '強化石']
   }
 };
 

@@ -150,7 +150,10 @@ api.setRun(3);
 const thornSpec = api.makeRoomSpec('hazard', 2, 0);
 api.setSpec(thornSpec);
 api.spawnDungeonHazards(thornSpec, 2100, null, [{ x:0, y:468, w:2100, ground:true }]);
-assert.ok(api.getTutorial() && api.getTutorial().id === 'thorn_roots', '一般模式反應型地形仍應教學');
+const tut = api.getTutorial();
+assert.ok(tut, '一般模式反應型地形仍應教學');
+assert.ok(['thorn_roots', 'poison_gas'].indexOf(tut.id) >= 0,
+  '教學應對應草原的反應型地形之一(D4-D 起一個群系可掛多種)，實際 ' + tut.id);
 
 // 7. 地形傷害：一般模式低於複雜模式（以高 HP 觀察百分比傷害）。
 const rockDef = api.defs.falling_rocks;

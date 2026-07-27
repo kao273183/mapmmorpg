@@ -96,6 +96,17 @@ function generateVoidPlatformLayout(spec, platforms) {
   return result.sort((a, b) => a.x - b.x);
 }
 
+function generatePoisonGasLayout(spec, width, eventX) {
+  return generateGroundHazardLayout(spec, width, eventX, { type:'poison_gas', spacing:900, min:2, max:3, minWidth:120, maxWidth:170, minGap:180 });
+}
+function generateGeyserLayout(spec, width, eventX) {
+  return generateGroundHazardLayout(spec, width, eventX, { type:'geyser', spacing:820, min:2, max:3, minWidth:44, maxWidth:62, minGap:150 });
+}
+function generateWindZoneLayout(spec, width, eventX) {
+  const rng = dungeonRoomRng(spec, 'hazards:wind_zone');
+  return generateGroundHazardLayout(spec, width, eventX, { type:'wind_zone', spacing:1000, min:1, max:2, minWidth:240, maxWidth:340, minGap:260 })
+    .map(z => Object.assign(z, { dir: rng() < 0.5 ? -1 : 1 }));   // 風向固定，玩家可以學
+}
 function timedGroundHazards(layout, def, startPhase) {
   return layout.map((hazard, index) => Object.assign(hazard, {
     phase:startPhase || 'warning',
@@ -113,6 +124,9 @@ function spawnDungeonHazards(spec, width, eventX, platforms) {
   if (spec.hazardId === 'thorn_roots') dungeonHazards = timedGroundHazards(generateThornRootLayout(spec, width, eventX), def);
   else if (spec.hazardId === 'falling_rocks') dungeonHazards = timedGroundHazards(generateFallingRockLayout(spec, width, eventX), def);
   else if (spec.hazardId === 'lava_vents') dungeonHazards = timedGroundHazards(generateLavaVentLayout(spec, width, eventX), def);
+  else if (spec.hazardId === 'poison_gas') dungeonHazards = timedGroundHazards(generatePoisonGasLayout(spec, width, eventX), def);
+  else if (spec.hazardId === 'geyser') dungeonHazards = timedGroundHazards(generateGeyserLayout(spec, width, eventX), def);
+  else if (spec.hazardId === 'wind_zone') dungeonHazards = timedGroundHazards(generateWindZoneLayout(spec, width, eventX), def);
   else if (spec.hazardId === 'ice_floor') dungeonHazards = generateIceFloorLayout(spec, width, eventX).map(hazard => Object.assign(hazard, { phase:'passive' }));
   else if (spec.hazardId === 'void_platforms') {
     dungeonHazards = timedGroundHazards(generateVoidPlatformLayout(spec, platforms || []), def, 'stable');
@@ -201,9 +215,23 @@ function lavaVentHitsPlayer(hazard, p) {
   return playerRectOverlaps(p, hazard.x - hazard.w / 2, hazard.y - 72, hazard.x + hazard.w / 2, hazard.y);
 }
 
+function poisonGasHitsPlayer(hazard, p) {   // 毒氣：整個範圍內、貼近地面的高度都算
+  return playerRectOverlaps(p, hazard.x - hazard.w / 2, 468 - 92, hazard.x + hazard.w / 2, 470);
+}
+function geyserHitsPlayer(hazard, p) {      // 間歇泉：細長的垂直柱
+  return playerRectOverlaps(p, hazard.x - hazard.w / 2, 468 - 150, hazard.x + hazard.w / 2, 470);
+}
+function playerInWindZone(p) {              // 強風帶：回傳風向（0＝不在風裡）
+  if (!terrainMovementHazardsEnabled()) return 0;   // 一般模式中和
+  for (const hazard of dungeonHazards) {
+    if (hazard.type !== 'wind_zone' || hazard.phase !== 'active') continue;
+    if (p.x > hazard.x - hazard.w / 2 && p.x < hazard.x + hazard.w / 2) return hazard.dir || 1;
+  }
+  return 0;
+}
 function damageFromDungeonHazard(hazard, def, options) {
   const o = options || {};
-  hazard.hitThisCycle = true;
+  if (!o.noConsume) hazard.hitThisCycle = true;   // 毒氣是持續傷害，不能一個循環只吃一次
   const modeMul = typeof terrainModeConfig === 'function' ? terrainModeConfig().damageMul : 1;
   const baseDamage = Math.max(def.minDamage || 1, Math.round(player.mhp * (def.damagePct || 0) * modeMul));
   const damage = Math.round(typeof dungeonCurseHazardDamage === 'function' ? dungeonCurseHazardDamage(baseDamage) : baseDamage);
@@ -221,14 +249,15 @@ function playerOnIceFloor(p) {
 }
 
 function dungeonHazardMoveVelocity(p, moveDirection, speed) {
-  if (!playerOnIceFloor(p)) return moveDirection * speed;
+  const wind = playerInWindZone(p) * (DUNGEON_HAZARD_DEFS.wind_zone.push || 0);  // 強風：疊在最後，空中也吃得到
+  if (!playerOnIceFloor(p)) return moveDirection * speed + wind * speed;
   const def = DUNGEON_HAZARD_DEFS.ice_floor;
   if (moveDirection) {
     const desired = moveDirection * speed;
     const delta = Math.max(-def.acceleration, Math.min(def.acceleration, desired - p.vx));
-    return p.vx + delta;
+    return p.vx + delta + wind * speed;
   }
-  const coast = p.vx * def.coast;
+  const coast = p.vx * def.coast + wind * speed;
   return Math.abs(coast) < 0.04 ? 0 : coast;
 }
 
@@ -251,6 +280,16 @@ function updateDungeonHazards() {
       if (damageFromDungeonHazard(hazard, def, { heavy:true })) return true;
     } else if (hazard.type === 'lava_vents' && lavaVentHitsPlayer(hazard, player)) {
       if (damageFromDungeonHazard(hazard, def, { launch:-4 })) return true;
+    } else if (hazard.type === 'poison_gas' && poisonGasHitsPlayer(hazard, player)) {
+      // 毒氣是持續傷害：不設 hitThisCycle，改用自己的 tick 計時，站著就會一直掉血
+      hazard.tick = (hazard.tick || 0) + 1;
+      if (hazard.tick >= (def.tickFrames || 26)) {
+        hazard.tick = 0;
+        if (damageFromDungeonHazard(hazard, def, { noConsume:true })) return true;
+        num(player.x, player.y - player.h - 28, '中毒', '#9bdd4f', { size:12 });
+      }
+    } else if (hazard.type === 'geyser' && geyserHitsPlayer(hazard, player)) {
+      if (damageFromDungeonHazard(hazard, def, { launch:def.launch || -13, heavy:true })) return true;
     }
   }
   return false;
@@ -347,6 +386,72 @@ function drawVoidPlatform(hazard) {
   }
 }
 
+function drawPoisonGas(hazard) {
+  const left = hazard.x - hazard.w / 2, def = DUNGEON_HAZARD_DEFS.poison_gas;
+  if (hazard.phase === 'warning') {
+    const p = 1 - hazard.timer / (def.warningFrames || 40);
+    ctx.save(); ctx.globalAlpha = 0.28 + p * 0.2; ctx.strokeStyle = '#9bdd4f'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.strokeRect(left, 468 - 78, hazard.w, 78); ctx.setLineDash([]); ctx.restore();
+    ctx.fillStyle = '#9bdd4f'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText('毒氣', hazard.x, 468 - 86); ctx.textAlign = 'left';
+    return;
+  }
+  if (hazard.phase !== 'active') return;
+  ctx.save();
+  for (let i = 0; i < 4; i++) {                    // 分層霧氣，低特效下仍是實心色塊看得出範圍
+    ctx.globalAlpha = 0.16 + i * 0.05;
+    const h = 20 + i * 15, off = Math.sin(frame * 0.05 + i) * 6;
+    ctx.fillStyle = '#7fc23c'; ctx.fillRect(left + off, 468 - h, hazard.w, h);
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(155,221,79,0.7)'; ctx.lineWidth = 2;
+  ctx.strokeRect(left, 468 - 78, hazard.w, 78);
+}
+function drawGeyser(hazard) {
+  const def = DUNGEON_HAZARD_DEFS.geyser;
+  if (hazard.phase === 'warning') {
+    const p = 1 - hazard.timer / (def.warningFrames || 50), urgent = hazard.timer < 14;
+    ctx.save(); ctx.globalAlpha = urgent ? 0.95 : 0.4 + p * 0.3;
+    ctx.strokeStyle = urgent ? '#fff2a8' : '#ffb45e'; ctx.lineWidth = urgent ? 4 : 3;
+    ctx.setLineDash(urgent ? [] : [7, 6]);
+    ctx.beginPath(); ctx.ellipse(hazard.x, 466, hazard.w / 2 + 6, 10, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+    ctx.fillStyle = urgent ? '#fff2a8' : '#ffb45e'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText('間歇泉', hazard.x, 442); ctx.textAlign = 'left';
+    return;
+  }
+  if (hazard.phase !== 'active') return;
+  const t = 1 - hazard.timer / (def.activeFrames || 36), h = 150 * Math.min(1, t * 3);
+  ctx.save(); ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#f6f1e6'; ctx.fillRect(hazard.x - hazard.w / 2, 468 - h, hazard.w, h);
+  ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffd9a8';
+  ctx.fillRect(hazard.x - hazard.w / 2 - 5, 468 - h, hazard.w + 10, h * 0.4);
+  ctx.restore();
+}
+function drawWindZone(hazard) {
+  const def = DUNGEON_HAZARD_DEFS.wind_zone, left = hazard.x - hazard.w / 2, dir = hazard.dir || 1;
+  const neutral = !terrainMovementHazardsEnabled();
+  if (hazard.phase === 'warning') {
+    ctx.save(); ctx.globalAlpha = 0.3; ctx.strokeStyle = '#bdefff'; ctx.lineWidth = 2; ctx.setLineDash([9, 7]);
+    ctx.strokeRect(left, 468 - 130, hazard.w, 130); ctx.setLineDash([]); ctx.restore();
+    ctx.fillStyle = '#bdefff'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
+    ctx.fillText(neutral ? '強風帶（一般模式已中和）' : '強風帶 ' + (dir < 0 ? '←' : '→'), hazard.x, 468 - 138);
+    ctx.textAlign = 'left';
+    return;
+  }
+  if (hazard.phase !== 'active') return;
+  ctx.save(); ctx.globalAlpha = neutral ? 0.16 : 0.5; ctx.strokeStyle = '#bdefff'; ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {                    // 風向箭頭，方向一眼可讀
+    const y = 468 - 22 - i * 24, off = ((frame * 2.2 * dir) + i * 70) % (hazard.w + 60) - 30;
+    const x = dir > 0 ? left + off : left + hazard.w - off;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 22 * dir, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 22 * dir, y); ctx.lineTo(x + 14 * dir, y - 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 22 * dir, y); ctx.lineTo(x + 14 * dir, y + 5); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(189,239,255,0.45)'; ctx.lineWidth = 2;
+  ctx.strokeRect(left, 468 - 130, hazard.w, 130);
+}
 function drawDungeonHazards() {
   for (const hazard of dungeonHazards) {
     if (hazard.type === 'thorn_roots') drawThornRoot(hazard);
@@ -354,11 +459,14 @@ function drawDungeonHazards() {
     else if (hazard.type === 'lava_vents') drawLavaVent(hazard);
     else if (hazard.type === 'ice_floor') drawIceFloor(hazard);
     else if (hazard.type === 'void_platforms') drawVoidPlatform(hazard);
+    else if (hazard.type === 'poison_gas') drawPoisonGas(hazard);
+    else if (hazard.type === 'geyser') drawGeyser(hazard);
+    else if (hazard.type === 'wind_zone') drawWindZone(hazard);
   }
 }
 
 function dungeonHazardColor(id) {
-  return { thorn_roots:'#a9df6f', falling_rocks:'#f0d9a2', lava_vents:'#ff9a36', ice_floor:'#bdefff', void_platforms:'#d9a8ff' }[id] || '#ffb45e';
+  return { thorn_roots:'#a9df6f', falling_rocks:'#f0d9a2', lava_vents:'#ff9a36', ice_floor:'#bdefff', void_platforms:'#d9a8ff', poison_gas:'#9bdd4f', geyser:'#ffd9a8', wind_zone:'#bdefff' }[id] || '#ffb45e';
 }
 
 function drawDungeonHazardTutorial() {

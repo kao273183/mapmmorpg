@@ -116,10 +116,13 @@ function makeRoomSpec(type, atFloor, branch) {
   const branchId = branch || 0;
   const seed = dungeonSeedHash((dungeonRun ? dungeonRun.seed : 1) + ':' + atFloor + ':' + resolvedType + ':' + branchId);
   const biome = dungeonBiomeDef(atFloor);
-  let hazardId = resolvedType === 'hazard' ? biome.hazardId : null;
+  // 一個群系可掛多種險境，依房間種子挑一種（同一房間永遠挑到同一個，固定種子可重現）
+  const hazardPool = (biome.hazardIds && biome.hazardIds.length) ? biome.hazardIds : [biome.hazardId];
+  const pickHazard = () => hazardPool[Math.floor(dungeonRng(seed + ':hazardPick')() * hazardPool.length) % hazardPool.length];
+  let hazardId = resolvedType === 'hazard' ? pickHazard() : null;
   const chapter = dungeonChapter(atFloor);
   const eventId = dungeonEventIdForRoom(resolvedType, seed, chapter, dungeonRun ? dungeonRun.eventHistory : []);
-  if (eventId === 'hazard_trial') hazardId = biome.hazardId;
+  if (eventId === 'hazard_trial') hazardId = pickHazard();
   const eventDef = eventId ? DUNGEON_EVENT_DEFS[eventId] : null;
   const hazardDef = hazardId ? DUNGEON_HAZARD_DEFS[hazardId] : null;
   return {
@@ -181,8 +184,8 @@ function dungeonEventPosition(spec, width) {
 function dungeonHazardAvailable(atFloor) {
   if (!DUNGEON_D2_FLAGS.hazards) return false;
   const biome = dungeonBiomeDef(atFloor);
-  const def = DUNGEON_HAZARD_DEFS[biome.hazardId];
-  return !!(def && def.implemented);
+  const ids = (biome.hazardIds && biome.hazardIds.length) ? biome.hazardIds : [biome.hazardId];
+  return ids.some(id => { const def = DUNGEON_HAZARD_DEFS[id]; return !!(def && def.implemented); });
 }
 
 function resetDungeonRun(benchmarkProfile) {

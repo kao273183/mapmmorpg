@@ -35,6 +35,7 @@ const source = [
     roomDefs:DUNGEON_ROOM_DEFS,
     eventDefs:DUNGEON_EVENT_DEFS,
     hazardDefs:DUNGEON_HAZARD_DEFS,
+    hazardPoolFor:floor => { const b = dungeonBiomeDef(floor); return (b.hazardIds && b.hazardIds.length) ? b.hazardIds : [b.hazardId]; },
     makeRoomSpec,
     generateRouteChoices,
     applyRoomEntry,
@@ -156,7 +157,11 @@ for (let seed = 1; seed <= 1000; seed++) {
 for (const type of ['safe', 'elite', 'treasure', 'event', 'camp', 'hazard', 'boss']) assert.ok(roomTypes.has(type), type + ' 應出現在整合路線樣本');
 for (const id of Object.keys(api.hazardDefs)) assert.ok(hazards.has(id), id + ' 應出現在 1,000 seed 樣本');
 for (const id of Object.keys(api.eventDefs)) assert.ok(events.has(id), id + ' 應出現在 1,000 seed 樣本');
-assert.strictEqual(Object.keys(api.hazardDefs).length, 5);
+// 險境數改為推導：每個群系的池加起來的去重數，加地形時不必再改這個數字
+const poolIds = new Set();
+for (let f = 2; f <= 22; f += 5) for (const id of api.hazardPoolFor(f)) poolIds.add(id);
+assert.strictEqual(Object.keys(api.hazardDefs).length, poolIds.size,
+  '每個已定義的險境都應該掛在某個群系的池上，否則永遠不會出現');
 assert.strictEqual(Object.keys(api.eventDefs).length, 17);
 
-console.log('dungeon D2 integrated smoke test passed (1000 seeds, 5 hazards, 17 events)');
+console.log('dungeon D2 integrated smoke test passed (1000 seeds, ' + Object.keys(api.hazardDefs).length + ' hazards, 17 events)');

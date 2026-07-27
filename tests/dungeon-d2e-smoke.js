@@ -70,7 +70,8 @@ for (let seed = 1; seed <= 6000 && !hazardSpec; seed++) {
   if (spec.eventId === 'hazard_trial') hazardSpec = spec;
 }
 assert.ok(hazardSpec, '應能產生地形試煉房間規格');
-assert.strictEqual(hazardSpec.hazardId, 'falling_rocks', '地形試煉必須在預覽前綁定當前群系地形');
+assert.ok(['falling_rocks', 'poison_gas'].indexOf(hazardSpec.hazardId) >= 0,
+  '地形試煉必須在預覽前綁定當前群系的險境之一(D4-D 起一個群系可掛多種)，實際 ' + hazardSpec.hazardId);
 assert.strictEqual(hazardSpec.biomeId, 'cavern');
 
 const player = { hp:100 };

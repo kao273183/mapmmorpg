@@ -46,7 +46,8 @@ const source = [
     setRun:__setD2cRun,
     setSpec:__setD2cSpec,
     getHazards:() => dungeonHazards,
-    defs:DUNGEON_HAZARD_DEFS
+    defs:DUNGEON_HAZARD_DEFS,
+    hazardPoolFor:floor => { const b = dungeonBiomeDef(floor); return (b.hazardIds && b.hazardIds.length) ? b.hazardIds : [b.hazardId]; }
   };
   `
 ].join('\n');
@@ -82,6 +83,7 @@ const expected = [
 ];
 for (const [floor, hazardId] of expected) {
   assert.strictEqual(api.defs[hazardId].implemented, true);
+  assert.ok(api.hazardPoolFor(floor).indexOf(hazardId) >= 0, floor + ' 層的險境池應含 ' + hazardId);
   assert.strictEqual(api.dungeonHazardAvailable(floor), true, '已完成地形應進入對應群系路線池');
   let routeSeen = 0;
   for (let seed = 1; seed <= 300; seed++) {
@@ -89,7 +91,10 @@ for (const [floor, hazardId] of expected) {
     for (const choice of api.generateRouteChoices(floor)) {
       if (choice.type !== 'hazard') continue;
       routeSeen++;
-      assert.strictEqual(choice.hazardId, hazardId, '險境預覽必須使用當前群系的已完成地形');
+      // 一個群系可掛多種險境（D4-D），只要求落在該群系的池內
+      assert.ok(api.hazardPoolFor(floor).indexOf(choice.hazardId) >= 0,
+        '險境預覽必須使用當前群系的已完成地形，實際 ' + choice.hazardId);
+      assert.strictEqual(api.defs[choice.hazardId].implemented, true, choice.hazardId + ' 應為已完成地形');
     }
   }
   assert.ok(routeSeen > 0, '各群系正式路線都應能抽到險境');

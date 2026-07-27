@@ -33,6 +33,7 @@ const source = [
     getRun:() => dungeonRun,
     biomeDefs:DUNGEON_BIOME_DEFS,
     hazardDefs:DUNGEON_HAZARD_DEFS,
+    hazardPoolFor:floor => { const b = dungeonBiomeDef(floor); return (b.hazardIds && b.hazardIds.length) ? b.hazardIds : [b.hazardId]; },
     eventDefs:DUNGEON_EVENT_DEFS,
     flags:DUNGEON_D2_FLAGS
   };
@@ -87,6 +88,8 @@ assert.ok(['traveler_chest', 'supply_crate'].includes(treasure.eventId));
 assert.strictEqual(api.eventDefs[treasure.eventId].family, 'chest');
 assert.strictEqual(treasure.hazardId, null);
 
+// D4-D 起一個群系可掛多種險境（依房間種子挑），所以只驗「落在該群系的池內」，
+// 並另外驗池內的代表性險境仍在。
 const hazardByFloor = [
   [2, 'meadow', 'thorn_roots'],
   [7, 'cavern', 'falling_rocks'],
@@ -98,7 +101,9 @@ const hazardByFloor = [
 for (const [floor, biomeId, hazardId] of hazardByFloor) {
   const spec = api.makeRoomSpec('hazard', floor, 0);
   assert.strictEqual(spec.biomeId, biomeId);
-  assert.strictEqual(spec.hazardId, hazardId);
+  const pool = api.hazardPoolFor(floor);
+  assert.ok(pool.indexOf(hazardId) >= 0, floor + ' 層的險境池應含代表性地形 ' + hazardId);
+  assert.ok(pool.indexOf(spec.hazardId) >= 0, floor + ' 層抽到的 ' + spec.hazardId + ' 不在該群系的險境池內');
   assert.ok(api.hazardDefs[spec.hazardId]);
 }
 
@@ -122,7 +127,9 @@ for (let seed = 1; seed <= 1000; seed++) {
       assert.ok(Array.isArray(choice.rewardTags));
       if (choice.type === 'hazard') {
         hazardChoiceCount++;
-        assert.strictEqual(choice.hazardId, 'thorn_roots', '正式路線只能抽到已完成的地形');
+        // 名稱說的是「已完成」而不是「某一種」——一個群系可掛多種，逐一驗 implemented
+        assert.ok(api.hazardDefs[choice.hazardId] && api.hazardDefs[choice.hazardId].implemented,
+          '正式路線只能抽到已完成的地形，實際 ' + choice.hazardId);
       }
     }
   }
