@@ -142,30 +142,120 @@ function makeRoomSpec(type, atFloor, branch) {
   };
 }
 
-function generateDungeonPlatforms(spec, width) {
-  const rng = dungeonRoomRng(spec, 'platforms');
-  const result = [{ x:0, y:468, w:width, ground:true }];
-  const rowsY = [405, 325, 250];
+// D4-E 佈局模板。共同規則：
+//   1. 地面平台永遠保留——險境、怪物生成與「掉下去」的行為全都假設 y=468 有地。
+//      模板只改上方的平台配置，所以最差情況只是「拿不到高處的東西」，不會卡死。
+//   2. 每個模板都吃 width，並把平台夾在畫面內。
+const DUNGEON_LAYOUT_ROWS = [405, 325, 250];
+
+function layoutScatter(rng, width) {            // 既有佈局：散佈 + 往上疊的踏階
+  const result = [];
   let px = 150;
   while (px < width - 260) {
     const pw = 140 + rng() * 120;
     if (rng() < 0.82) {
       const ri = (rng() * 3) | 0;
-      result.push({ x:px, y:rowsY[ri], w:pw });
+      result.push({ x:px, y:DUNGEON_LAYOUT_ROWS[ri], w:pw });
       let ux = px, uw = pw;
       for (let r = ri - 1; r >= 0; r--) {
-        const near = result.some(q => !q.ground && q.y === rowsY[r] && q.x < ux + uw + 40 && q.x + q.w > ux - 40);
+        const near = result.some(q => q.y === DUNGEON_LAYOUT_ROWS[r] && q.x < ux + uw + 40 && q.x + q.w > ux - 40);
         if (!near) {
           const sw = 90 + rng() * 50;
           const dir = rng() < 0.5 ? -1 : 1;
           const sx = Math.max(20, Math.min(width - sw - 20, dir < 0 ? ux - sw + 34 : ux + uw - 34));
-          result.push({ x:sx, y:rowsY[r], w:sw });
+          result.push({ x:sx, y:DUNGEON_LAYOUT_ROWS[r], w:sw });
           ux = sx; uw = sw;
         }
       }
     }
     px += pw + 60 + rng() * 130;
   }
+  return result;
+}
+
+function layoutStair(rng, width) {              // 階梯上行：一路往上，走到底再折返下來
+  const result = [];
+  const dir = rng() < 0.5 ? 1 : -1;
+  const steps = 6 + Math.floor(rng() * 3);
+  const stepW = Math.max(110, (width - 300) / steps);
+  for (let i = 0; i < steps; i++) {
+    const up = i < steps / 2 ? i : steps - 1 - i;                 // 上去再下來
+    const y = 405 - Math.min(2, up) * 78;
+    const x = dir > 0 ? 160 + i * stepW : width - 160 - (i + 1) * stepW;
+    result.push({ x:Math.max(20, Math.min(width - 140, x)), y, w:120 + rng() * 40 });
+  }
+  return result;
+}
+
+function layoutShaft(rng, width) {              // 垂直豎井：兩三處密集的上下通道，其餘留空
+  const result = [];
+  const shafts = 2 + Math.floor(rng() * 2);
+  for (let s = 0; s < shafts; s++) {
+    const cx = 220 + (width - 440) * ((s + 0.5) / shafts) + (rng() - 0.5) * 80;
+    for (let r = 0; r < 3; r++) {
+      const side = (r % 2 === 0) ? -1 : 1;                        // 左右交錯，逼玩家之字爬升
+      const w = 96 + rng() * 40;
+      result.push({ x:Math.max(20, Math.min(width - w - 20, cx + side * (40 + rng() * 26) - w / 2)), y:DUNGEON_LAYOUT_ROWS[r], w });
+    }
+  }
+  return result;
+}
+
+function layoutChasm(rng, width) {              // 斷崖大跳：少數寬平台 + 大間距（地面仍在，失手不致命）
+  const result = [];
+  let px = 200;
+  while (px < width - 320) {
+    const pw = 190 + rng() * 90;
+    result.push({ x:px, y:rng() < 0.5 ? 405 : 325, w:pw });
+    px += pw + 190 + rng() * 90;                                  // 刻意拉開
+  }
+  return result;
+}
+
+function layoutCanopy(rng, width) {             // 懸吊平台群：高處密集小平台
+  const result = [];
+  let px = 140;
+  while (px < width - 200) {
+    const pw = 70 + rng() * 50;
+    const r = rng() < 0.62 ? (rng() < 0.5 ? 1 : 2) : 0;           // 偏高處
+    result.push({ x:px, y:DUNGEON_LAYOUT_ROWS[r], w:pw });
+    if (rng() < 0.45) {
+      const w2 = 60 + rng() * 40;
+      result.push({ x:Math.min(width - w2 - 20, px + pw * 0.5), y:DUNGEON_LAYOUT_ROWS[Math.min(2, r + 1)], w:w2 });
+    }
+    px += pw + 70 + rng() * 70;
+  }
+  return result;
+}
+
+const DUNGEON_LAYOUT_TEMPLATES = [
+  { id:'scatter', name:'散佈平台', gen:layoutScatter, weight:3, tricky:false },
+  { id:'stair',   name:'階梯上行', gen:layoutStair,   weight:2, tricky:false },
+  { id:'shaft',   name:'垂直豎井', gen:layoutShaft,   weight:2, tricky:true },
+  { id:'chasm',   name:'斷崖大跳', gen:layoutChasm,   weight:2, tricky:true },
+  { id:'canopy',  name:'懸吊平台', gen:layoutCanopy,  weight:2, tricky:true }
+];
+
+function dungeonLayoutTemplate(spec) {
+  // 秘境高層把「刁鑽」模板的權重拉高（計畫的「佈局與層級掛鉤」）。
+  const tier = (typeof currentRiftScale === 'function') ? currentRiftScale().tier : 1;
+  const bonus = Math.min(3, (tier - 1) * 0.4);
+  const weighted = DUNGEON_LAYOUT_TEMPLATES.map(t => ({ t, w:t.weight + (t.tricky ? bonus : 0) }));
+  const total = weighted.reduce((sum, x) => sum + x.w, 0);
+  let roll = dungeonRoomRng(spec, 'layout')() * total;
+  for (const x of weighted) { roll -= x.w; if (roll <= 0) return x.t; }
+  return DUNGEON_LAYOUT_TEMPLATES[0];
+}
+
+function generateDungeonPlatforms(spec, width) {
+  const rng = dungeonRoomRng(spec, 'platforms');
+  const template = dungeonLayoutTemplate(spec);
+  const result = [{ x:0, y:468, w:width, ground:true }];   // 地面永遠保留
+  for (const plat of template.gen(rng, width)) {
+    if (plat.w < 40) continue;
+    result.push({ x:Math.max(0, Math.min(width - plat.w, plat.x)), y:plat.y, w:plat.w });
+  }
+  result.layoutId = template.id;
   return result;
 }
 
