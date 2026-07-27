@@ -350,7 +350,12 @@ const SNOW = [
 const LIZARD = [
   "............",".rrrrrrrrrr.","ryrrrrrrryr.","rrrrrrrrrrrr","r.rr..rr.rr."
 ];
-const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW };
+// D4-A 射手：細長身形 + 單顆發光眼，站定射擊，外觀要一眼跟近戰怪分開。
+const SHOOTER = [
+  "...kkkk...", "..kcccck..", "..kciick..", "..kcccck..",
+  "...kkkk...", "....ee....", "...eeee...", "..ee..ee.."
+];
+const MON_SPRITE = { mush: MUSH, spore: SPORE, bat: BAT, bomber: FSLIME, charger: LIZARD, icer: ISLIME, splitter: SNOW, shooter: SHOOTER };
 function drawSprite(rows, x, y, s, flip, flash, recolor) {
   const w = rows[0].length;
   for (let r = 0; r < rows.length; r++) {

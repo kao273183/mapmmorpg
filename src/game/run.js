@@ -59,6 +59,13 @@ function spawnMon(type, n, sc, xpSc, eliteCh, rng) {
       minx, maxx, hp, mhp: hp, xpv: Math.round(15 * xpSc), dmg: Math.round(8 * dsc), w: 40, h: 26, hitT: 0, elite: false, s: 4 });
     return;
   }
+  if (type === 'shooter') { // D4-A 遠程怪：血薄、站定射擊、與玩家保持距離
+    const hp = monsterHp(19, sc, n);
+    mons.push({ type:'shooter', x: sx, y: pl.y, vx: (0.3 + rng() * 0.2) * (rng() < 0.5 ? -1 : 1),
+      minx, maxx, hp, mhp: hp, xpv: Math.round(18 * xpSc), dmg: Math.round(7 * dsc),
+      shotCd: 40 + Math.floor(rng() * 60), tel: 0, w: 30, h: 26, hitT: 0, elite: false, s: 3 });
+    return;
+  }
   const elite = rng() < eliteCh;
   let hp = monsterHp(26, sc, n, elite ? 3.2 : 1);
   let damage = 8 * dsc * (elite ? 1.6 : 1);

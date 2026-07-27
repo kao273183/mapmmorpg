@@ -220,6 +220,18 @@ function render() {
       const rc = bossStyle ? { e:bossStyle.color, f:bossStyle.accent } : null;
       drawSprite(rows, m.x - rows[0].length * m.s / 2, m.y - rows.length * m.s, m.s, m.vx < 0, m.hitT > 0, rc);
     }
+    if (m.type === 'shooter' && m.tel > 0) { // 發射預警：瞄準線由虛轉實，最後 10 幀轉紅
+      const ax = m.aimX != null ? m.aimX : player.x, ay = m.aimY != null ? m.aimY : player.y - player.h / 2;
+      const urgent = m.tel <= 10;
+      ctx.save();
+      ctx.globalAlpha = urgent ? 0.95 : 0.4 + Math.sin(frame * 0.4) * 0.12;
+      ctx.strokeStyle = urgent ? '#ff6b6b' : '#c58aff'; ctx.lineWidth = urgent ? 3 : 2;
+      ctx.setLineDash(urgent ? [] : [8, 6]);
+      ctx.beginPath(); ctx.moveTo(m.x, m.y - m.h / 2); ctx.lineTo(ax, ay); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+      ctx.fillStyle = urgent ? '#ff8a8a' : '#d9a8ff'; ctx.font = 'bold 18px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillText('!', m.x, m.y - m.h - 12); ctx.textAlign = 'left';
+    }
     if (m.type === 'boss' && m.tele > 0 && Math.floor(m.tele / 5) % 2 === 0) {
       ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center';
       ctx.fillText('!', m.x, m.y - m.h - 18);
@@ -239,6 +251,11 @@ function render() {
       ctx.fillStyle = s.col || '#9bdd4f'; ctx.fillRect(-4, -7, 8, 14);
       ctx.fillStyle = '#d8ef7b'; ctx.fillRect(-2, -5, 4, 8);
       ctx.fillStyle = '#6b4b2a'; ctx.fillRect(-1, -10, 2, 4); ctx.restore();
+    } else if (s.bolt) {                     // D4-A 射手的直線能量彈
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
+      ctx.fillStyle = s.col || '#c58aff'; ctx.fillRect(-9, -3, 18, 6);
+      ctx.fillStyle = '#eccfff'; ctx.fillRect(-4, -2, 10, 4);
+      ctx.fillStyle = '#fff'; ctx.fillRect(3, -1, 4, 2); ctx.restore();
     } else if (s.voidBolt) {
       ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(frame * 0.16);
       ctx.fillStyle = s.col || '#b05ae0'; ctx.fillRect(-7, -7, 14, 14);

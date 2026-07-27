@@ -74,13 +74,16 @@ for (let i = 0; i < 12; i++) clouds.push({ x: i * 260 + (i * 97) % 130, y: 40 + 
 
 // ---------- biomes(群系:每 5 層一個,決定配色與怪物池)----------
 const BIOMES = [
-  { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', boss:'草原領主', bcol:'#63cf3c', bcol2:'#3f9127', pool:['slime','slime','bat','mush'] },
-  { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', boss:'洞窟領主', bcol:'#8a7aa8', bcol2:'#5a4a78', pool:['slime','bat','bat','spore'] },
+  { name:'翠綠草原', sky:['#87c5f0','#c8e4f5','#e8f4fa'], hill:'#a8d8a0', ground:'#8a5a33', grass:'#59b83a', dot:'#3f9127', cloud:'rgba(255,255,255,0.85)', boss:'草原領主', bcol:'#63cf3c', bcol2:'#3f9127', pool:['slime','slime','bat','mush','shooter'] },
+  { name:'幽暗洞窟', sky:['#2a3552','#3a4562','#4a5570'], hill:'#38405a', ground:'#463f55', grass:'#6a6a7c', dot:'#4a4a5c', cloud:'rgba(130,135,160,0.35)', boss:'洞窟領主', bcol:'#8a7aa8', bcol2:'#5a4a78', pool:['slime','bat','bat','spore','shooter'] },
   { name:'熾熱熔岩', sky:['#5a1e1e','#7a3018','#a84826'], hill:'#4a201c', ground:'#5a2a20', grass:'#8a3220', dot:'#c8461e', cloud:'rgba(255,130,60,0.28)', boss:'熔岩魔王', bcol:'#ff6b2e', bcol2:'#c0301e', pool:['bomber','charger','slime','spore','charger'] },
   { name:'冰霜凍原', sky:['#a4c6e8','#c8dcf0','#eaf4ff'], hill:'#bcd4e4', ground:'#586a7a', grass:'#a8c8e0', dot:'#84a6c6', cloud:'rgba(255,255,255,0.9)', boss:'冰霜領主', bcol:'#9adcf0', bcol2:'#5a9ac0', pool:['icer','splitter','icer','spore','bat'] },
   { name:'虛空深淵', sky:['#180d28','#2a1540','#3a2052'], hill:'#281838', ground:'#382848', grass:'#5a3a7a', dot:'#7c4a9c', cloud:'rgba(130,90,170,0.35)', boss:'深淵魔王', bcol:'#b05ae0', bcol2:'#7a2fa8', pool:['bomber','charger','icer','splitter','bat','spore'] }
 ];
-function biomeOf(f) { return BIOMES[Math.min(BIOMES.length - 1, Math.floor((f - 1) / 5))]; }
+function biomeOf(f) { // 與 dungeonBiomeDef 共用同一個索引，否則背景/怪池會跟險境/Boss 對不上
+  const i = (typeof dungeonBiomeIndex === 'function') ? dungeonBiomeIndex(f) : Math.floor((f - 1) / 5);
+  return BIOMES[Math.max(0, Math.min(BIOMES.length - 1, i))];
+}
 
 const player = {
   x: 80, y: 468, vx: 0, vy: 0, w: 26, h: 46, face: 1,
@@ -142,6 +145,23 @@ function curseRewardV(id) { return typeof dungeonCurseValue === 'function' ? dun
 function blessingHeal(amount) {
   const blessed = typeof dungeonBlessingHealingAmount === 'function' ? dungeonBlessingHealingAmount(amount) : amount;
   return typeof dungeonCurseHealingAmount === 'function' ? dungeonCurseHealingAmount(blessed) : blessed;
+}
+// D4-A 射手開火。秘境高層換成散射三連（計畫的「高層強化變體」）。
+function fireShooterBolt(m) {
+  const tier = (typeof currentRiftScale === 'function') ? currentRiftScale().tier : 1;
+  const spread = tier >= 5 ? 3 : 1;                       // T5 以上散射三連
+  const dx = (m.aimX != null ? m.aimX : player.x) - m.x;
+  const dy = (m.aimY != null ? m.aimY : player.y - player.h / 2) - (m.y - m.h / 2);
+  const base = Math.atan2(dy, dx), speed = 5.4;
+  for (let i = 0; i < spread; i++) {
+    const ang = base + (i - (spread - 1) / 2) * 0.20;
+    espits.push({
+      x:m.x, y:m.y - m.h / 2, vx:Math.cos(ang) * speed, vy:Math.sin(ang) * speed,
+      grav:0, life:150, dmg:Math.max(1, m.dmg), col:'#c58aff', bolt:true,
+      ownerName:'射手', sourceName:'射手的能量彈'
+    });
+  }
+  playSfx('fire', 0.35, 1.5); beep(520, 0.07, 'square', 0.03);
 }
 function skillMpCost(definition) {
   if (player.deadeyeT > 0 && player.deadeyeFreeMp) return 0; // 鷹眼·迅捷終極：專注期間免 MP

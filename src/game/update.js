@@ -320,6 +320,19 @@ function update() {
       } else if (Math.abs(m.x - p.x) < 48 && Math.abs(m.y - p.y) < 60) {
         m.fuse = 30;
       }
+    } else if (m.type === 'shooter') { // D4-A：站定射擊，會與玩家保持距離；發射前有可見預警
+      const dx = p.x - m.x, adx = Math.abs(dx), inLane = Math.abs((p.y - p.h / 2) - (m.y - m.h / 2)) < 60;
+      if (m.tel > 0) {                       // 預警中：站住不動，讓玩家有時間走位
+        m.tel--; m.aimX = p.x; m.aimY = p.y - p.h / 2;
+        if (m.tel === 0) { fireShooterBolt(m); m.shotCd = 100 + Math.floor(Math.random() * 60); } // 開火後必須重設冷卻，否則會一直卡在預警
+      } else {
+        if (adx < 150) { m.x -= Math.sign(dx || 1) * 0.9 * moveF; }        // 太近就後退
+        else if (adx > 330 || !inLane) { m.x += Math.sign(dx || 1) * 0.5 * moveF; } // 太遠就靠近
+        m.x = Math.max(m.minx, Math.min(m.maxx, m.x));
+        if (m.shotCd > 0) m.shotCd--;
+        else if (inLane && adx < 380 && !(m.freezeT > 0)) { m.tel = 34; m.aimX = p.x; m.aimY = p.y - p.h / 2; }
+      }
+      m.vx = dx < 0 ? -1 : 1;                // 面向玩家（繪製用）
     } else if (m.type === 'charger') {
       if (m.chg > 0) {
         m.chg--;
@@ -458,7 +471,9 @@ function update() {
 
   // boss 毒彈
   for (const s of espits.slice()) {
-    s.vy += 0.25; s.x += s.vx; s.y += s.vy;
+    s.vy += (s.grav != null ? s.grav : 0.25); // 直線彈設 grav:0（D4-A 射手），Boss 的拋物線彈維持預設
+    s.x += s.vx; s.y += s.vy;
+    if (s.life != null && --s.life <= 0) { burst(s.x, s.y, s.col || '#8a5adf', 4); espits.splice(espits.indexOf(s), 1); continue; }
     if (p.inv === 0 && Math.abs(s.x - p.x) < 15 && Math.abs(s.y - (p.y - p.h / 2)) < p.h / 2 + 8) {
       const d = Math.max(1, s.dmg - armorDef());
       if (s.chill) { p.chillT = 150; num(p.x, p.y - p.h - 24, '凍結', '#7ec8f0'); }

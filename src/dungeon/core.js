@@ -30,9 +30,23 @@ function dungeonRng(value) {
 function dungeonRoomIndex(atFloor) { return ((atFloor - 1) % 5) + 1; }
 function dungeonChapter(atFloor) { return Math.floor((atFloor - 1) / 5) + 1; }
 
-function dungeonBiomeDef(atFloor) {
-  const index = Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5));
-  return DUNGEON_BIOME_DEFS[Math.max(0, index)];
+// 起始群系多樣化：每局第 1 章從「入門安全」的群系中依 run seed 挑一個，之後章節維持既有順序。
+// 只洗第一章的理由：Boss 與險境都綁在群系上且難度是遞增排的，整條路線洗牌會讓第 5 層
+// 出現深淵魔王、第 1 層出現虛空平台。這三個群系的險境相對溫和，Boss 也撐得住第一章的數值。
+const DUNGEON_START_BIOME_IDS = ['meadow', 'cavern', 'tundra'];
+function dungeonBiomeIndex(atFloor) {
+  const base = Math.max(0, Math.min(DUNGEON_BIOME_DEFS.length - 1, Math.floor((atFloor - 1) / 5)));
+  const id = dungeonRun && dungeonRun.startBiomeId;
+  const start = id ? DUNGEON_BIOME_DEFS.findIndex(def => def.id === id) : 0;
+  if (start <= 0) return base;                 // 起始就是草原＝維持原順序
+  if (base === 0) return start;                // 第一章換成起始群系
+  if (base === start) return 0;                // 與原本放它的那一章互換，避免同一群系在一局裡出現兩次
+  return base;
+}
+function dungeonBiomeDef(atFloor) { return DUNGEON_BIOME_DEFS[dungeonBiomeIndex(atFloor)]; }
+function dungeonPickStartBiome(seed) {
+  const rng = dungeonRng(seed + ':startBiome');
+  return DUNGEON_START_BIOME_IDS[Math.floor(rng() * DUNGEON_START_BIOME_IDS.length) % DUNGEON_START_BIOME_IDS.length];
 }
 
 function dungeonRoomRng(spec, purpose) {
@@ -175,6 +189,8 @@ function resetDungeonRun(benchmarkProfile) {
   const seed = benchmarkProfile ? benchmarkProfile.seed : dungeonSeedHash(Date.now() + ':' + Math.random() + ':' + (meta.playerName || '勇者'));
   dungeonRun = {
     seed,
+    // 基準局固定用草原，否則固定種子的平衡報表會跟著起始群系跑掉、失去可比性
+    startBiomeId:benchmarkProfile ? 'meadow' : dungeonPickStartBiome(seed),
     chapter:1,
     explorationScore:0,
     roomHistory:[],
