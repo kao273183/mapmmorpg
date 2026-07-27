@@ -336,7 +336,7 @@ function update() {
         m.emergeT--;
         if (m.emergeT === 0) {
           const tier = (typeof currentRiftScale === 'function') ? currentRiftScale().tier : 1;
-          m.aboveT = 100; m.erupt = 12;
+          m.aboveT = 70; m.erupt = 12;   // 暴露期不宜過長：它是打帶跑，不是站著跟你纏鬥
           burst(m.x, m.ground - 16, '#c89a5a', 16);   // 破土粒子；傷害在下方自行判定，不能借用 skillAreaDamage(那是打怪的)
           if (Math.abs(p.x - m.x) < 46 && p.inv === 0) {
             const d = Math.max(1, m.dmg - armorDef());
@@ -351,22 +351,34 @@ function update() {
         else if (m.repeats > 0) { m.repeats--; m.x = Math.max(m.minx, Math.min(m.maxx, p.x)); m.emergeT = 32; } // 連續冒出要重新鎖定
         else { m.burrow = 1; m.digT = 90 + Math.random() * 60; }
       }
-    } else if (m.type === 'phaser') { // D4-C：短距瞬移貼近玩家，落點有殘影預告
+    } else if (m.type === 'phaser') { // D4-C：短距瞬移貼近玩家，落點有殘影預告，落地突刺
       m.t++;
-      m.y = m.baseY + Math.sin(m.t * 0.06) * 8;
       if (m.blinkT > 0) {
         m.blinkT--;
-        if (m.blinkT === 0) {                // 瞬移到殘影標好的位置
+        m.y = m.baseY + Math.sin(m.t * 0.06) * 8;
+        if (m.blinkT === 0) {                // 瞬移到殘影標好的位置，接著突刺
           m.x = m.ghostX; m.baseY = m.ghostY; m.y = m.ghostY;
+          // 巡邏範圍跟到落點（同衝鋒獸衝刺後的處理），否則下次瞬移又會被舊範圍夾住
+          m.minx = Math.max(20, m.x - 200); m.maxx = Math.min(worldW - 20, m.x + 200);
+          m.strikeT = 22;                    // 落點在玩家旁 44px，接觸判定只有 22px，不突刺就永遠碰不到
           burst(m.x, m.y - m.h / 2, '#b05ae0', 10); beep(700, 0.08, 'sine', 0.035);
         }
-      } else if (m.blinkCd > 0) { m.blinkCd--; }
-      else if (!(m.freezeT > 0)) {
-        const side = p.x < m.x ? -1 : 1;
-        m.ghostX = Math.max(m.minx, Math.min(m.maxx, p.x + side * 44)); // 落在玩家旁邊而不是身上
-        m.ghostY = p.y - 20;
-        m.blinkT = 28;                       // 預告時間，讓玩家能反手
-        m.blinkCd = 130 + Math.floor(Math.random() * 70);
+      } else if (m.strikeT > 0) {            // 突刺：朝玩家撲過去，玩家有 22 幀可以反手或閃開
+        m.strikeT--;
+        m.x += Math.sign(p.x - m.x || 1) * 3.1 * moveF;
+        m.baseY += Math.sign((p.y - p.h / 2) - m.baseY || 1) * 1.6 * moveF; // 動 baseY，
+        m.y = m.baseY;                        // 否則浮動用的 sin 會被累加進 baseY，整隻慢慢沉到地底
+      } else {
+        m.y = m.baseY + Math.sin(m.t * 0.06) * 8;
+        if (m.blinkCd > 0) m.blinkCd--;
+        else if (!(m.freezeT > 0)) {
+          const side = p.x < m.x ? -1 : 1;
+          // 只夾在世界邊界內——夾在自己的巡邏範圍會讓它永遠瞬移不到範圍外的玩家，瞬移就失去意義
+          m.ghostX = Math.max(30, Math.min(worldW - 30, p.x + side * 44));
+          m.ghostY = p.y - 20;
+          m.blinkT = 28;                     // 預告時間，讓玩家能反手
+          m.blinkCd = 130 + Math.floor(Math.random() * 70);
+        }
       }
     } else if (m.type === 'swarm') { // D4-C：平時繞著錨點聚散，週期性整群撲擊
       m.t++;

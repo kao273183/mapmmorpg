@@ -135,6 +135,26 @@ for (const [kind, cond] of [['burrower', "m\\.emergeT > 0"], ['phaser', "m\\.bli
 const labels = live(runSrc).match(/const MONSTER_LABEL = \{[^}]*\}/)[0];
 for (const t of NEW_TYPES) assert.ok(new RegExp(t + ':').test(labels), t + ' 沒有 MONSTER_LABEL，傷害來源會顯示成「怪物」');
 
+// ── 2.9 D4-F 平衡釘樁 ────────────────────────────────────────────────────
+// 鏡影：瞬移落點只能夾在世界邊界，不能夾在自己的巡邏範圍——夾住的話它永遠瞬移不到
+// 範圍外的玩家，實測威脅值會是 0（瞬移的意義就是跨距離）。
+assert.ok(/m\.ghostX = Math\.max\(30, Math\.min\(worldW - 30/.test(phaserAi),
+  '鏡影的瞬移落點應夾在世界邊界，不是自己的巡邏範圍');
+assert.ok(/m\.minx = Math\.max\(20, m\.x - \d+\); m\.maxx = /.test(phaserAi),
+  '鏡影瞬移後巡邏範圍要跟到落點（同衝鋒獸衝刺後的處理），否則下次又被舊範圍夾住');
+// 落地必須有攻擊動作：落點在玩家旁 44px，而接觸判定只有 22px，不突刺＝零威脅
+assert.ok(/m\.strikeT = \d+/.test(phaserAi) && /m\.strikeT > 0/.test(phaserAi),
+  '鏡影落地後必須突刺，否則落在接觸判定之外、完全打不到玩家');
+// 浮動的 sin 不能被累加回 baseY，否則整隻會慢慢沉到地底
+assert.ok(!/m\.baseY = m\.y;/.test(phaserAi),
+  '鏡影不得把含 sin 偏移的 y 寫回 baseY，會造成高度飄移');
+// 穿地獸暴露期不宜過長：它是打帶跑，不是站著纏鬥
+// 取所有指派的最大值——只抓第一個會抓到重置用的 `m.aboveT = 0`，怎麼改都會通過
+const aboveTs = [...burrowAi.matchAll(/m\.aboveT = (\d+)/g)].map(m => parseInt(m[1], 10));
+assert.ok(aboveTs.length >= 2, '穿地獸應有重置與設定兩處 aboveT');
+assert.ok(Math.max(...aboveTs) <= 80,
+  '穿地獸的暴露期 ' + Math.max(...aboveTs) + ' 幀過長，會變成站著纏鬥的近戰怪');
+
 // ── 3. 起始群系多樣化 ────────────────────────────────────────────────────
 assert.ok(/const DUNGEON_START_BIOME_IDS = \[/.test(coreSrc), '應有可起始的群系清單');
 const startIds = coreSrc.match(/const DUNGEON_START_BIOME_IDS = \[([^\]]*)\]/)[1]
