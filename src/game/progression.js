@@ -72,7 +72,7 @@ function gearColor(it) {
   const set = it && GEAR_SET_BY_ID[it.setId];
   return set ? set.color : RARITY_COL[(it && it.r) || 0];
 }
-function setIdsForClass(cls) { return GEAR_SETS.filter(s => s.cls === cls).map(s => s.id); }
+function setIdsForClass(cls) { return GEAR_SETS.filter(s => s.cls === baseOf(cls)).map(s => s.id); } // 進階職沿用基礎職套裝線（同 uniqueIdsFor）
 function equippedSetCounts(eq) {
   const counts = {};
   for (const part of SET_PARTS) {

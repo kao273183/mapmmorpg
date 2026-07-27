@@ -103,6 +103,26 @@ vm.runInContext(`
   if (meta.mats.set !== 0) throw new Error('forge did not consume set cores');
   if (!gearUsableByClass(meta.stash[1], 'warrior') || gearUsableByClass(meta.stash[1], 'mage')) throw new Error('class restriction failed');
   renderStashTab();
+
+  // 進階職必須沿用基礎職的套裝線。setIdsForClass 少了 baseOf() 時會回空陣列，
+  // genGear 就靜默跳過套裝——四個 J1 進階職因此從上線起就掉不到套裝，且不會報錯。
+  // 對照組是 uniqueIdsFor，它本來就有做 baseOf，所以傳奇照掉、套裝掛掉，兩者不一致正是徵兆。
+  for (const job of Object.keys(CLASSES)) {
+    const base = baseClassOf(job);
+    const own = setIdsForClass(job), baseSets = setIdsForClass(base);
+    if (own.join(',') !== baseSets.join(','))
+      throw new Error(job + ' 的套裝清單應與基礎職 ' + base + ' 一致，實際 [' + own + '] vs [' + baseSets + ']');
+    for (const id of own) {
+      if (!gearUsableByClass(createGear(10, 'armor', job, 3, id), job))
+        throw new Error(job + ' 掉到自己穿不上的套裝 ' + id);
+    }
+  }
+  // 目前沒有套裝的職業＝弓箭手系（J2 只做了職業本身，套裝與傳奇弓還沒設計，見 doc/PLAN-archer.md）。
+  // 釘住這份名單有兩個作用：別的職業掉了套裝會被抓到（bug ① 的回歸），
+  // 而補上弓箭手套裝之後這裡會提醒把名單一併清掉，不會留下過期的容許值。
+  const noSets = Object.keys(CLASSES).filter(job => setIdsForClass(job).length === 0).join(',');
+  if (noSets !== 'archer,ranger,marksman')
+    throw new Error('沒有套裝的職業應只有弓箭手系（待補內容），實際為 [' + noSets + ']');
 `, context);
 
 assert.equal(storage.has('pixelrogue_save'), true, 'forge should persist the updated stash');
