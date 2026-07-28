@@ -321,7 +321,7 @@ function renderStashTab() {
     stashActBtns.push(b1);
     fillRoundRect(b1.x, b1.y, b1.w, b1.h, 4, equipped ? 'rgba(125,255,214,0.16)' : usable ? 'rgba(255,255,255,0.055)' : 'rgba(255,90,90,0.055)', equipped ? '#68c1ac' : usable ? '#42465d' : '#613f4a', 1);
     ctx.fillStyle = equipped ? '#8affdc' : usable ? '#d5d8e8' : '#b57882'; ctx.font = 'bold 10px ' + STAT_FONT; ctx.textAlign = 'center';
-    ctx.fillText(equipped ? '✓ 卸下裝備' : usable ? '設為出戰' : '限' + (sel.cls === 'mage' ? '法師' : '劍士'), b1.x + b1.w / 2, b1.y + 23);
+    ctx.fillText(equipped ? '✓ 卸下裝備' : usable ? '設為出戰' : '限' + classDisplayName(sel.cls), b1.x + b1.w / 2, b1.y + 23);
     const pend = pendingStashDel === sel.uid;
     const b2 = { x: wx + 488, y: wy + 13, w: 104, h: 36, act: 'dismantle' };
     stashActBtns.push(b2); fillRoundRect(b2.x, b2.y, b2.w, b2.h, 4, pend ? 'rgba(226,59,59,0.26)' : 'rgba(255,255,255,0.04)', pend ? '#e05b66' : '#42465d', 1);

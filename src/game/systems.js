@@ -14,6 +14,9 @@ const CLASSES = {
   ranger:       { name: '遊俠',   col: '#6fbf6a', base: 'archer',  advanced: true, tag: '遠程  •  陷阱機動', sub: '設陷牽制，靈巧走位' },
   marksman:     { name: '神射手', col: '#e0c060', base: 'archer',  advanced: true, tag: '遠程  •  蓄力穿透', sub: '一箭定生死，穿透一切' }
 };
+// 職業顯示名稱。硬寫「法師 : 劍士」的二元三元式在加了弓箭手之後會把弓標成「限劍士使用」，
+// 訊息完全相反；一律走職業表，日後加職業也不會再壞。
+function classDisplayName(cls) { const d = CLASSES[cls]; return d ? d.name : (cls || '未知'); }
 function baseClassOf(cls) { const c = CLASSES[cls]; return (c && c.base) || cls; } // 進階職對應回基礎職（裝備/屬性/外觀共用）
 function isAdvancedClass(cls) { return !!(CLASSES[cls] && CLASSES[cls].advanced); }
 function baseClassIds() { return Object.keys(CLASSES).filter(id => !CLASSES[id].advanced); }

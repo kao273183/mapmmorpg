@@ -326,6 +326,22 @@ function render() {
         ctx.fillRect(sx - 2, p.y - 40, 4, 26);
         ctx.fillStyle = orb; ctx.fillRect(sx - 4, p.y - 46, 8, 8);
       }
+    } else if (baseClassOf(p.cls) === 'archer') {
+      // 弓：以手為圓心畫一段朝面向凸出的弧（弓臂）＋ 弦；施放時把弦拉開並搭上箭。
+      const wood = p.eq.weapon ? gearColor(p.eq.weapon) : '#a05a2c';
+      const r = p.cast > 0 ? 16 : 13, pull = p.cast > 0 ? -6 : -1;
+      ctx.save();
+      ctx.translate(sx, p.y - 26); ctx.scale(p.face, 1);
+      ctx.strokeStyle = wood; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, 0, r, -1.25, 1.25); ctx.stroke();
+      ctx.strokeStyle = '#e8e0c8'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(-1.25) * r, Math.sin(-1.25) * r);
+      ctx.lineTo(pull, 0);
+      ctx.lineTo(Math.cos(1.25) * r, Math.sin(1.25) * r);
+      ctx.stroke();
+      if (p.cast > 0) { ctx.fillStyle = '#cfe0a0'; ctx.fillRect(pull, -1, r + 10, 2); }
+      ctx.lineCap = 'butt'; ctx.restore();
     } else {
       const blade = p.eq.weapon ? gearColor(p.eq.weapon) : '#b89a6a';
       if (p.cast > 0) {
@@ -577,6 +593,11 @@ function drawGlyph(kind, gx, gy, col) {
     if (baseClassOf(player.cls) === 'mage') {
       ctx.fillStyle = '#a05a2c'; ctx.fillRect(gx - 1, gy - 6, 3, 16);
       ctx.fillStyle = col; ctx.fillRect(gx - 4, gy - 12, 8, 8);
+    } else if (baseClassOf(player.cls) === 'archer') {
+      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(gx - 3, gy - 1, 9, -1.2, 1.2); ctx.stroke();
+      ctx.strokeStyle = '#e8e0c8'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(gx - 6, gy - 9); ctx.lineTo(gx - 6, gy + 7); ctx.stroke();
     } else {
       ctx.fillRect(gx - 2, gy - 12, 4, 18);
       ctx.fillStyle = '#f2c14e'; ctx.fillRect(gx - 6, gy + 6, 12, 3);
@@ -755,7 +776,7 @@ function drawItemTooltip(it, mx, my, equipped) {
   }
   const set = it.setId && GEAR_SET_BY_ID[it.setId];
   if (set) { lines.push({ t: '【' + set.name + '】套裝', c: set.color }); for (const b of set.bonuses) lines.push({ t: '　' + b.pieces + '件 ' + b.text, c: withAlpha(set.color, 0.85) }); }
-  if (it.cls && it.cls !== 'any') lines.push({ t: '限' + (it.cls === 'mage' ? '法師' : '劍士') + '使用', c: '#ff9a8a' });
+  if (it.cls && it.cls !== 'any') lines.push({ t: '限' + classDisplayName(it.cls) + '使用', c: '#ff9a8a' });
   if (equipped && equipped !== it) lines.push({ t: '（目前已裝備同部位）', c: '#6b7290' });
   // 量測尺寸
   ctx.font = 'bold 12px "Courier New",monospace';

@@ -150,5 +150,25 @@ const saved = JSON.parse(storage.get('pixelrogue_save'));
 assert.ok(saved.cs && saved.cs.owned && saved.cs.equipped, '存檔應含外觀欄位 cs');
 assert.ok(saved.cs.owned.title.length > 0 && saved.cs.owned.color.length > 0, '已解鎖的外觀應寫進存檔');
 
+// 8. 每個基礎職都要有自己的手持武器外觀，而且職業限制文字要走職業表。
+// 加弓箭手時漏掉了第三個 case，於是弓箭手在畫面上「拿劍」（二元分支 法師→法杖 / else→劍）；
+// 同一個坑也讓弓被標成「限劍士使用」，訊息完全相反。這裡用推導式擋住第三次發生。
+const BASE_WEAPON_BRANCH = { mage:/baseClassOf\(p\.cls\) === 'mage'/, archer:/baseClassOf\(p\.cls\) === 'archer'/ };
+for (const base of api.CLASSES ? Object.keys(api.CLASSES).filter(c => !api.CLASSES[c].advanced) : []) {
+  if (base === 'warrior') continue;                       // 劍士是 else 分支（預設）
+  assert.ok(BASE_WEAPON_BRANCH[base], base + ' 是新的基礎職，請在本測試登記它的手持武器分支');
+  assert.ok(BASE_WEAPON_BRANCH[base].test(bootSrc) || BASE_WEAPON_BRANCH[base].test(renderSrc),
+    base + ' 沒有自己的手持武器繪製分支，會沿用預設的劍');
+}
+// 裝備欄的武器圖示同理
+assert.ok(/baseClassOf\(player\.cls\) === 'archer'/.test(renderSrc),
+  '裝備欄的武器圖示缺少弓箭手分支，會畫成劍');
+// 職業限制文字不得硬寫兩職
+for (const [file, src] of [['render.js', renderSrc], ['interface.js', fs.readFileSync(path.join(root, 'src', 'game', 'interface.js'), 'utf8')], ['town.js', fs.readFileSync(path.join(root, 'src', 'game', 'town.js'), 'utf8')]]) {
+  assert.ok(!/=== 'mage' \? '法師' : '劍士'/.test(src),
+    file + ' 仍以硬寫的二元式決定職業名稱，弓箭手會被標成「劍士」——請改用 classDisplayName()');
+}
+assert.ok(/function classDisplayName\(cls\)/.test(systemsSrc), '應有共用的 classDisplayName()');
+
 console.log('✓ J1-E smoke 測試通過（' + Object.keys(api.TITLE_DEFS).length + ' 稱號 / ' +
   Object.keys(api.COLOR_DEFS).length + ' 配色・門檻發放・選用規則・重上色對照）');
