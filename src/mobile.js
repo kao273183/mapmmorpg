@@ -10,6 +10,8 @@
 
   const coarse = window.matchMedia('(pointer:coarse)');
   const portrait = window.matchMedia('(orientation:portrait)');
+  // Playables 規範：任何長寬比都要能玩、不得鎖方向 → 不擋直向，改由 CSS 加黑邊置中。
+  const inPlayables = !!(window.GamePlatform && window.GamePlatform.inPlayables);
 
   function updateViewportMetrics() {
     const viewport = window.visualViewport;
@@ -29,7 +31,7 @@
 
   function updateOrientationUi() {
     updateViewportMetrics();
-    const blocked = coarse.matches && portrait.matches && window.innerWidth <= 1024;
+    const blocked = !inPlayables && coarse.matches && portrait.matches && window.innerWidth <= 1024;
     prompt.setAttribute('aria-hidden', blocked ? 'false' : 'true');
     document.documentElement.classList.toggle('mobile-portrait', blocked);
     if (!blocked) status.textContent = '';

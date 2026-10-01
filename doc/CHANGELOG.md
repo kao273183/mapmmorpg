@@ -1,5 +1,12 @@
 # 開發完成紀錄
 
+## v0.29.64 — YouTube Playables 整合（2026-10-01）
+
+- 新增 `src/platform.js` 平台層：偵測 `ytgame.IN_PLAYABLES_ENV` 時把 `window.localStorage` 換成記憶體快取，先 `firstFrameReady` → `await loadData` 再依序載入遊戲腳本，寫入時延遲合併呼叫 `saveData`；讀檔失敗則不寫回雲端，避免覆蓋進度。一般網頁版不載入此檔，行為不變。
+- 遊戲端：YouTube 靜音一律無聲（`systemAudioOn`）、`onPause` 停止主迴圈與 AudioContext、`onResume` 重新排程；Playables 不使用 Page Visibility API；圖塊表就緒後呼叫 `gameReady`。
+- Playables 版隱藏存檔碼匯出／匯入與全螢幕按鈕，不顯示直向旋轉提示，16:9 畫面置中加黑邊；聊天時 Esc 不再 `preventDefault`；手機聊天改用畫面內輸入框取代 `window.prompt`。
+- 新增 `tools/build-playables.js`：輸出 `dist/playables/`，SDK 最先載入、移除 PWA、`assets/runtime` 檔名改成安全字元並以 `asset-map.js` 對照（目前 244 檔、7.15 MiB）。正式頁與測試頁資源統一為 v0.29.64。
+
 ## v0.29.36 — 祝福改版：更有個性的選擇（2026-07-23）
 
 - 針對「祝福感覺都一樣」的回報：問題在於 12 個祝福清一色是小幅被動加成，缺少會改變玩法的效果。改為讓每個祝福走不同整合路徑（`effect.type` 維持 12 種各異）。

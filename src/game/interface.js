@@ -60,8 +60,12 @@ function drawGear(cx, cy, r, col) {
   ctx.restore();
 }
 // ---------- 設定視窗(不用 prompt,畫面內處理)----------
-const GAME_VERSION = '0.29.63';
+const GAME_VERSION = '0.29.64';
 const GAME_UPDATE_NOTES = [
+  {
+    version:'0.29.64', date:'2026-10-01', title:'YouTube Playables 版準備',
+    items:['新增 YouTube Playables 打包版：進度自動存到 YouTube 帳號，遵守 YouTube 靜音與暫停，任何螢幕比例都能玩。','手機點聊天框改用畫面內輸入框，不再跳出瀏覽器對話框。','一般網頁版玩法與存檔不變。']
+  },
   {
     version:'0.29.63', date:'2026-07-24', title:'弓箭手技能補完（J2-B）',
     items:['弓箭手補齊四個技能：多重箭（扇形三箭）、貫穿射（穿透整條直線）、箭雨（範圍落箭覆蓋）、勁弩射（蓄力強箭並擊退）。','每個技能都有兩條天賦分支——例如多重箭散射／集火、勁弩射擊退／穿甲。技能樹補滿五個節點。','箭矢投射物新增穿透、擊退、緩速與大箭表現；全部沿用弓箭手的箭圖。']
@@ -289,6 +293,7 @@ function getSaveInput() {
   saveInput.type = 'text'; saveInput.setAttribute('autocomplete', 'off');
   saveInput.style.cssText = 'position:fixed;left:50%;top:56%;transform:translate(-50%,-50%);width:70%;max-width:440px;padding:10px 12px;font:14px "Courier New",monospace;z-index:9999;display:none;background:#14162b;color:#fff;border:2px solid #7dffd6;border-radius:4px;text-align:center;';
   saveInput.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') applySaveInput(); else if (e.key === 'Escape') closeSaveEdit(); });
+  saveInput.addEventListener('blur', () => { if (settingsMode === 'chat') closeSaveEdit(); });
   document.body.appendChild(saveInput);
   return saveInput;
 }
@@ -296,13 +301,14 @@ function startSaveEdit(mode) {
   settingsMode = mode;
   const el = getSaveInput();
   el.value = mode === 'rename' ? (meta.playerName || '') : '';
-  el.placeholder = mode === 'rename' ? '輸入新名字(最多12字)後按 Enter' : '貼上存檔碼後按 Enter';
+  el.placeholder = mode === 'rename' ? '輸入新名字(最多12字)後按 Enter' : mode === 'chat' ? '輸入聊天內容後按 Enter' : '貼上存檔碼後按 Enter';
   el.style.display = 'block'; el.focus();
 }
 function closeSaveEdit() { settingsMode = null; if (saveInput) { saveInput.style.display = 'none'; saveInput.blur(); } }
 function applySaveInput() {
   const v = (saveInput.value || '').trim();
-  if (settingsMode === 'rename') { if (v) { meta.playerName = v.slice(0, 12); saveMeta(); menuMsg = { text: '已改名為 ' + meta.playerName, color: '#7dffd6', t: 200 }; } }
+  if (settingsMode === 'chat') { if (v) sendChat(v); }
+  else if (settingsMode === 'rename') { if (v) { meta.playerName = v.slice(0, 12); saveMeta(); menuMsg = { text: '已改名為 ' + meta.playerName, color: '#7dffd6', t: 200 }; } }
   else if (settingsMode === 'import') {
     const a = decodeSave(v);
     if (a) { applyMeta(a[1], a.slice(2, 7), a[7]); if (a[0] >= 2) applySkillNums(a.slice(8, 8 + 46)); saveMeta(); menuMsg = { text: '匯入成功!靈魂 ' + meta.souls, color: '#7dffd6', t: 220 }; }
@@ -461,15 +467,18 @@ function renderSettings() {
   if (settingsPage === 'bosses') { renderSettingsBosses(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   if (settingsPage === 'benchmark') { renderSettingsBenchmark(mx, my, mw, mh); ctx.textAlign = 'left'; return; }
   ctx.fillStyle = '#c8cdec'; ctx.font = '14px "Courier New",monospace'; ctx.fillText('名稱:' + (meta.playerName || '勇者'), W / 2, my + 66);
-  ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
+  ctx.fillStyle = '#8890b8'; ctx.font = '11px "Courier New",monospace'; ctx.fillText(IN_PLAYABLES ? '進度會自動儲存到你的 YouTube 帳號' : '設定儲存在此瀏覽器；存檔碼可備份角色進度', W / 2, my + 86);
   // 全螢幕切換（右上角 header 動作；iOS Safari 分頁不支援時提示改用「加入主畫面」）
-  const fsActive = typeof gameFullscreenActive === 'function' && gameFullscreenActive();
-  const fsBtn = { x: mx + mw - 148, y: my + 14, w: 132, h: 30, act: 'fullscreen' };
-  settingsBtns.push(fsBtn);
-  ctx.fillStyle = fsActive ? 'rgba(125,255,214,0.18)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
-  ctx.strokeStyle = fsActive ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
-  ctx.fillText(fsActive ? '◱ 結束全螢幕' : '◱ 全螢幕', fsBtn.x + fsBtn.w / 2, fsBtn.y + 20);
+  // Playables 由 YouTube 控制全螢幕，遊戲內不得自行切換或鎖定方向。
+  if (!IN_PLAYABLES) {
+    const fsActive = typeof gameFullscreenActive === 'function' && gameFullscreenActive();
+    const fsBtn = { x: mx + mw - 148, y: my + 14, w: 132, h: 30, act: 'fullscreen' };
+    settingsBtns.push(fsBtn);
+    ctx.fillStyle = fsActive ? 'rgba(125,255,214,0.18)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
+    ctx.strokeStyle = fsActive ? '#7dffd6' : '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(fsBtn.x, fsBtn.y, fsBtn.w, fsBtn.h);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Courier New",monospace'; ctx.textAlign = 'center';
+    ctx.fillText(fsActive ? '◱ 結束全螢幕' : '◱ 全螢幕', fsBtn.x + fsBtn.w / 2, fsBtn.y + 20);
+  }
   ctx.textAlign = 'center';
   ctx.fillStyle = audioSettings.muted ? '#ff8a8a' : '#7dffd6'; ctx.font = 'bold 14px "Courier New",monospace';
   ctx.fillText('音效音量：' + (audioSettings.muted ? '靜音' : Math.round(audioSettings.volume * 100) + '%'), W / 2, my + 112);
@@ -498,12 +507,19 @@ function renderSettings() {
   sm(mx + 478, my + 262, 76, '重置', 'joySizeReset', false);
   const bw = 240, bh = 42, bx1 = W / 2 - bw - 10, bx2 = W / 2 + 10, byy = my + 312;
   const mk = (x, y, label, act, col) => { const b = { x, y, w: bw, h: bh, act }; settingsBtns.push(b); ctx.fillStyle = col || 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = '#44485f'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh); ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New",monospace'; ctx.fillText(label, x + bw / 2, y + 27); };
-  mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
-  mk(bx2, byy, '匯入存檔', 'import');
-  mk(bx1, byy + 52, '改名', 'rename');
-  mk(bx2, byy + 52, '更新紀錄 v' + GAME_VERSION, 'updates', 'rgba(185,140,255,0.16)');
-  mk(bx1, byy + 104, 'D3 平衡紀錄', 'balance', 'rgba(125,255,214,0.12)');
-  mk(bx2, byy + 104, '關閉', 'close', 'rgba(226,59,59,0.2)');
+  if (IN_PLAYABLES) { // Playables 規範：進度只能存在 YouTube 雲端，不提供存檔碼
+    mk(bx1, byy, '改名', 'rename');
+    mk(bx2, byy, '更新紀錄 v' + GAME_VERSION, 'updates', 'rgba(185,140,255,0.16)');
+    mk(bx1, byy + 52, 'D3 平衡紀錄', 'balance', 'rgba(125,255,214,0.12)');
+    mk(bx2, byy + 52, '關閉', 'close', 'rgba(226,59,59,0.2)');
+  } else {
+    mk(bx1, byy, '複製存檔碼', 'copy', 'rgba(125,255,214,0.2)');
+    mk(bx2, byy, '匯入存檔', 'import');
+    mk(bx1, byy + 52, '改名', 'rename');
+    mk(bx2, byy + 52, '更新紀錄 v' + GAME_VERSION, 'updates', 'rgba(185,140,255,0.16)');
+    mk(bx1, byy + 104, 'D3 平衡紀錄', 'balance', 'rgba(125,255,214,0.12)');
+    mk(bx2, byy + 104, '關閉', 'close', 'rgba(226,59,59,0.2)');
+  }
   if (settingsMode) { ctx.fillStyle = '#ffe680'; ctx.font = '12px "Courier New",monospace'; ctx.fillText('（下方輸入框輸入後按 Enter,Esc 取消）', W / 2, my + mh - 12); }
   if (menuMsg) { ctx.fillStyle = menuMsg.color; ctx.font = 'bold 13px "Courier New",monospace'; ctx.fillText(menuMsg.text, W / 2, my + mh + 22); if (--menuMsg.t <= 0) menuMsg = null; }
   ctx.textAlign = 'left';
@@ -589,7 +605,7 @@ window.addEventListener('keydown', e => {
       else if (k === 'escape') { chatInput = ''; chatting = false; }
       else if (k === 'backspace') chatInput = chatInput.slice(0, -1);
       else if (e.key.length === 1 && chatInput.length < 50) chatInput += e.key;
-      e.preventDefault();
+      if (k !== 'escape') e.preventDefault(); // Esc 保留給瀏覽器離開全螢幕（Playables 規範）
       return;
     }
     if (k === 'p') { openStats(); return; }
@@ -637,7 +653,6 @@ window.addEventListener('keyup', e => {
   setGameKey(e.key, false);
 });
 window.addEventListener('blur', clearGameInputs);
-document.addEventListener('visibilitychange', () => { if (document.hidden) clearGameInputs(); });
 function handleTap(mx, my) {
   const inside = (b) => b && mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
   if (handleDungeonPanelTap(mx, my)) return;
@@ -706,7 +721,7 @@ function handleTap(mx, my) {
   if (gameState === 'town') {
     const cw = 360, ih = 24, ch = 108, cy = H - ch - ih - 14;
     if (mx >= 14 && mx <= 14 + cw && my >= cy) { // 點聊天框
-      if (isTouch) { const t = window.prompt('聊天:'); if (t && t.trim()) sendChat(t.trim()); }
+      if (isTouch) startSaveEdit('chat'); // 不用 window.prompt：Playables 的 iframe 會擋對話框
       else chatting = true;
       return;
     }

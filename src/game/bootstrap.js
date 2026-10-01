@@ -1,4 +1,9 @@
 "use strict";
+// YouTube Playables 平台層（src/platform.js，只在 Playables 打包版載入）；一般網頁與測試沒有時為 null。
+const PLATFORM = window.GamePlatform || null;
+const IN_PLAYABLES = !!(PLATFORM && PLATFORM.inPlayables);
+// Playables 打包會把檔名改成安全字元，asset-map.js 提供「原路徑 → 打包路徑」對照。
+function assetUrl(path) { const map = window.ASSET_MAP; return (map && map[path]) || path; }
 const cv = document.getElementById('cv');
 const W = 960, H = 540;
 const ctx = cv.getContext('2d');
@@ -82,19 +87,19 @@ for (const cls of ['warrior', 'mage', 'archer']) {
   for (const part of ['weapon', 'armor', 'helmet', 'boots']) {
     for (const file of GEAR_ART[cls][part]) {
       const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
-      if (!gearArtImages[path]) { const img = new Image(); img.src = path; gearArtImages[path] = img; }
+      if (!gearArtImages[path]) { const img = new Image(); img.src = assetUrl(path); gearArtImages[path] = img; }
     }
   }
 }
 for (const art of Object.values(GEAR_SET_ART)) {
   for (const file of Object.values(art)) {
     const path = GEAR_ART_ROOT + 'weapons and armor/' + file;
-    if (!gearArtImages[path]) { const img = new Image(); img.src = path; gearArtImages[path] = img; }
+    if (!gearArtImages[path]) { const img = new Image(); img.src = assetUrl(path); gearArtImages[path] = img; }
   }
 }
 for (const file of GEAR_ART.acc) {
   const path = GEAR_ART_ROOT + file;
-  const img = new Image(); img.src = path; gearArtImages[path] = img;
+  const img = new Image(); img.src = assetUrl(path); gearArtImages[path] = img;
 }
 function itemIconIdx(it) {
   if (it.kind === 'weapon') return it.wpn === 'stave' ? 1 : it.wpn === 'bow' ? 2 : 0;
@@ -134,8 +139,8 @@ const SKILL_ICON_FILES = {
 const skillIcons = {}, skillIconsGray = {};
 for (const [id, n] of Object.entries(SKILL_ICON_FILES)) {
   const normal = new Image(), gray = new Image();
-  normal.src = 'assets/runtime/skills/icons/normal/' + n + ' Icon.png';
-  gray.src = 'assets/runtime/skills/icons/gray/' + n + ' Icon.png';
+  normal.src = assetUrl('assets/runtime/skills/icons/normal/' + n + ' Icon.png');
+  gray.src = assetUrl('assets/runtime/skills/icons/gray/' + n + ' Icon.png');
   skillIcons[id] = normal; skillIconsGray[id] = gray;
 }
 const SKILL_VFX_DEFS = {
@@ -167,7 +172,7 @@ const SKILL_VFX_DEFS = {
 };
 const skillVfxImages = {};
 for (const [id, def] of Object.entries(SKILL_VFX_DEFS)) {
-  const img = new Image(); img.src = def.src; skillVfxImages[id] = img;
+  const img = new Image(); img.src = assetUrl(def.src); skillVfxImages[id] = img;
 }
 let worldW = 2000;
 
@@ -220,9 +225,13 @@ const sfxBuffers = {}, sfxLastAt = {};
 function saveAudioSettings() {
   try { localStorage.setItem(AUDIO_KEY, JSON.stringify(audioSettings)); } catch (err) {}
 }
+// YouTube 靜音時一律無聲，遊戲內音量設定不得覆蓋。
+function systemAudioOn() { return !PLATFORM || PLATFORM.isAudioEnabled(); }
 function applyAudioVolume() {
-  if (audioMaster && audioCtx) audioMaster.gain.setValueAtTime(audioSettings.muted ? 0 : audioSettings.volume, audioCtx.currentTime);
+  const silent = audioSettings.muted || !systemAudioOn();
+  if (audioMaster && audioCtx) audioMaster.gain.setValueAtTime(silent ? 0 : audioSettings.volume, audioCtx.currentTime);
 }
+if (PLATFORM) PLATFORM.onAudioEnabledChange(applyAudioVolume);
 function unlockAudio() {
   try {
     if (!audioCtx) {
@@ -239,14 +248,14 @@ async function preloadSfx() {
   await Promise.all(Object.entries(SFX_FILES).map(async ([id, url]) => {
     if (sfxBuffers[id]) return;
     try {
-      const res = await fetch(url); if (!res.ok) return;
+      const res = await fetch(assetUrl(url)); if (!res.ok) return;
       sfxBuffers[id] = await audioCtx.decodeAudioData(await res.arrayBuffer());
     } catch (err) {}
   }));
   sfxLoading = false;
 }
 function playSfx(id, volume = 1, rate = 1) {
-  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0) return;
+  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0 || !systemAudioOn()) return;
   const now = performance.now(), gap = SFX_COOLDOWN[id] || 0;
   if (now - (sfxLastAt[id] || 0) < gap) return;
   sfxLastAt[id] = now;
@@ -269,7 +278,7 @@ function toggleSfxMute() {
   if (!audioSettings.muted) playSfx('uiConfirm');
 }
 function beep(f, d, type, v) {
-  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0) return;
+  if (!audioCtx || audioSettings.muted || audioSettings.volume <= 0 || !systemAudioOn()) return;
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = type || 'square'; o.frequency.value = f;
