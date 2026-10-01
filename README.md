@@ -55,3 +55,13 @@ G1-E 已將祝福與詛咒接入正式探索：每隔 3～4 層交替出現三�
 G1-F 已完成首輪平衡與收尾：沿用 D3 劍士／法師配對基準，比較無效果、只拿祝福、只拿詛咒與混合四種局況；本輪沒有警戒值超標，因此不做無樣本依據的數值調整。平衡紀錄現在會保存當局效果組合、房間獎勵、通關時間、承傷與靈魂，固定模型及判讀詳見 [G1 平衡報告](doc/REPORT-events-G1.md)。
 
 版本完成內容請見 [開發完成紀錄](doc/CHANGELOG.md)。
+
+## YouTube Playables
+
+打包上傳用檔案：
+
+```
+node tools/build-playables.js
+```
+
+輸出到 `dist/playables/`（SDK 最先載入、移除 PWA、素材檔名改為 Playables 允許的字元）。Playables 版由 `src/platform.js` 處理雲端存檔、YouTube 靜音與暫停；一般網頁版不載入此檔。上傳前請用官方 [Playables test suite](https://developers.google.com/youtube/gaming/playables/test_suite) 驗證。

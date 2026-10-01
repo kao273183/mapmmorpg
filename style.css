@@ -159,6 +159,21 @@ html.force-touch-controls canvas{
   canvas{visibility:hidden;pointer-events:none;}
 }
 
+/* YouTube Playables：任何長寬比皆可遊玩，16:9 畫面盡量填滿並置中加黑邊，不顯示旋轉提示 */
+html.playables body{padding:0;}
+html.playables #rotatePrompt,
+html.playables #hint{display:none!important;}
+html.playables canvas{
+  visibility:visible!important;
+  pointer-events:auto!important;
+  width:min(var(--app-width),calc(var(--app-height) * 16 / 9));
+  height:auto;
+  max-width:none;
+  max-height:none;
+  border:0;
+  border-radius:0;
+}
+
 @media (prefers-reduced-motion:reduce){
   .rotate-phone{animation:none;transform:rotate(90deg);}
 }
